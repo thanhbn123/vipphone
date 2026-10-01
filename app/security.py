@@ -41,18 +41,41 @@ BASE_SECURITY_HEADERS = {
 }
 
 #: CSP nghiêm: mọi script/style đều là file ngoài, không có inline.
-STRICT_CSP = (
-    "default-src 'self'; "
-    "script-src 'self'; "
-    "style-src 'self'; "
-    "img-src 'self' data:; "
-    "font-src 'self'; "
-    "connect-src 'self'; "
-    "form-action 'self'; "
-    "frame-ancestors 'none'; "
-    "base-uri 'self'; "
-    "object-src 'none'"
-)
+#: Origin của Cloudflare Turnstile. CHỈ được thêm vào CSP khi Turnstile BẬT.
+TURNSTILE_ORIGIN = "https://challenges.cloudflare.com"
+
+
+def build_strict_csp(*, turnstile: bool) -> str:
+    """CSP nghiêm, và CHỈ mở cho Cloudflare khi Turnstile thật sự bật.
+
+    Vì sao phải có điều kiện: CSP là hàng rào. Mở sẵn cho một origin bên thứ ba
+    khi tính năng CHƯA dùng là nới rào mà không đổi lại lợi ích gì. Khi tắt
+    Turnstile, CSP phải quay về đúng `script-src 'self'`.
+    """
+    script_src = "'self'"
+    frame_src = ""
+    if turnstile:
+        script_src = f"'self' {TURNSTILE_ORIGIN}"
+        # Widget Turnstile render trong iframe của Cloudflare.
+        frame_src = f"frame-src {TURNSTILE_ORIGIN}; "
+
+    return (
+        "default-src 'self'; "
+        f"script-src {script_src}; "
+        "style-src 'self'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        f"{frame_src}"
+        "form-action 'self'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "object-src 'none'"
+    )
+
+
+#: CSP dùng khi Turnstile TẮT (mặc định). Giữ tên cũ để không phá chỗ đang dùng.
+STRICT_CSP = build_strict_csp(turnstile=False)
 
 #: CSP nới cho trang tài liệu API tự sinh (Swagger UI cần inline + CDN).
 DOCS_CSP = (
@@ -77,9 +100,8 @@ def apply_security_headers(response: Response, path: str, *, is_https: bool) -> 
     for name, value in BASE_SECURITY_HEADERS.items():
         response.headers.setdefault(name, value)
 
-    response.headers.setdefault(
-        "Content-Security-Policy", DOCS_CSP if is_docs_path(path) else STRICT_CSP
-    )
+    csp = DOCS_CSP if is_docs_path(path) else build_strict_csp(turnstile=settings.turnstile_enabled)
+    response.headers.setdefault("Content-Security-Policy", csp)
 
     if is_https:
         response.headers.setdefault(

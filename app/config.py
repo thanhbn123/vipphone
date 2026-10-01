@@ -66,7 +66,11 @@ class Settings(BaseSettings):
 
     # --------------------------------------------------------------- turnstile
     #: Để trống = tắt. KHÔNG commit secret thật.
+    #: Khoá SECRET — chỉ ở server, KHÔNG bao giờ lộ ra client.
     turnstile_secret_key: str | None = None
+    #: Khoá SITE — CÔNG KHAI theo thiết kế của Cloudflare (nằm trong HTML/JS).
+    #: Đây không phải secret; nhưng cũng không đưa vào repo dưới dạng giá trị thật.
+    turnstile_site_key: str | None = None
     turnstile_verify_url: str = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
     turnstile_required: bool = False
 
@@ -127,6 +131,23 @@ class Settings(BaseSettings):
     @property
     def staff_auth_configured(self) -> bool:
         return len(self.staff_key_set) > 0
+
+    @property
+    def turnstile_secret_configured(self) -> bool:
+        return bool(self.turnstile_secret_key)
+
+    @property
+    def turnstile_enabled(self) -> bool:
+        """Turnstile có ĐỦ điều kiện để chạy end-to-end không.
+
+        Cần CẢ HAI: khoá site (để frontend render widget) và khoá secret (để server
+        xác minh). Thiếu một trong hai thì widget không hoạt động được — và nếu
+        `TURNSTILE_REQUIRED=true` ở trạng thái đó thì mọi lead bị chặn.
+
+        Trạng thái này được `/api/public-config` trả cho frontend, và được
+        `scripts/staging_preflight.sh` kiểm.
+        """
+        return bool(self.turnstile_site_key) and bool(self.turnstile_secret_key)
 
     @property
     def allowed_host_list(self) -> list[str]:

@@ -70,6 +70,9 @@ jobs:
             assets/js/config.js assets/js/tracking.js assets/js/util.js \
             assets/js/qr.js assets/js/app.js assets/js/success.js \
             assets/js/redeem.js assets/js/qr-scan.js assets/js/admin-leads.js \
+            assets/js/turnstile.js \
+            app/routers/public_config.py \
+            tests/test_turnstile.py tests/test_auth_boundary.py \
             data/iphone-models.json \
             app/main.py app/config.py app/models.py \
             app/routers/admin.py app/services/admin_leads.py \
@@ -188,6 +191,28 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Guard — khoá SECRET Turnstile không được lộ phía client
+        run: |
+          set -euo pipefail
+          # Khoá site là công khai; khoá SECRET thì tuyệt đối không được có trong
+          # bất kỳ tệp nào trình duyệt tải về. Lộ secret = kẻ tấn công tự giải
+          # được challenge, tức là bot protection vô hiệu.
+          if grep -rIn 'TURNSTILE_SECRET_KEY\|turnstile_secret' assets/ *.html 2>/dev/null; then
+            echo "LỖI: khoá secret Turnstile xuất hiện phía client."
+            exit 1
+          fi
+
+          # Đối chứng dương: mẫu PHẢI bắt được một chuỗi thật, nếu không chốt chặn
+          # này đang vô dụng mà vẫn xanh.
+          probe="$(mktemp)"
+          printf '%s\n' "const k = 'TURNSTILE_SECRET_KEY';" > "$probe"
+          if ! grep -q 'TURNSTILE_SECRET_KEY' "$probe"; then
+            echo "LỖI: chốt chặn secret Turnstile không hoạt động (đối chứng dương thất bại)."
+            rm -f "$probe"; exit 1
+          fi
+          rm -f "$probe"
+          echo "OK: không có khoá secret Turnstile phía client."
 
       - name: Guard — không có secret dạng phổ biến trong file nguồn
         run: |

@@ -21,7 +21,7 @@ from . import __version__
 from .config import Settings, get_settings
 from .errors import ApiError
 from .giftcodes import is_well_formed_gift_code, normalize_gift_code
-from .routers import admin, catalog, gifts, health, leads
+from .routers import admin, catalog, gifts, health, leads, public_config
 from .security import apply_security_headers
 
 logger = logging.getLogger("vipphone")
@@ -129,6 +129,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # ------------------------------------------------------------- routers
     app.include_router(health.router)
+    app.include_router(public_config.router)
     app.include_router(catalog.router)
     app.include_router(leads.router)
     app.include_router(gifts.router)

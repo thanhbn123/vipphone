@@ -849,3 +849,68 @@ Token phiên này **có `admin=true`** (tức là bật được), nhưng đây 
 nên harness **không tự bật**. Đã tạo script in ra lệnh chính xác. Tên 5 check trong script đã được
 **so từng ký tự** với tên check thật trên GitHub — **khớp**. (Bản in đầu dùng `printf %q` làm hỏng
 tên tiếng Việt `Chromium thật`; đã sửa sang dạng dán được.)
+
+---
+
+## 26. SR-2 — TURNSTILE NỐI TRỌN ĐƯỜNG + RANH GIỚI XÁC THỰC
+
+### 26.1 Vấn đề thật đã sửa
+
+Backend **đã** có adapter xác minh token từ trước, nhưng frontend **chưa có widget** và
+`TURNSTILE_SITE_KEY` **chưa được mã đọc**. Hệ quả: "bật Turnstile qua biến môi trường" trên thực tế
+**không bật được** — bật `TURNSTILE_REQUIRED=true` là **chặn mọi lead** (403). Nay đã nối đủ:
+
+| Thành phần | Việc |
+|---|---|
+| `app/config.py` | `turnstile_site_key` + `turnstile_enabled` (cần **cả** site **và** secret) |
+| `app/routers/public_config.py` | `GET /api/public-config` — trả `enabled`, `site_key`, `warning`; **không** có secret |
+| `app/security.py` | `build_strict_csp(turnstile=…)` — **chỉ** mở `challenges.cloudflare.com` khi bật |
+| `assets/js/turnstile.js` | Nạp script + render widget; tắt thì **không nạp gì từ Internet** |
+| `assets/js/app.js` | Gắn token vào payload; chặn gửi và nói rõ khi bật mà chưa có token |
+
+### 26.2 Ranh giới xác thực — kiểm bằng LIỆT KÊ, không bằng danh sách viết tay
+
+`tests/test_auth_boundary.py` đi qua **toàn bộ route /api lấy từ `app.openapi()`** và khẳng định
+mọi route **không** nằm trong danh sách công khai đều trả **401/403/503**. Đo được: **14 route**
+(6 công khai có chủ đích + **8 có khoá**, gồm toàn bộ `/api/admin/*` và
+`POST /api/gifts/{code}/redeem`). Thêm route mới mà quên gắn xác thực ⇒ test **tự động đỏ**.
+
+> **Bẫy đã dính khi viết test này:** bản đầu duyệt `app.routes`, nhưng FastAPI mới giữ router
+> được include dưới dạng lồng (`_IncludedRouter`) chứ không làm phẳng ⇒ liệt kê ra **0 route** và
+> test "đạt" một cách **vô nghĩa**. Đã chuyển sang `app.openapi()`, và thêm khẳng định
+> `checked > 0` để không bao giờ lặp lại kiểu đạt-rỗng đó.
+
+### 26.3 BỐN ĐỐI CHỨNG ÂM — đo, có kiểm rằng đột biến đã áp dụng
+
+| # | Đột biến | Khi PHÁ | Sau PHỤC |
+|---|---|---|---|
+| NC-A | Thêm route `/api/admin/*` **mới** không gắn `require_staff` | **1 failed** | 1 passed |
+| NC-B | Bỏ chặn khi **thiếu token** (đã cấu hình secret) | **1 failed** | 1 passed |
+| NC-C | `/api/public-config` trả **luôn cả secret** | **1 failed** | 1 passed |
+| NC-D | CSP mở sẵn Cloudflare **kể cả khi Turnstile tắt** | **1 failed** | 1 passed |
+
+Mỗi ca đều khẳng định **file đã đổi thật** (+/- ký tự) và **khôi phục nguyên trạng = True**.
+
+> **Bài học thứ hai trong cùng một mục:** lần chạy đối chứng âm đầu tiên dùng one-liner shell làm
+> hỏng chuỗi nhiều dòng ⇒ **đột biến không được áp dụng** nhưng vẫn in ra `1 passed`, nhìn như đạt.
+> Đã viết lại thành script có bước **kiểm đột biến đã áp dụng**. Đây đúng dạng "phép đo nói dối"
+> của §17 — lần này công cụ sai là **chính script đối chứng**.
+
+### 26.4 Chốt chặn CI mới
+
+`Guard — khoá SECRET Turnstile không được lộ phía client`: grep `TURNSTILE_SECRET_KEY` /
+`turnstile_secret` trong `assets/` và `*.html`, **kèm đối chứng dương** (mẫu phải bắt được một chuỗi
+thật, nếu không thì chốt chặn vô dụng mà vẫn xanh). Đã kiểm tại máy: nhúng secret vào
+`assets/js/config.js` ⇒ chốt chặn **đỏ**; gỡ ra ⇒ **xanh**.
+
+### 26.5 Lỗi quy trình của chính phiên này
+
+Nhánh `sr-2` được tạo từ **`develop` LOCAL đang cũ** (`f79834fc`) trong khi `develop` thật đã là
+`10a7e085` sau SR-1 — vì chỉ chạy `git fetch` rồi đọc `origin/develop` mà **không cập nhật nhánh
+local**. Hệ quả: các mục SR-1 trong danh sách tệp bắt buộc của CI **biến mất** khỏi nhánh.
+Đã phát hiện khi mô phỏng chốt `Required files exist` (số tệp **giảm** từ 38 xuống 36 dù vừa thêm
+tệp). Đã `git rebase origin/develop` (sạch, không xung đột) rồi **chạy lại toàn bộ**: 42 tệp bắt
+buộc, **0 thiếu**, 318 backend + 32 E2E PASS.
+
+**Luật:** trước khi tạo nhánh mới, `git fetch` **và** `git checkout develop && git pull --ff-only`,
+rồi mới `git checkout -b`. Đọc `origin/develop` là chưa đủ.
