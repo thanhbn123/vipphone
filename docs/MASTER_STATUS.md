@@ -1118,3 +1118,62 @@ thành chờ **chính mã quà**.
 **Bài học:** ma trận trình duyệt không chỉ kiểm sản phẩm — nó **tăng số lần chạy** và nhờ vậy
 **phơi ra race** mà một engine duy nhất đã che mất. Một test flaky là **nợ**: nó sẽ đỏ vào đúng
 lúc không ai rảnh để điều tra, và lần đó người ta sẽ học cách bỏ qua nó.
+
+---
+
+## 29. PHIÊN STAGING READINESS — TỔNG KẾT
+
+### 29.1 Bảng gate
+
+| Gate | Nội dung | PR | CI | Merge SHA |
+|---|---|---|---|---|
+| SR-1 | Hợp đồng cấu hình staging + bản đồ PII + phương án retention | #19 | PASS | `10a7e085ff9277ab14edd3a77f3c1dce7a35aa47` |
+| SR-2 | Turnstile nối trọn đường + ranh giới xác thực | #21 | PASS | `266bd9ff5f515d4419bea32b7a4395195975f8da` |
+| SR-3 | Ma trận trình duyệt + sửa câu sai về Linux | #23 | PASS | `074c644d175461d7071d110316d887d13347900b` |
+| SR-4 | Preflight + sao lưu/phục hồi + smoke tải + phát hành/quay lui | #25 | PASS | `1d1e2a581ca8b0c83fc5cfb5f915c1f05aebae1c` |
+
+`main` = `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **KHÔNG ĐỔI suốt phiên**.
+
+### 29.2 Sáu câu SAI đã sửa trong chính tài liệu của dự án
+
+Đây là phần đáng chú ý nhất của phiên. **Không câu nào là lỗi mã** — tất cả là **tài liệu nói sai
+về chính hệ thống**, và tài liệu sai thì không ai đi kiểm.
+
+| # | Câu sai | Sự thật đo được |
+|---|---|---|
+| 1 | `OWNER_ACCEPTANCE` §C: *"Chưa đo trên Linux. Mọi phép đo chạy trên macOS"* | CI đã chạy **ubuntu-24.04 Linux x64** từ lâu |
+| 2 | `OWNER_ACCEPTANCE` §C: *"Chưa đo trên trình duyệt khác Chromium"* | Nay Chromium + Firefox + WebKit đều chạy, **33/33 mỗi engine** |
+| 3 | `docs/staging.md` (SR-1): *"bật `TURNSTILE_REQUIRED=true` sẽ chặn mọi lead"* | Đúng **lúc viết**, nhưng SR-2 đã nối đủ đường ⇒ câu này phải sửa cùng lúc |
+| 4 | Bảng gate ghi G11/G12 `NOT RUN` trong khi CI đã chạy xong | Đã chốt số đúng |
+| 5 | Bảng cấu hình thiếu `ALLOWED_HOSTS` + `EXPOSE_READINESS_DETAILS` | Đã kiểm bằng **script** đối chiếu `Settings.model_fields`: nay 0 thiếu |
+| 6 | `.gitignore` đọc như đã chặn bản dump (`*.sql` có) nhưng **`*.dump` thì chưa** | Đã chặn; đây là lỗ hổng **PII**, không phải lỗi cú pháp |
+
+> **Bài học:** một câu *"chưa đo X"* rất khó bị bắt lỗi vì nó **nghe an toàn** — nó không hứa gì
+> nên không ai đi kiểm. Nhưng nó **hạ thấp** thực tế và làm mất công đã bỏ ra (ca 1), hoặc tệ hơn:
+> nó **che một lỗ hổng** (ca 6). Đây là §12.1 áp cho **tài liệu**, không chỉ cho test.
+
+### 29.3 Bốn phép kiểm hoá ra KHÔNG kiểm được gì
+
+| # | Phép kiểm | Nó "đạt" thế nào |
+|---|---|---|
+| 1 | `test_no_api_route_is_unexpectedly_public` — bản đầu duyệt `app.routes` | FastAPI giữ router lồng ⇒ liệt kê **0 route** ⇒ `checked > 0` cứu; nếu không có dòng đó thì test **đạt rỗng** |
+| 2 | Phép kiểm production trong preflight | Nhánh `WARN` **luôn thắng** ⇒ trỏ staging vào DB production vẫn **exit 0** (mã chết) |
+| 3 | Test admin thêm model (G04-G06) | Race: chờ thông báo rồi đọc bảng **trước khi bảng vẽ lại** ⇒ flaky trên CI |
+| 4 | Script đối chứng âm của chính phiên này | One-liner shell làm hỏng chuỗi nhiều dòng ⇒ **đột biến không áp dụng** mà vẫn in `1 passed` |
+
+**Cả bốn đều thuộc một họ:** *phép đo không có khả năng thất bại.* Cách phát hiện duy nhất là
+**phá thứ nó bảo vệ rồi xem nó có đỏ không** — và ở ca 4, phải kiểm cả **thứ dùng để phá**.
+
+### 29.4 Trạng thái cuối
+
+| Mục | Giá trị |
+|---|---|
+| `REPO_SIDE_STAGING_READINESS` | **PASS** |
+| Test | **318** backend + **33** E2E × **3 engine** |
+| CI | **7 check** trên Linux |
+| Đối chứng âm trong phiên | **10** (4 của SR-2, 6 của SR-4) + 1 chốt CI + 1 độ trễ chứng minh race |
+| `STAGING_DEPLOY` | **BLOCKED_EXTERNAL_INFRA** |
+| `TURNSTILE_REAL` | **BLOCKED_EXTERNAL_CREDENTIAL** |
+| `PII_RETENTION` | **OWNER_DECISION_REQUIRED** |
+| `BRANCH_PROTECTION` | **OWNER_ACTION_REQUIRED** (đo: `main` và `develop` đều `404`) |
+| `PRODUCTION` | **NOT DEPLOYED** — `main` không đổi |

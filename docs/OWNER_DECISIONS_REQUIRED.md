@@ -12,6 +12,7 @@
 | D-002 | Credential Turnstile | **BLOCKED_EXTERNAL_CREDENTIAL** | bot protection thật |
 | D-003 | Branch protection | **OWNER_ACTION_REQUIRED** | chống push thẳng `main` |
 | D-004 | Chính sách lưu trữ PII | **OWNER_DECISION_REQUIRED** | dọn dẹp dữ liệu, quyền được xoá |
+| D-005 | RPO/RTO + lịch sao lưu | **OWNER_DECISION_REQUIRED** | khả năng chịu mất dữ liệu |
 
 ---
 
@@ -183,3 +184,37 @@ kinh doanh**. Kỹ thuật chỉ dựng được cơ chế, không quyết đư�
 | Chính sách fail-open/closed Turnstile | Đã chốt ở `docs/staging.md` §3.1 |
 | Retention trong code | **Chờ D-004** — cố ý không đoán hộ |
 | Deploy production | **FORBIDDEN** ở phiên này, cần release gate riêng |
+
+---
+
+## D-005 — RPO / RTO VÀ LỊCH SAO LƯU
+
+**Trạng thái:** **OWNER_DECISION_REQUIRED**. Hiện **chưa có lịch sao lưu nào**.
+
+**Need.** Chọn mức chịu mất dữ liệu. Toàn bộ lead, gift code và vết phát quà nằm trong **một**
+PostgreSQL. Không có bản sao lưu nào **đã được kiểm** thì chưa có bản sao lưu nào.
+
+**Đã có sẵn trong repo:** `docs/backup-restore.md` — lệnh sao lưu/phục hồi, cách kiểm, và một
+`LOCAL BACKUP/RESTORE TEST` **đã chạy thật** (250 lead, kiểm bằng **md5 nội dung**, không chỉ đếm dòng).
+
+**Khung để chọn** (KHÔNG phải khuyến nghị):
+
+| Phương án | Tần suất | Mất tối đa | Công / chi phí |
+|---|---|---|---|
+| Cơ bản | mỗi ngày | tới **24 giờ** lead | thấp |
+| Vừa | mỗi giờ | tới **1 giờ** | cần lịch chạy + chỗ lưu |
+| Chặt | WAL liên tục (PITR) | gần như **0** | cần cấu hình archive + dung lượng lớn |
+
+**Cần Owner trả lời:**
+
+1. **RPO** — mất tối đa bao nhiêu dữ liệu là chấp nhận được?
+2. **RTO** — phục hồi xong trong bao lâu?
+3. **Giữ bao nhiêu bản**, trong bao lâu?
+4. **Lưu ở đâu** — có được để **cùng máy** với database không? (khuyến nghị: **không**)
+5. **Có mã hoá bản dump không?** Bản dump chứa **đầy đủ PII** và **không** được hưởng quyền bảo vệ
+   của database.
+6. **Ai chịu trách nhiệm** chạy sao lưu, và **ai kiểm** định kỳ? Sao lưu không được kiểm thì không
+   phải sao lưu.
+
+**Vì sao không tự chọn:** đây là **mức chấp nhận rủi ro kinh doanh**. Kỹ thuật dựng được cơ chế;
+chỉ Owner biết mất một ngày lead có sao không.
