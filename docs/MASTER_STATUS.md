@@ -31,8 +31,8 @@
 | G08 | Security pass | **DONE** | [#12](https://github.com/thanhbn123/vipphone/pull/12) | **PASS** | `381abefdcb304376a177b2153daac4044ca7fd6e` |
 | G09 | Tests đầy đủ | **DONE** — 297 backend + 30 E2E (Chromium thật) | [#14](https://github.com/thanhbn123/vipphone/pull/14) | **PASS** (5/5 job) | `d4648f46cd801cf323b715a3eba334ff3570ca4e` |
 | G10 | CI đầy đủ | **DONE** — 5 job, gồm E2E chạy thật và quét phụ thuộc | [#14](https://github.com/thanhbn123/vipphone/pull/14) | **PASS** (5/5 job) | `d4648f46cd801cf323b715a3eba334ff3570ca4e` |
-| G11 | Staging readiness | **DONE (tài liệu)** — `docs/deployment.md`; **hạ tầng staging = BLOCKED_EXTERNAL_INFRA** | #16 | NOT RUN (xem PR) | — |
-| G12 | Owner acceptance pack | **DONE** — `docs/OWNER_ACCEPTANCE.md` | #16 | NOT RUN (xem PR) | — |
+| G11 | Staging readiness | **DONE (tài liệu)** — `docs/deployment.md`; **hạ tầng staging = BLOCKED_EXTERNAL_INFRA** | [#16](https://github.com/thanhbn123/vipphone/pull/16) | **PASS** (5/5 job) | `93e6aae11f6f17b860b083abbba7c7832bb2ae67` |
+| G12 | Owner acceptance pack | **DONE** — `docs/OWNER_ACCEPTANCE.md` | [#16](https://github.com/thanhbn123/vipphone/pull/16) | **PASS** (5/5 job) | `93e6aae11f6f17b860b083abbba7c7832bb2ae67` |
 
 **Baseline gốc của dự án:** `7d6162cf31eb96ea27879be3a4671812a9cd7e01` (1 commit, 14 file, CI đỏ 2/2 run).
 Chi tiết baseline đầy đủ nằm ở lịch sử git (`git show 7d6162c`) và ở PR #2.
