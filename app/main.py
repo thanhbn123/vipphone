@@ -7,6 +7,7 @@ MỘT tiến trình phục vụ cả API lẫn file tĩnh → deploy và rollbac
 from __future__ import annotations
 
 import logging
+import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -14,6 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import __version__
 from .config import Settings, get_settings
@@ -60,10 +62,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = app_settings
 
     # ---------------------------------------------------------- middleware
+    # Chặn Host header lạ (host-header injection / cache poisoning) khi có cấu
+    # hình. RỖNG = không giới hạn, và ở production thì readiness BÁO RÕ là chưa
+    # cấu hình — không im lặng.
+    if app_settings.allowed_host_list:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=app_settings.allowed_host_list)
+    elif app_settings.is_production:
+        logger.warning("ALLOWED_HOSTS đang RỖNG ở production — máy chủ không giới hạn Host header.")
+
     @app.middleware("http")
     async def security_middleware(request: Request, call_next):
+        # Mã tương quan cho mọi request: trả về header và để lại trong log, nhờ
+        # vậy lần được một sự cố từ phía khách tới đúng dòng log.
+        request_id = uuid.uuid4().hex[:16]
+        request.state.request_id = request_id
+
         response = await call_next(request)
         apply_security_headers(response, request.url.path, is_https=request.url.scheme == "https")
+        response.headers.setdefault("X-Request-ID", request_id)
         return response
 
     # ------------------------------------------------------- xử lý ngoại lệ

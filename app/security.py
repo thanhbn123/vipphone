@@ -208,6 +208,27 @@ def _extract_staff_token(request: Request) -> str | None:
     return header_key or None
 
 
+def optional_staff(request: Request) -> str | None:
+    """Như `require_staff` nhưng KHÔNG ném lỗi — trả None nếu không có quyền.
+
+    Dùng cho endpoint vừa phục vụ công khai vừa có phần chi tiết dành cho nhân
+    viên (ví dụ `/api/ready`): công khai thấy ít, nhân viên thấy đủ.
+    """
+    configured = settings.staff_key_set
+    if not configured:
+        return None
+
+    token = _extract_staff_token(request)
+    if not token:
+        return None
+
+    for candidate in configured:
+        if secrets.compare_digest(token, candidate):
+            return _actor_label(candidate)
+
+    return None
+
+
 def require_staff(request: Request) -> str:
     """Dependency FastAPI. Trả nhãn actor khi hợp lệ, ném lỗi khi không."""
     configured = settings.staff_key_set

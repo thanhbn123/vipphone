@@ -17,8 +17,13 @@ def test_health_returns_ok_without_database_work(client):
 
 
 @pytest.mark.integration
-def test_ready_reports_database_and_configuration(client):
-    response = client.get("/api/ready")
+def test_ready_reports_database_and_configuration(client, staff_headers):
+    """Chi tiết readiness là thông tin NỘI BỘ — phải có quyền nhân viên mới thấy.
+
+    Hợp đồng này đổi ở G08: trước đây `/api/ready` trả hết cho công khai, tức là
+    nói cho người lạ biết bot protection đang tắt và schema đang ở revision nào.
+    """
+    response = client.get("/api/ready", headers=staff_headers)
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ready"
@@ -34,9 +39,15 @@ def test_ready_reports_database_and_configuration(client):
 
 @pytest.mark.integration
 def test_ready_reports_missing_staff_auth_honestly(client, monkeypatch):
+    """Khi CHƯA cấu hình xác thực nhân viên thì không thể xác thực để xem chi tiết.
+
+    Vì vậy dùng cờ tường minh `EXPOSE_READINESS_DETAILS` — và điều quan trọng là
+    readiness phải NÓI THẲNG `staff_auth = NOT_CONFIGURED` chứ không im lặng.
+    """
     from app import security
 
     monkeypatch.setattr(security.settings, "staff_api_keys", "")
+    monkeypatch.setattr(security.settings, "expose_readiness_details", True)
 
     body = client.get("/api/ready").json()
     assert body["checks"]["staff_auth"] == "NOT_CONFIGURED"

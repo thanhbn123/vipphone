@@ -45,6 +45,8 @@ os.environ["TURNSTILE_SECRET_KEY"] = ""
 os.environ["TURNSTILE_REQUIRED"] = "false"
 os.environ["TRUST_PROXY_HEADERS"] = "false"
 os.environ["LOG_LEVEL"] = "WARNING"
+# G08: giới hạn Host header (TestClient dùng Host: testserver)
+os.environ["ALLOWED_HOSTS"] = "testserver,localhost,127.0.0.1"
 
 # --------------------------------------------------------------------------
 # Từ đây mới được import app.*
