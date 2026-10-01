@@ -3,33 +3,57 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>VIP PHONE — Redeem quà</title>
+  <meta name="robots" content="noindex">
+  <title>VIP PHONE — Redeem quà (nhân viên)</title>
   <link rel="stylesheet" href="assets/css/styles.css">
 </head>
 <body>
+  <a class="skip-link" href="#main">Bỏ qua điều hướng, tới nội dung chính</a>
+
   <header class="topbar">
-    <div class="brand"><span class="brand-mark">VIP</span><span class="brand-name">PHONE</span></div>
+    <div class="brand">
+      <span class="brand-mark">VIP</span>
+      <span class="brand-name">PHONE</span>
+    </div>
     <span class="co-brand">STAFF REDEEM</span>
   </header>
 
-  <main class="container narrow">
-    <section class="card">
-      <p class="eyebrow">NHÂN VIÊN VIP PHONE</p>
-      <h1>Xác nhận phát quà</h1>
-      <p>Nhập mã nhận quà của khách. Bản starter lưu dữ liệu trên chính trình duyệt hiện tại.</p>
+  <main class="container narrow" id="main">
+    <p class="banner banner-warn" role="note">
+      <strong>BẢN DEMO — CHƯA CÓ XÁC THỰC NHÂN VIÊN.</strong>
+      Trang này hiện mở công khai và chỉ đọc/ghi dữ liệu trên chính trình duyệt này.
+      Không dùng cho vận hành thật cho tới khi có xác thực nhân viên và backend.
+    </p>
 
-      <form id="redeemForm">
-        <label>
-          Gift code
-          <input id="redeemCode" required placeholder="VIP-26-XXXXXX" autocomplete="off">
+    <section class="card" aria-labelledby="redeem-title">
+      <p class="eyebrow">NHÂN VIÊN VIP PHONE</p>
+      <h1 id="redeem-title">Xác nhận phát quà</h1>
+      <p>Nhập mã nhận quà của khách để tra cứu và xác nhận phát quà.</p>
+
+      <form id="redeemForm" novalidate>
+        <label for="redeemCode">
+          Mã nhận quà
+          <input id="redeemCode" name="redeemCode" type="text" required
+                 placeholder="VIP-26-XXXXXX" autocomplete="off"
+                 autocapitalize="characters" spellcheck="false"
+                 aria-describedby="redeemCode-hint">
+          <span class="field-hint" id="redeemCode-hint">
+            Không phân biệt chữ hoa/thường. Định dạng: VIP-YY-XXXXXX.
+          </span>
         </label>
         <button class="primary-btn" type="submit">KIỂM TRA MÃ</button>
       </form>
 
-      <div id="redeemResult" class="redeem-result"></div>
+      <div id="redeemResult" class="redeem-result" aria-live="polite"></div>
     </section>
   </main>
 
+  <footer class="site-footer">
+    <p>VIP PHONE — khu vực nhân viên.</p>
+  </footer>
+
+  <script src="assets/js/tracking.js"></script>
+  <script src="assets/js/util.js"></script>
   <script src="assets/js/redeem.js"></script>
 </body>
 </html>
