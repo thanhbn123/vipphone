@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 
 from fastapi import APIRouter, Depends, Request, status
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 from ..audit import derive_actor_from_request
 from ..db import get_db
 from ..errors import ApiError, ValidationFailed
+from ..limits import read_limited_body
 from ..schemas import LeadCreateRequest, LeadCreateResponse
 from ..security import client_ip, enforce_lead_rate_limit, verify_turnstile
 from ..services.leads import create_lead
@@ -60,11 +62,8 @@ async def create_lead_endpoint(
     """
     enforce_lead_rate_limit(request)
 
-    raw = await request.body()
-    if len(raw) > request.app.state.settings.max_lead_body_bytes:
-        raise ApiError(413, "PAYLOAD_TOO_LARGE", "Dữ liệu gửi lên quá lớn.")
-
-    import json
+    # Đọc body qua trần chặn — kiểm Content-Length TRƯỚC khi đọc (xem app/limits.py).
+    raw = await read_limited_body(request, request.app.state.settings.max_lead_body_bytes)
 
     try:
         body = json.loads(raw or b"{}")

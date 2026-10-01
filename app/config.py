@@ -71,8 +71,22 @@ class Settings(BaseSettings):
     turnstile_required: bool = False
 
     # -------------------------------------------------------------------- CORS
-    #: Danh sách origin cho phép, phân tách bằng dấu phẩy. RỖNG = không bật CORS.
-    cors_allowed_origins: str = ""
+    #: CỐ Ý KHÔNG CÓ CẤU HÌNH CORS.
+    #:
+    #: Trước đây có `CORS_ALLOWED_ORIGINS` nhưng **không chỗ nào dùng** — cấu
+    #: hình an ninh đọc như đã làm mà thực ra chưa làm, tệ hơn cả không có.
+    #: API và frontend phục vụ CÙNG ORIGIN nên CORS không cần thiết. Nếu sau này
+    #: tách frontend sang origin khác thì phải gắn `CORSMiddleware` với allowlist
+    #: TƯỜNG MINH (không `*`, không `allow_credentials`), và viết test cho nó.
+
+    # ------------------------------------------------------------------ host
+    #: Danh sách Host được phép, phân tách bằng dấu phẩy. RỖNG = không giới hạn Host.
+    #: Đặt giá trị thật khi chạy sau proxy để chặn host-header injection.
+    allowed_hosts: str = ""
+
+    #: Có công khai chi tiết của `/api/ready` (migration head, turnstile, ...) không.
+    #: Mặc định TẮT: chi tiết chỉ dành cho nhân viên. Bật chỉ khi có lý do.
+    expose_readiness_details: bool = False
 
     # ------------------------------------------------------------------ giới hạn
     max_lead_body_bytes: int = Field(default=8_192, ge=1024)
@@ -115,8 +129,8 @@ class Settings(BaseSettings):
         return len(self.staff_key_set) > 0
 
     @property
-    def cors_origin_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
+    def allowed_host_list(self) -> list[str]:
+        return [h.strip() for h in self.allowed_hosts.split(",") if h.strip()]
 
     @property
     def year_prefix(self) -> str:

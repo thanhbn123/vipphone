@@ -28,7 +28,7 @@
 | G03 | Redeem engine (atomic, chống double-spend) + audit | **DONE** | [#6](https://github.com/thanhbn123/vipphone/pull/6) | **PASS** | `92a4952d54c1d2009a85f69ba74a44becc4651df` |
 | G04+G05+G06 | Staff redeem UI (quét QR) + Admin leads/CSV + Danh mục iPhone qua admin | **DONE** | [#8](https://github.com/thanhbn123/vipphone/pull/8) | **PASS — 3/3 job** | `280ef0026f0904d87ac03b95c01170e2c9ee9f64` |
 | G07 | Campaign / source tracking | MỘT PHẦN (đã có ở G02: nhận & lưu ở server) | — | — | — |
-| G08 | Security pass | MỘT PHẦN (đã có ở G02 + **G05: IDOR, CSV injection**; còn Turnstile/dependency scan) | — | — | — |
+| G08 | Security pass | **DONE** — PR #12, chưa merge tại thời điểm ghi; còn Turnstile/dependency scan → §21 | #12 | NOT RUN (xem PR) | — |
 | G09 | Tests đầy đủ | MỘT PHẦN (280 backend + **14 E2E trình duyệt thật**; E2E **chưa nối vào CI**) | — | — | — |
 | G10 | CI đầy đủ | MỘT PHẦN (lint, migration, unit, integration PG, secret scan) | — | — | — |
 | G11 | Staging readiness | MỘT PHẦN (`.env.example`, `/api/ready` đã có; `docs/deployment.md` chưa) | — | — | — |
@@ -585,3 +585,96 @@ khi PATCH, escape LIKE, fail-closed khi chưa cấu hình, ẩn nút quét QR, k
 landing đọc danh mục từ API. **Nằm NGOÀI phạm vi:** các test an ninh của G01–G03 (đã có đối
 chứng âm riêng ở gate đó) và các test không mang tính an ninh (validate định dạng, sắp xếp,
 phân trang thường). Không có nghĩa "toàn bộ test của dự án đã được đối chứng âm".
+
+---
+
+## 21. G08 — SECURITY PASS (5 lỗ hổng vá, 4 đối chứng âm)
+
+Rà soát trên `develop` = `92a4952` tìm được **8 phát hiện**; gate này vá 5. Ba phát hiện
+còn lại vẫn **MỞ** và được ghi ở §13.2.
+
+| # | Lỗ hổng | Mức | Bản vá |
+|---|---|---|---|
+| F1 | Trần body kiểm **SAU khi đã đọc hết** vào RAM ⇒ trần 8 KB không bảo vệ được gì trước payload lớn | trung-cao | `app/limits.py`: kiểm `Content-Length` **trước khi chạm body**; body chunked đọc theo khối, bỏ ngay khi vượt trần |
+| F2 | `/api/ready` công khai lộ `env`, `version`, `migration_head`, và **staff auth / Turnstile có cấu hình hay không** — tức là nói cho người lạ biết bot protection đang TẮT | trung | Công khai chỉ còn `{"status"}`; chi tiết chỉ khi có khoá nhân viên hợp lệ, hoặc bật tường minh `EXPOSE_READINESS_DETAILS` |
+| F3 | Cấu hình CORS là **MÃ CHẾT**: `cors_origin_list` có trong config nhưng **không middleware nào dùng**. Đọc như đã làm mà thực ra chưa làm — tệ hơn cả không có | trung | Gỡ hẳn + ghi lý do tại chỗ; có test khẳng định **không** rò header CORS cho origin lạ |
+| F4 | Thiếu `TrustedHostMiddleware` | trung (khi có proxy) | Thêm `ALLOWED_HOSTS`; ở production mà rỗng thì **cảnh báo lúc khởi động** và readiness báo `NOT_CONFIGURED` — không im lặng |
+| F5 | `request_id` khai mà **không ai truyền**; không có mã tương quan trong log/response | thấp | Middleware sinh `X-Request-ID`, lưu vào `request.state` |
+
+### 21.1 Đối chứng âm — đo LẠI trên bản đã gộp với G04-G06
+
+Bản vá được viết trên `92a4952`, rồi áp lên `18e4a6e` (sau G04-G06). **Phép đo cũ không
+được tin sau khi rebase** — nên 4 đối chứng âm đã chạy lại trên bản đã gộp:
+
+| Phá gì | Kết quả | Khôi phục |
+|---|---|---|
+| `read_limited_body` → đọc trước, kiểm sau | **1 failed** | 1 passed |
+| `/api/ready` → luôn trả chi tiết | **1 failed** | 1 passed |
+| Bỏ `TrustedHostMiddleware` | **1 failed** | 1 passed |
+| Gắn `CORSMiddleware(allow_origins=["*"])` | **1 failed** | 1 passed |
+
+**Phạm vi đã đo:** 4 đối chứng âm này phủ đúng 4 bản vá của G08. **Nằm ngoài phạm vi:**
+các test an ninh khác của dự án (đã có đối chứng âm riêng ở gate của chúng). Không có
+nghĩa "toàn bộ test an ninh đã được đối chứng âm".
+
+### 21.2 Đổi hợp đồng — nói rõ
+
+`GET /api/ready` **đổi hợp đồng**: trước đây trả hết cho công khai, nay công khai chỉ thấy
+`status`. Hai test cũ đã được cập nhật theo hợp đồng mới. Ai đang dùng `/api/ready` để lấy
+chi tiết thì phải gửi kèm khoá nhân viên.
+
+### 21.3 Còn MỞ sau G08 (không được coi là đã xong)
+
+- **Turnstile/reCAPTCHA**: mới có adapter, **chưa có khoá thật** ⇒ bot protection đang **TẮT**
+- **Rate limit trong bộ nhớ tiến trình**: `--workers N` ⇒ giới hạn thực tế × N. Cần Redis nếu scale ngang
+- **Chưa quét lỗ hổng phụ thuộc** trong CI (`pip-audit`) → G10
+- **Chưa rà PII lọt vào log production**
+- **`main` chưa bật branch protection** → cần Owner
+
+---
+
+## 22. KỶ LUẬT TÀI NGUYÊN DÙNG CHUNG (hai sự cố thật trong phiên này)
+
+Bài học §20 nói về *phép đo*. Mục này nói về **tài nguyên**: làn không chỉ là **thư mục**,
+mà còn là **database, cổng, tiến trình**. Hai sự cố đã xảy ra thật, cả hai đều ghi ra
+thay vì giấu.
+
+### 22.1 Hai phiên cùng chạy test trên MỘT database → deadlock
+
+Lúc gate G04+G05+G06 đang chạy test, controller cũng chạy `pytest tests` với
+`TEST_DATABASE_URL=…/vipphone_test` — **cùng một database**. Kết quả đo được:
+
+```
+psycopg.errors.DeadlockDetected: deadlock detected
+DETAIL: Process 75050 waits for AccessExclusiveLock on relation …; blocked by process 75051.
+        Process 75051 waits for AccessShareLock on relation …; blocked by process 75050.
+[SQL: TRUNCATE TABLE iphone_models RESTART IDENTITY CASCADE]
+178 passed, 1 error
+```
+
+Hai tiến trình cùng `TRUNCATE` bảng `iphone_models` ⇒ khoá chéo nhau. **Không phải lỗi sản
+phẩm** — là lỗi vận hành của phiên. Hệ quả có thể có: phép đo của gate bị nhiễu một lượt.
+
+**Luật rút ra:**
+- Mỗi phiên kiểm chứng dùng **database RIÊNG**, tên mang dấu vết phiên
+  (`vipphone_g08_test`, `vipphone_g08_e2e_test`).
+- **Trước khi chạy test**, kiểm `pg_stat_activity` xem database đó có ai đang dùng.
+- Không bao giờ trỏ `TEST_DATABASE_URL` vào database mà phiên khác có thể đang dùng.
+
+### 22.2 Tiến trình nền dừng lại — và ghi rõ AI đã dừng
+
+Gate báo một điều bất thường: tiến trình uvicorn nền cũ (**PID 64410**, cổng 8000) mà nó
+từng thấy qua `lsof`/`ps` thì nay không còn chạy, và nó xác nhận **chưa từng** chạy
+`kill`/`pkill`/`killall`. Câu hỏi đó có đáp án, và câu trả lời là **controller**.
+
+Đó là uvicorn do controller khởi động lúc 18:56 cho việc kiểm chứng E2E của G03, rồi
+để chạy nền quên tắt. Khi phát hiện, controller đã:
+1. `ps -p 64408,64410 -o pid,ppid,lstart,command` để **nhìn tận mắt** hai tiến trình,
+2. `lsof -nP -iTCP:8000 -sTCP:LISTEN` để xác nhận ai giữ cổng 8000,
+3. `kill 64410` — **theo đúng PID**, không theo mẫu tên,
+4. kiểm lại: cổng 8000 đã nhả, và các tiến trình python còn lại là của gate (PID khác),
+   **không bị đụng tới**.
+
+**Luật rút ra:** dừng tiến trình nền thì **ghi ra** (ai dừng, PID nào, lúc nào). Một tiến
+trình biến mất mà không ai nhận là một câu hỏi chẩn đoán tốn thời gian cho phiên sau —
+đúng ca 16:35:39 mà `CLAUDE.md` §16.7 đã ghi.
