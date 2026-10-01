@@ -740,3 +740,27 @@ giữ đúng dấu tiếng Việt.
 |---|---|---|
 | Bỏ BOM khỏi CSV | **1 failed** | 1 passed |
 | Tiêm PII vào payload QR | **1 failed** (đúng test PII) | 1 passed |
+
+### 23.6 Job `dependency-scan` bắt được một lỗ hổng THẬT ngay lần chạy đầu
+
+Đây là bằng chứng job mới có tác dụng, không phải trang trí:
+
+```
+Found 2 known vulnerabilities in 1 package
+Name   Version ID              Fix Versions
+pytest 8.4.2   PYSEC-2026-1845 9.0.3
+  pytest through 9.0.2 on UNIX relies on directories with the
+  /tmp/pytest-of-{user} name pattern, which allows local users to cause a
+  denial of service or possibly gain privileges.
+```
+
+Phạm vi: **phụ thuộc DEV** (`pytest`), không phải đường chạy production —
+`pip-audit -r requirements.txt` (runtime) **sạch** cả trước và sau.
+
+**Đã xử lý, không tắt job:** nâng lên `pytest>=9.0.3,<10` (thực tế cài 9.1.1),
+`pytest-cov~=6.3`. Rồi **chạy lại toàn bộ trên pytest 9**: 297 backend + 30 E2E
+PASS, và cả hai cách chạy theo marker như CI (`-m "not integration"` → 57 passed;
+`-m integration` → 240 passed). `pip-audit --strict` cho **cả hai** file
+requirements → `No known vulnerabilities found`.
+
+Ghi rõ lý do pin ngay trong `requirements-dev.txt` để không ai hạ về lại.

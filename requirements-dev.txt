@@ -1,7 +1,12 @@
 -r requirements.txt
 
-pytest~=8.3
-pytest-cov~=6.0
+# pytest >= 9.0.3 là BẮT BUỘC, không phải "cho mới":
+# PYSEC-2026-1845 — pytest <= 9.0.2 trên UNIX dựa vào thư mục `/tmp/pytest-of-{user}`,
+# cho phép người dùng cục bộ gây denial of service hoặc có thể chiếm quyền.
+# Job `dependency-scan` trong CI bắt được lỗi này; đã nâng lên bản vá và chạy lại
+# toàn bộ (297 backend + 30 E2E đều PASS). KHÔNG hạ về lại.
+pytest>=9.0.3,<10
+pytest-cov~=6.3
 httpx~=0.28
 ruff~=0.8
 playwright~=1.49
