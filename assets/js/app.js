@@ -16,6 +16,8 @@
   var form = document.getElementById("leadForm");
   var modelSelect = document.getElementById("iphone_model");
   var errorBox = document.getElementById("formError");
+  var turnstileWrap = document.getElementById("turnstileWrap");
+  var turnstileWidget = document.getElementById("turnstileWidget");
   var submitBtn = document.getElementById("submitBtn");
   var submitLabel = submitBtn ? submitBtn.textContent : "GỬI";
 
@@ -25,6 +27,7 @@
   var util = window.VPUtil;
   var config = window.VIPPHONE_CONFIG || {};
 
+  var turnstile = null;
   var formStarted = false;
   var submitting = false;
   var catalogReady = false;
@@ -277,6 +280,17 @@
     event.preventDefault();
     if (submitting) return; // chống double submit
 
+    // Turnstile BẬT mà chưa có token thì gửi lên chắc chắn bị 403. Nói ngay tại
+    // chỗ thay vì để khách nhận lỗi khó hiểu từ server.
+    if (turnstile && turnstile.isEnabled() && !turnstile.getToken()) {
+      showFormError(
+        turnstile.hasFailed()
+          ? "Không tải được bước kiểm tra chống spam. Vui lòng tải lại trang rồi thử lại."
+          : "Vui lòng hoàn tất bước kiểm tra chống spam ở trên rồi bấm gửi."
+      );
+      return;
+    }
+
     clearFormError();
     clearAllFieldErrors();
 
@@ -307,7 +321,9 @@
       utm_campaign: attribution.utm_campaign || null,
       utm_content: attribution.utm_content || null,
       ref: attribution.ref || null,
-      consent: data.consent === true
+      consent: data.consent === true,
+      // Chỉ gửi khi có. Server tự quyết định có bắt buộc hay không.
+      turnstile_token: turnstile ? turnstile.getToken() : null
     };
 
     fetch(apiBase() + "/api/leads", {
@@ -343,7 +359,10 @@
               "Bạn vừa gửi quá nhiều lần. Vui lòng đợi một lát rồi thử lại."
             );
           } else if (response.status === 403) {
-            showFormError("Yêu cầu bị từ chối. Vui lòng tải lại trang rồi thử lại.");
+            if (turnstile) turnstile.reset();
+            showFormError(
+              "Không qua được bước kiểm tra chống spam. Vui lòng thử lại."
+            );
           } else {
             showFormError(error.message);
           }
@@ -381,4 +400,15 @@
 
   submitBtn.disabled = true; // chỉ bật khi danh mục máy đã sẵn sàng
   loadModels();
+
+  // Turnstile là TUỲ CHỌN: tắt thì hàm init trả về ngay và không nạp gì từ Internet.
+  // Không chờ nó xong mới bật form — nạp mạng chậm không được làm chậm trang.
+  turnstile = window.VPTurnstile || null;
+  if (turnstile) {
+    turnstile.init(turnstileWidget).then(function () {
+      if (turnstile.isEnabled() && turnstileWrap) {
+        turnstileWrap.hidden = false;
+      }
+    });
+  }
 })();

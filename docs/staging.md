@@ -39,7 +39,7 @@ Bốn nhãn, dùng đúng nghĩa:
 | `TRUST_PROXY_HEADERS` | OPTIONAL | PUBLIC | RUN | `true` **chỉ khi** proxy ghi đè `X-Forwarded-For` | ✅ có |
 | `ALLOWED_HOSTS` | **REQUIRED** | PUBLIC | RUN | `staging.<domain>` | ✅ có |
 | `TURNSTILE_SECRET_KEY` | OPTIONAL | **SECRET** | RUN | khoá Cloudflare; trống = tắt | ✅ có |
-| `TURNSTILE_SITE_KEY` | OPTIONAL | **PUBLIC** | RUN | khoá site; **lộ được, là khoá công khai** | ⚠️ **SR-2** |
+| `TURNSTILE_SITE_KEY` | OPTIONAL | **PUBLIC** | RUN | khoá site; **lộ được, là khoá công khai** | ✅ có |
 | `TURNSTILE_REQUIRED` | OPTIONAL | PUBLIC | RUN | `false` cho tới khi widget có mặt | ✅ có |
 | `MAX_LEAD_BODY_BYTES` | OPTIONAL | PUBLIC | RUN | `8192` | ✅ có |
 | `EXPOSE_READINESS_DETAILS` | OPTIONAL | PUBLIC | RUN | `false` ở staging | ✅ có |
@@ -72,18 +72,33 @@ Nếu sau này tách frontend sang origin khác thì gắn `CORSMiddleware` vớ
 
 ---
 
-## 3. ⚠️ Bẫy Turnstile — đọc trước khi bật
+## 3. Turnstile — cách bật, và cái bẫy đã được chặn
 
-**Hôm nay, bật `TURNSTILE_REQUIRED=true` sẽ CHẶN MỌI LEAD.**
+**Đường đi đã nối đủ** (SR-2):
 
-Vì sao: backend **đã** có adapter xác minh token ở server, nhưng **frontend chưa có widget** nên
-không có token nào được gửi lên ⇒ mọi `POST /api/leads` bị từ chối **403**.
+```
+server: TURNSTILE_SITE_KEY + TURNSTILE_SECRET_KEY
+   -> GET /api/public-config   (công khai: enabled + site_key, KHÔNG có secret)
+   -> assets/js/turnstile.js   (nạp script Cloudflare + render widget)
+   -> khách giải challenge     -> turnstile_token gửi kèm POST /api/leads
+   -> server xác minh tại /siteverify  (verify_turnstile)
+```
 
-`TURNSTILE_SITE_KEY` hiện **chưa được mã đọc** (đánh dấu ⚠️ **SR-2** ở bảng trên). Gate **SR-2** sẽ
-nối trọn đường: endpoint công khai trả site key → frontend render widget → CSP cho phép origin
-Cloudflare → test với verifier giả.
+**Cái bẫy — và cách nó bị chặn.** Trước SR-2, bật `TURNSTILE_REQUIRED=true` khi frontend **chưa có
+widget** sẽ **chặn mọi lead** (403) mà không ai hiểu vì sao. Nay:
 
-Cho tới khi SR-2 xong: **giữ `TURNSTILE_REQUIRED=false`** và coi bot protection là **TẮT**.
+- `/api/public-config` trả `enabled = false` khi **thiếu một trong hai khoá**, kèm `warning` nói rõ.
+- `turnstile.js` chỉ nạp script Cloudflare khi `enabled = true`; tắt thì **không nạp gì từ Internet**
+  (có test E2E bắt request trình duyệt thật để chứng minh).
+- CSP **chỉ** mở cho `challenges.cloudflare.com` khi Turnstile bật; tắt thì CSP quay về
+  `script-src 'self'`.
+- Frontend chặn gửi và nói rõ khi bật mà chưa có token, thay vì để khách nhận lỗi khó hiểu.
+
+**Vẫn phải giữ `TURNSTILE_REQUIRED=false` cho tới khi có khoá thật.** Chưa có khoá ⇒ bot protection
+đang **TẮT**, và `/api/ready` báo `NOT_CONFIGURED` để điều đó không bị bỏ quên.
+
+**Khoá SECRET không bao giờ ra phía client** — có test khẳng định `/api/public-config` không chứa
+secret, và CI có chốt chặn grep `TURNSTILE_SECRET_KEY` trong `assets/` + `*.html` (kèm đối chứng dương).
 
 ### 3.1 Chính sách fail-open / fail-closed
 

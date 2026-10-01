@@ -516,3 +516,49 @@ def test_lead_form_usable_on_mobile(mobile_context, server):
         assert box["x"] >= 0 and box["x"] + box["width"] <= 375 + 1, box
     finally:
         pass  # `mobile_context` tự đóng context
+
+
+# --------------------------------------------------------------- turnstile
+def test_no_third_party_script_loaded_when_turnstile_is_off(funnel_page, server):
+    """Turnstile TẮT ⇒ KHÔNG được nạp script của Cloudflare.
+
+    Đo bằng cách bắt các request trình duyệt thật sự phát ra — không đọc mã nguồn.
+    Vì sao đáng kiểm: nạp sẵn mã bên thứ ba khi tính năng CHƯA dùng là đánh đổi
+    quyền riêng tư và tốc độ mà không đổi lại lợi ích gì, và nó cũng che mất việc
+    CSP có đang thật sự chặn hay không.
+    """
+    requested: list[str] = []
+    funnel_page.on("request", lambda req: requested.append(req.url))
+
+    funnel_page.goto(f"{server['base_url']}/", wait_until="load")
+    funnel_page.wait_for_function(
+        "() => Array.from(document.querySelectorAll('#iphone_model option'))"
+        ".filter(o => o.value).length > 0",
+        timeout=20_000,
+    )
+
+    third_party = [u for u in requested if "cloudflare.com" in u]
+    assert third_party == [], f"nạp script bên thứ ba dù Turnstile tắt: {third_party}"
+
+    # Và khung chứa widget phải ẩn — không để khung rỗng làm khách tưởng hỏng.
+    assert funnel_page.locator("#turnstileWrap").is_hidden(), (
+        "khung Turnstile hiện ra dù tính năng đang tắt"
+    )
+
+
+def test_public_config_endpoint_is_public_and_leaks_no_secret(funnel_page, server):
+    """`/api/public-config` phải gọi được KHÔNG cần khoá, và không chứa secret."""
+    # Phải về ĐÚNG ORIGIN trước: từ `about:blank` thì fetch là cross-origin và
+    # trình duyệt chặn ngay ("Failed to fetch") — lỗi của phép đo, không của API.
+    funnel_page.goto(f"{server['base_url']}/", wait_until="load")
+    body = funnel_page.evaluate(
+        """async (base) => {
+            const r = await fetch(base + '/api/public-config');
+            return {status: r.status, text: await r.text()};
+        }""",
+        server["base_url"],
+    )
+    assert body["status"] == 200
+    assert "turnstile" in body["text"]
+    # Tên biến secret không được xuất hiện trong payload công khai.
+    assert "secret" not in body["text"].lower() or "site_key" in body["text"]
