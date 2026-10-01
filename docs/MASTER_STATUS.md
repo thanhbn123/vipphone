@@ -29,10 +29,10 @@
 | G04+G05+G06 | Staff redeem UI (quét QR) + Admin leads/CSV + Danh mục iPhone qua admin | **DONE** | [#8](https://github.com/thanhbn123/vipphone/pull/8) | **PASS — 3/3 job** | `280ef0026f0904d87ac03b95c01170e2c9ee9f64` |
 | G07 | Campaign / source tracking | MỘT PHẦN (đã có ở G02: nhận & lưu ở server) | — | — | — |
 | G08 | Security pass | **DONE** | [#12](https://github.com/thanhbn123/vipphone/pull/12) | **PASS** | `381abefdcb304376a177b2153daac4044ca7fd6e` |
-| G09 | Tests đầy đủ | **DONE** — 297 backend + 30 E2E (Chromium thật) | #14 | NOT RUN (xem PR) | — |
-| G10 | CI đầy đủ | **DONE** — 5 job, gồm E2E chạy thật và quét phụ thuộc | #14 | NOT RUN (xem PR) | — |
-| G11 | Staging readiness | MỘT PHẦN (`.env.example`, `/api/ready` đã có; `docs/deployment.md` chưa) | — | — | — |
-| G12 | Owner acceptance pack | NOT STARTED | — | NOT RUN | — |
+| G09 | Tests đầy đủ | **DONE** — 297 backend + 30 E2E (Chromium thật) | [#14](https://github.com/thanhbn123/vipphone/pull/14) | **PASS** (5/5 job) | `d4648f46cd801cf323b715a3eba334ff3570ca4e` |
+| G10 | CI đầy đủ | **DONE** — 5 job, gồm E2E chạy thật và quét phụ thuộc | [#14](https://github.com/thanhbn123/vipphone/pull/14) | **PASS** (5/5 job) | `d4648f46cd801cf323b715a3eba334ff3570ca4e` |
+| G11 | Staging readiness | **DONE (tài liệu)** — `docs/deployment.md`; **hạ tầng staging = BLOCKED_EXTERNAL_INFRA** | #16 | NOT RUN (xem PR) | — |
+| G12 | Owner acceptance pack | **DONE** — `docs/OWNER_ACCEPTANCE.md` | #16 | NOT RUN (xem PR) | — |
 
 **Baseline gốc của dự án:** `7d6162cf31eb96ea27879be3a4671812a9cd7e01` (1 commit, 14 file, CI đỏ 2/2 run).
 Chi tiết baseline đầy đủ nằm ở lịch sử git (`git show 7d6162c`) và ở PR #2.
@@ -362,7 +362,7 @@ không được lưu. Có danh sách ĐEN riêng cho `phone`, `full_name`, `comp
 | — | **Thay đổi danh mục iPhone KHÔNG ghi audit** — bảng `audit_events` có CHECK constraint liệt kê 4 `event_type`; thêm loại mới cần migration. Chưa làm trong gate này | G08 |
 | — | **Trang `admin-leads.html` được phục vụ công khai** (chỉ là vỏ, không chứa dữ liệu). Chặn ở tầng trang là chặn nhầm chỗ vì trình duyệt không gửi được header xác thực khi mở HTML | chấp nhận có ghi lý do |
 | — | **CSV không có BOM** ⇒ Excel có thể hiển thị sai dấu tiếng Việt khi mở trực tiếp | G08 |
-| — | **Bộ E2E chưa nối vào CI** (CI không có Chromium) ⇒ dễ bị bỏ quên | G10 | CI đầy đủ | **DONE** — 5 job, gồm E2E chạy thật và quét phụ thuộc | #14 | NOT RUN (xem PR) | — |
+| — | **Bộ E2E chưa nối vào CI** (CI không có Chromium) ⇒ dễ bị bỏ quên | G10 | CI đầy đủ | **DONE** — 5 job, gồm E2E chạy thật và quét phụ thuộc | [#14](https://github.com/thanhbn123/vipphone/pull/14) | **PASS** (5/5 job) | `d4648f46cd801cf323b715a3eba334ff3570ca4e` |
 | — | Chưa rà soát PII lọt vào log production | G08 |
 
 ---
@@ -764,3 +764,42 @@ PASS, và cả hai cách chạy theo marker như CI (`-m "not integration"` → 
 requirements → `No known vulnerabilities found`.
 
 Ghi rõ lý do pin ngay trong `requirements-dev.txt` để không ai hạ về lại.
+
+---
+
+## 24. G11+G12 — STAGING READINESS + GÓI NGHIỆM THU
+
+Hai tệp tài liệu, cùng nguồn dữ kiện, gộp một PR (không phải mega-PR: 2 tệp + cập nhật file này).
+
+### 24.1 `docs/deployment.md`
+
+Kiến trúc (1 tiến trình uvicorn + PostgreSQL 16) · yêu cầu phiên bản · bảng **22 trường cấu
+hình** khớp `Settings.model_fields` (đã kiểm bằng script, không bằng mắt) · migration + rollback ·
+systemd/nginx mẫu · health/ready · quy trình phát hành · **CI chạy 5 job gì** · và **danh sách
+việc còn thiếu trước production**.
+
+Hai điểm cố ý nhấn:
+- `--workers N` làm rate limit **nhân lên N lần** (bộ đếm trong tiến trình). Ghi rõ, **không**
+  tuyên bố "đã có rate limit" mà bỏ qua phạm vi.
+- Ở production mà `ALLOWED_HOSTS` rỗng thì máy chủ **ghi cảnh báo** và readiness báo
+  `NOT_CONFIGURED` — **cố ý ồn ào** chứ không im lặng.
+
+### 24.2 `docs/OWNER_ACCEPTANCE.md`
+
+Checklist **17 mục**, mỗi mục `PASS` / `FAIL` / `BLOCKED` kèm **lệnh đã chạy** hoặc **số đo**.
+Có mục **"Bảng này KHÔNG nói gì"** và mục **"Việc cần Owner quyết"**.
+
+**Đã kiểm bằng script:** 49 tên test được trích dẫn trong tài liệu **đều tồn tại thật** trong
+`tests/` và `tests_e2e/`. Trích một test không tồn tại là bằng chứng giả, nên bước này không
+được bỏ.
+
+### 24.3 Trạng thái cuối
+
+| Mục | Giá trị |
+|---|---|
+| `main` | `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **KHÔNG ĐỔI suốt phiên** |
+| STAGING | **NOT DEPLOYED** |
+| PRODUCTION | **NOT DEPLOYED** |
+| Test | **297** backend + **30** E2E, tất cả PASS |
+| CI | **5 job**, xanh trên cả ba PR đã merge |
+| Đối chứng âm | **24 ca** đã đo (16 + 4 + 2 + 2 tất định), phạm vi ghi rõ |
