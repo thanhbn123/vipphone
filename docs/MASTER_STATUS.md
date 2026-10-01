@@ -19,8 +19,8 @@
 |---|---|---|---|---|---|
 | Phase 0 | Discovery / Baseline | **DONE** | — | — | — |
 | G01 | Baseline hardening + sửa CI đỏ | **DONE** | [#2](https://github.com/thanhbn123/vipphone/pull/2) | **PASS** | `7dabe0ade68797a6eead65dd315924f52748987a` |
-| G02 | Real backend (API + DB + migration + QR chuẩn + catalog) | **IN PROGRESS** | — | NOT RUN | — |
-| G03 | Redeem engine (atomic, chống double-spend) + audit | NOT STARTED | — | NOT RUN | — |
+| G02 | Real backend (API + DB + migration + QR chuẩn + catalog) | **DONE** | [#4](https://github.com/thanhbn123/vipphone/pull/4) | **PASS** | `b4ca55d3bedcf67c910d0223029da92e37ed6492` |
+| G03 | Redeem engine (atomic, chống double-spend) + audit | **IN PROGRESS** | — | NOT RUN | — |
 | G04 | Staff redeem UI + xác thực nhân viên | NOT STARTED | — | NOT RUN | — |
 | G05 | Admin leads | NOT STARTED | — | NOT RUN | — |
 | G06 | iPhone catalog | MỘT PHẦN (đã có ở G02: DB + seed + API) | — | — | — |
@@ -107,7 +107,7 @@ Kiểm tra ràng buộc (`pg_constraint`):
 | GET | `/api/catalog/iphone-models` | công khai | **CÓ** |
 | GET | `/api/gifts/{gift_code}` | **nhân viên** | **CÓ** |
 | GET | `/api/gifts/{gift_code}/qr.png` | công khai | **CÓ** |
-| POST | `/api/gifts/{gift_code}/redeem` | **nhân viên** | **CHƯA CÓ** → G03 |
+| POST | `/api/gifts/{gift_code}/redeem` | **nhân viên** | **CÓ** (G03) — nguyên tử, idempotent |
 | GET | `/api/admin/leads` | **nhân viên** | **CHƯA CÓ** → G05 |
 
 `POST /api/leads` trả về:
@@ -177,11 +177,21 @@ phân biệt được hai nội dung khác nhau (nếu không, phép đo vô ngh
 | Mục | Trạng thái |
 |---|---|
 | Tra cứu gift cho nhân viên | **CÓ** (G02), trả trường tối thiểu, SĐT che bớt |
-| Xác nhận phát quà (ghi trạng thái) | **CHƯA CÓ** → G03 |
-| Giao dịch nguyên tử / chống double-spend | **CHƯA CÓ** → G03 |
-| Audit `GIFT_REDEEMED` | **CHƯA CÓ** → G03 |
+| Xác nhận phát quà (ghi trạng thái) | **CÓ** (G03) |
+| Chống double-spend | **CÓ** — `SELECT … FOR UPDATE`, chứng minh bằng test tất định |
+| Idempotent | **CÓ** — đã REDEEMED thì trả `already_redeemed = true`, **không** đổi `redeemed_at` |
+| Audit `GIFT_STATUS_CHANGED` + `GIFT_REDEEMED` | **CÓ**, ghi cùng transaction |
+| Trạng thái được phép chuyển | `NEW` / `CONFIRMED` / `READY` → `REDEEMED`. `CANCELLED` → **409, không phát quà** |
 
-Trang `redeem.html` **nói thẳng** khi chức năng xác nhận chưa khả dụng — không giả vờ thành công.
+**Cơ chế chống double-spend:** `SELECT … FOR UPDATE` khoá hàng TRƯỚC khi đọc trạng thái.
+Ở mức READ COMMITTED, transaction thứ hai **chờ**; khi được giải phóng, PostgreSQL đọc lại
+hàng ĐÃ CẬP NHẬT nên bên thua thấy `REDEEMED` và trả idempotent thay vì ghi lần hai.
+
+**Đo được (không suy đoán):** hai test **tất định** — (a) `locked_lead_query()` phải
+compile ra SQL có `FOR UPDATE`, (b) khi hàng đang bị khoá, đọc `pg_stat_activity` phải thấy
+backend của service đang chờ **Ở CHÍNH CÂU `SELECT … FOR UPDATE`** (không phải ở câu `UPDATE`).
+Đã kiểm bằng **đối chứng âm**: bỏ `with_for_update()` thì **cả hai test FAIL**; khôi phục thì
+**cả hai PASS**.
 
 ---
 
@@ -235,7 +245,7 @@ không được lưu. Có danh sách ĐEN riêng cho `phone`, `full_name`, `comp
 | S1 | Validation server-side, không tin client | **XONG** — Pydantic + `extra="forbid"`, từ chối `iphone_year`/`gift_status`/`lead_id` do client gửi |
 | S3 | Ranh giới xác thực nhân viên | **CÓ** — `X-Staff-Key` / `Bearer`, so sánh `compare_digest`. **Fail CLOSED**: chưa cấu hình → **503** |
 | S4 | Rate limit | **CÓ** — cửa sổ trượt theo IP, có test 429 + `Retry-After` |
-| S5 | Audit trail | **MỘT PHẦN** — lead/gift có; redeem ở G03 |
+| S5 | Audit trail | **XONG cho luồng hiện có** — `LEAD_CREATED`, `GIFT_CREATED`, `GIFT_STATUS_CHANGED`, `GIFT_REDEEMED`, ghi CÙNG transaction với thay đổi |
 | S7 | Security header | **CÓ** — CSP nghiêm, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP; HSTS chỉ khi HTTPS |
 | S8 | CSRF | Không dùng cookie/session; xác thực qua header nên **không bị CSRF cổ điển**. Ghi rõ để không tưởng là đã làm |
 | S10 | Secret scanning | **CÓ** — gitleaks 8.30.1, quét toàn bộ lịch sử git |
@@ -260,7 +270,7 @@ không được lưu. Có danh sách ĐEN riêng cho `phone`, `full_name`, `comp
 
 ## 14. TESTS
 
-**143 test, tất cả PASS** — đo bằng `python -m pytest -q` trên **PostgreSQL 16 thật**.
+**163 test, tất cả PASS** — đo bằng `python -m pytest -q` trên **PostgreSQL 16 thật**.
 Phạm vi: `tests/` (unit + integration). **Chưa có** bộ E2E nằm trong repo.
 
 | File | Nội dung |
@@ -270,6 +280,7 @@ Phạm vi: `tests/` (unit + integration). **Chưa có** bộ E2E nằm trong rep
 | `tests/test_health_and_headers.py` | `/api/health`, `/api/ready`, security header, CSP, shortlink |
 | `tests/test_leads_api.py` | lead hợp lệ, SĐT sai, thiếu consent, trùng lặp, gift code duy nhất, đụng độ + thử lại, UTM, model, SQLi, rate limit |
 | `tests/test_gifts_api.py` | xác thực, che PII, mã sai, **QR giải mã thật**, danh mục |
+| `tests/test_redeem_api.py` | redeem thành công, idempotent, CANCELLED bị từ chối, phân quyền, **khoá hàng tất định**, đa luồng |
 | `tests/test_migrations.py` | upgrade/downgrade trên **database tạm riêng**, seed, UNIQUE một phần, CHECK, `alembic check` |
 
 Đối chiếu với 14 kịch bản bắt buộc của G09:
@@ -282,9 +293,9 @@ Phạm vi: `tests/` (unit + integration). **Chưa có** bộ E2E nằm trong rep
 | 4 | duplicate submission | **PASS** |
 | 5 | gift code uniqueness | **PASS** |
 | 6 | gift lookup | **PASS** |
-| 7 | redeem success | **CHƯA** → G03 |
-| 8 | redeem second time | **CHƯA** → G03 |
-| 9 | concurrent redeem | **CHƯA** → G03 |
+| 7 | redeem success | **PASS** |
+| 8 | redeem second time | **PASS** (idempotent) |
+| 9 | concurrent redeem | **PASS** (khoá hàng, test tất định) |
 | 10 | invalid gift code | **PASS** |
 | 11 | UTM capture | **PASS** |
 | 12 | model validation | **PASS** |
@@ -339,10 +350,17 @@ Trong phiên này, **năm lần** thứ dùng để kiểm chứng tự nó khô
 | 6 | **7 test migration pass ở máy nhưng FAIL trên CI**: `password authentication failed for user "vipphone"` | `str(URL)` của SQLAlchemy **che password thành `***`**. Máy local đăng nhập kiểu `trust` nên URL **không có password** → không thấy gì; CI dùng service container **có password** → engine kết nối bằng `***`. Sửa thành `render_as_string(hide_password=False)`. **Đã tái hiện lỗi tại máy** bằng cách bật `scram-sha-256` cho PostgreSQL cục bộ rồi chạy lại: **7 failed** với mã cũ, **7 passed** với bản vá. Đây là lý do **phải có CI chạy trên PostgreSQL thật có password** — chạy máy không bắt được |
 | 7 | gitleaks báo 1 leak: `test-staff-key-0123456789abcdef` trong `tests/conftest.py` | Không phải secret thật, nhưng **trông giống** credential nên làm nhiễu đúng công cụ dùng để bắt secret thật. Đổi thành giá trị độ phức tạp thấp. Chuỗi cũ vẫn nằm trong **lịch sử commit chưa merge**, nên xử lý bằng cách **viết lại commit** chứ **không** thêm allowlist — thêm allowlist là làm yếu công cụ kiểm chứng |
 
-**Nguyên tắc rút ra:** khi một chốt chặn báo động, câu hỏi đầu tiên phải là
-*"chốt chặn sai hay dữ liệu sai?"* — và câu trả lời phải bằng **một phép đo**,
-không bằng cảm giác. Bốn lần đầu là **công cụ sai**; lần 5 và 6 là **dữ liệu/thiết lập sai**;
-lần 7 là **giá trị thử nghiệm gây nhiễu**. Sửa đúng chỗ, không sửa cho vừa mắt.
+| 8 | Test đồng thời `test_concurrent_redeem_only_one_wins` **PASS 5/5 lần dù ĐÃ BỎ `with_for_update()`** | Test không phân biệt được. Nguyên nhân đo được: 8 luồng mất ~20ms bắt tay kết nối (scram) nên các `SELECT` bị so le, cuộc đua **không xảy ra** (đo trực tiếp: 1 lần ghi thắng). Bản vá đầu tiên (kiểm "service có ném lỗi khoá không") **cũng không phân biệt được** — bỏ khoá thì service chờ ở câu `UPDATE`, vẫn ném cùng loại lỗi. Bản vá thật: đọc `pg_stat_activity` để xem backend đang chờ **Ở CÂU NÀO** — phải là `SELECT … FOR UPDATE`. **Đã kiểm bằng đối chứng âm**: bỏ khoá → 2 test FAIL; khôi phục → 2 test PASS |
+
+**Nguyên tắc rút ra (bổ sung sau ca 8):** một test **PASS** không có nghĩa là nó
+**kiểm được điều mình tưởng**. Muốn biết một test có thật sự phân biệt được không, phải
+**phá thứ nó định bảo vệ rồi xem nó có FAIL không** — gọi là đối chứng âm. Test nào không
+FAIL khi phá thì test đó **chưa kiểm gì cả**, dù nó xanh.
+
+Khi một chốt chặn báo động, câu hỏi đầu tiên phải là *"chốt chặn sai hay dữ liệu sai?"* —
+và câu trả lời phải bằng **một phép đo**, không bằng cảm giác. Bốn lần đầu là **công cụ sai**;
+lần 5 và 6 là **dữ liệu/thiết lập sai** (chỉ lộ trên CI); lần 7 là **giá trị thử nghiệm gây nhiễu**;
+lần 8 là **phép đo không phân biệt được**. Sửa đúng chỗ, không sửa cho vừa mắt.
 
 ---
 

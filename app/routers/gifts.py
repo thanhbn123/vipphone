@@ -8,9 +8,10 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..errors import NotFound
 from ..giftcodes import is_well_formed_gift_code, normalize_gift_code
-from ..schemas import GiftLookupResponse
+from ..schemas import GiftLookupResponse, GiftRedeemResponse
 from ..security import require_staff
 from ..services.gifts import find_lead_by_gift_code, render_qr_png, to_lookup_response
+from ..services.redeem import redeem_gift
 
 router = APIRouter(prefix="/api/gifts", tags=["gifts"])
 
@@ -72,4 +73,33 @@ def gift_qr_png(gift_code: str, db: Session = Depends(get_db)) -> Response:
             "Cache-Control": "no-store",
             "Content-Disposition": f'inline; filename="vip-phone-{lead.gift_code}.png"',
         },
+    )
+
+
+@router.post(
+    "/{gift_code}/redeem",
+    response_model=GiftRedeemResponse,
+    summary="Xác nhận phát quà (cần xác thực, nguyên tử, idempotent)",
+)
+def redeem(
+    gift_code: str,
+    db: Session = Depends(get_db),
+    actor: str = Depends(require_staff),
+) -> GiftRedeemResponse:
+    """Chuyển gift sang REDEEMED.
+
+    - Nguyên tử: khoá hàng bằng `SELECT ... FOR UPDATE`, nên hai nhân viên trên
+      hai máy KHÔNG phát quà hai lần cho cùng một mã.
+    - Idempotent: mã đã REDEEMED thì trả `already_redeemed = true` và KHÔNG ghi
+      thêm, KHÔNG đổi `redeemed_at`.
+    - Audit `GIFT_STATUS_CHANGED` + `GIFT_REDEEMED` ghi cùng transaction.
+    """
+    result = redeem_gift(db, gift_code=gift_code, actor=actor)
+
+    return GiftRedeemResponse(
+        lead_id=result.lead.lead_id,
+        gift_code=result.lead.gift_code,
+        gift_status=result.lead.gift_status,
+        already_redeemed=result.already_redeemed,
+        redeemed_at=result.lead.redeemed_at,
     )
