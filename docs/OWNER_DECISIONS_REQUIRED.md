@@ -102,7 +102,9 @@ gh api -X PUT repos/thanhbn123/vipphone/branches/main/protection \
   -f required_status_checks[strict]=true \
   -f 'required_status_checks[contexts][]=Backend (lint, migration, tests)' \
   -f 'required_status_checks[contexts][]=Dependency scan (pip-audit)' \
-  -f 'required_status_checks[contexts][]=E2E (Chromium thật + PostgreSQL)' \
+  -f 'required_status_checks[contexts][]=E2E (chromium thật + PostgreSQL)' \
+  -f 'required_status_checks[contexts][]=E2E (firefox thật + PostgreSQL)' \
+  -f 'required_status_checks[contexts][]=E2E (webkit thật + PostgreSQL)' \
   -f 'required_status_checks[contexts][]=Secret scan (gitleaks)' \
   -f 'required_status_checks[contexts][]=Validate static frontend' \
   -f enforce_admins=false \
@@ -116,7 +118,9 @@ gh api -X PUT repos/thanhbn123/vipphone/branches/develop/protection \
   -f required_status_checks[strict]=true \
   -f 'required_status_checks[contexts][]=Backend (lint, migration, tests)' \
   -f 'required_status_checks[contexts][]=Dependency scan (pip-audit)' \
-  -f 'required_status_checks[contexts][]=E2E (Chromium thật + PostgreSQL)' \
+  -f 'required_status_checks[contexts][]=E2E (chromium thật + PostgreSQL)' \
+  -f 'required_status_checks[contexts][]=E2E (firefox thật + PostgreSQL)' \
+  -f 'required_status_checks[contexts][]=E2E (webkit thật + PostgreSQL)' \
   -f 'required_status_checks[contexts][]=Secret scan (gitleaks)' \
   -f 'required_status_checks[contexts][]=Validate static frontend' \
   -f enforce_admins=false \

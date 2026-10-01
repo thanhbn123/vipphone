@@ -914,3 +914,82 @@ buộc, **0 thiếu**, 318 backend + 32 E2E PASS.
 
 **Luật:** trước khi tạo nhánh mới, `git fetch` **và** `git checkout develop && git pull --ff-only`,
 rồi mới `git checkout -b`. Đọc `origin/develop` là chưa đủ.
+
+---
+
+## 27. SR-3 — MA TRẬN TRÌNH DUYỆT + SỬA MỘT CÂU SAI VỀ LINUX
+
+### 27.1 Sửa một câu SAI trong tài liệu nghiệm thu
+
+`docs/OWNER_ACCEPTANCE.md` §C viết: *"Chưa đo trên Linux. Mọi phép đo chạy trên macOS (Mac mini M4)."*
+**Câu đó sai.** CI đã chạy trên **GitHub-hosted `ubuntu-24.04`, Linux x64** từ lâu:
+
+```
+Runner Image Provisioner
+Operating System
+Ubuntu
+Image: ubuntu-24.04
+Cache hit for: setup-python-Linux-x64-24.04-Ubuntu-python-3.12.14-...
+```
+
+Trên Linux đã chạy: lint · unit · integration PostgreSQL · migration (`alembic upgrade` +
+`alembic check`) · secret scan · dependency scan · E2E.
+
+**Phạm vi đúng:** *"mã chạy đúng trên Linux"* — **có** bằng chứng.
+*"triển khai được trên Linux"* (đóng gói, systemd, nginx, TLS, chạy dưới tải) — **chưa** đo.
+Đã sửa tài liệu, và ghi rõ chỗ nào là số đo macOS, chỗ nào là CI Linux.
+
+> Bài học: tài liệu nghiệm thu **cũng là một phép đo**, và nó cũng có thể sai. Một câu
+> "chưa đo X" nghe rất an toàn nên không ai đi kiểm — trong khi nó **hạ thấp** thực tế và
+> làm mất công đã bỏ ra.
+
+### 27.2 Ma trận trình duyệt
+
+`tests_e2e/conftest.py` chọn engine qua `E2E_BROWSER` (mặc định `chromium`). **Gõ sai tên thì
+DỪNG NGAY** thay vì âm thầm dùng chromium — nếu không, CI có thể tưởng đang kiểm WebKit mà
+thật ra chỉ chạy lại Chromium.
+
+CI: job `e2e` thành **ma trận 3 engine**, `fail-fast: false` (một engine hỏng không che hai
+engine kia). Tên job nay là `E2E (<engine> thật + PostgreSQL)`.
+
+| Engine | Kết quả | Thời gian |
+|---|---|---|
+| Chromium | **33/33 PASS** | ~9s |
+| Firefox | **33/33 PASS** | ~14s |
+| Playwright WebKit | **33/33 PASS** | ~15s |
+
+**Không có khác biệt hành vi giữa ba engine** trên bộ test hiện có.
+
+### 27.3 Phát hiện: `BarcodeDetector` không engine nào có
+
+Đo trực tiếp trên cả ba engine:
+
+```
+chromium  BarcodeDetector = False
+firefox   BarcodeDetector = False
+webkit    BarcodeDetector = False
+```
+
+Nghĩa là **nhánh "có hỗ trợ quét QR" chỉ được kiểm bằng GIẢ LẬP** (test của G04 tự tiêm một
+lớp `BarcodeDetector` giả), **chưa** được kiểm bằng engine thật. Trên Chrome desktop thật có
+camera, hành vi **có thể khác** — **chưa đo**.
+
+Đã thêm test `test_qr_scan_toggle_matches_the_REAL_browser_capability`: nó **không giả lập**,
+mà hỏi chính engine đang chạy rồi so với thứ trang hiển thị — nên ma trận mới có ý nghĩa.
+
+### 27.4 Hệ quả BẮT BUỘC cho branch protection
+
+Đổi job `e2e` thành ma trận làm **tên check đổi** từ một thành ba. Danh sách check bắt buộc
+trong `scripts/enable_branch_protection.sh` **và** `docs/OWNER_DECISIONS_REQUIRED.md` đã được
+cập nhật đồng thời, nếu không Owner bật protection xong sẽ **chờ mãi một check không bao giờ
+xuất hiện**. Nay là **7 check**:
+
+```
+Backend (lint, migration, tests)
+Dependency scan (pip-audit)
+E2E (chromium thật + PostgreSQL)
+E2E (firefox thật + PostgreSQL)
+E2E (webkit thật + PostgreSQL)
+Secret scan (gitleaks)
+Validate static frontend
+```

@@ -25,7 +25,9 @@ APPLY=0
 CHECKS=(
   "Backend (lint, migration, tests)"
   "Dependency scan (pip-audit)"
-  "E2E (Chromium thật + PostgreSQL)"
+  "E2E (chromium thật + PostgreSQL)"
+  "E2E (firefox thật + PostgreSQL)"
+  "E2E (webkit thật + PostgreSQL)"
   "Secret scan (gitleaks)"
   "Validate static frontend"
 )
