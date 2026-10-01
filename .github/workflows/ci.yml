@@ -77,6 +77,9 @@ jobs:
             migrations/versions/0001_initial.py \
             docs/MASTER_STATUS.md docs/architecture.md docs/lead-schema.md \
             docs/adr/0001-stack-selection.md \
+            docs/staging.md docs/pii-data-map.md docs/OWNER_DECISIONS_REQUIRED.md \
+            docs/decisions/PII_RETENTION_OPTIONS.md \
+            .env.staging.example scripts/enable_branch_protection.sh \
             requirements.txt requirements-dev.txt \
             README.md
           do
