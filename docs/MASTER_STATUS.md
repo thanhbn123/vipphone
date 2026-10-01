@@ -7,9 +7,10 @@
 > Chưa chạy thì ghi `NOT RUN`. Chưa deploy thì ghi `NOT DEPLOYED`.
 > Kết luận dạng "0 lỗi" phải ghi kèm **công cụ đo**, **phạm vi đo** và **cái nằm ngoài phạm vi**.
 
-- Cập nhật lần cuối: **2026-10-01, 19:35 +07**
+- Cập nhật lần cuối: **2026-10-01, 19:19 +07**
 - Người cập nhật: DEEPSEEK HARNESS — VIP PHONE PROJECT CONTROLLER
-- Gate vừa xong: **G04 + G05 + G06** (issue [#7](https://github.com/thanhbn123/vipphone/issues/7))
+- Gate vừa xong: **G04 + G05 + G06** (issue [#7](https://github.com/thanhbn123/vipphone/issues/7), PR [#8](https://github.com/thanhbn123/vipphone/pull/8), merge `280ef00`)
+- `develop`: `280ef0026f0904d87ac03b95c01170e2c9ee9f64` · `main`: `7d6162cf31eb96ea27879be3a4671812a9cd7e01` (không đổi)
 - Repo: <https://github.com/thanhbn123/vipphone>
 
 ---
@@ -22,7 +23,7 @@
 | G01 | Baseline hardening + sửa CI đỏ | **DONE** | [#2](https://github.com/thanhbn123/vipphone/pull/2) | **PASS** | `7dabe0ade68797a6eead65dd315924f52748987a` |
 | G02 | Real backend (API + DB + migration + QR chuẩn + catalog) | **DONE** | [#4](https://github.com/thanhbn123/vipphone/pull/4) | **PASS** | `b4ca55d3bedcf67c910d0223029da92e37ed6492` |
 | G03 | Redeem engine (atomic, chống double-spend) + audit | **DONE** | [#6](https://github.com/thanhbn123/vipphone/pull/6) | **PASS** | `92a4952d54c1d2009a85f69ba74a44becc4651df` |
-| G04+G05+G06 | Staff redeem UI (quét QR) + Admin leads/CSV + Danh mục iPhone qua admin | **CODE XONG — CHỜ CI + MERGE** (PR #8) | [#8](https://github.com/thanhbn123/vipphone/pull/8) | xem PR #8 | điền ở PR chốt số sau merge |
+| G04+G05+G06 | Staff redeem UI (quét QR) + Admin leads/CSV + Danh mục iPhone qua admin | **DONE** | [#8](https://github.com/thanhbn123/vipphone/pull/8) | **PASS — 3/3 job** | `280ef0026f0904d87ac03b95c01170e2c9ee9f64` |
 | G07 | Campaign / source tracking | MỘT PHẦN (đã có ở G02: nhận & lưu ở server) | — | — | — |
 | G08 | Security pass | MỘT PHẦN (đã có ở G02 + **G05: IDOR, CSV injection**; còn Turnstile/dependency scan) | — | — | — |
 | G09 | Tests đầy đủ | MỘT PHẦN (280 backend + **14 E2E trình duyệt thật**; E2E **chưa nối vào CI**) | — | — | — |
@@ -42,14 +43,21 @@ Chi tiết baseline đầy đủ nằm ở lịch sử git (`git show 7d6162c`) 
 | Expected develop | `92a4952d54c1d2009a85f69ba74a44becc4651df` | `git rev-parse origin/develop` |
 | Actual develop (trước merge) | `92a4952d54c1d2009a85f69ba74a44becc4651df` | `git rev-parse origin/develop` |
 | Merge-base | `92a4952d54c1d2009a85f69ba74a44becc4651df` | `git merge-base origin/develop <PR HEAD>` |
-| PR HEAD | `gate/g04-g05-g06-staff-admin` | `git rev-parse origin/gate/g04-g05-g06-staff-admin` |
-| Merge SHA mới | điền ở PR chốt số sau khi merge (không sửa trực tiếp `develop`) | `git rev-parse origin/develop` |
+| PR HEAD | `cd460d29c95bb2d7b9d700349bde91f8ed999f00` | `gh pr view 8 --json headRefOid` |
+| **Merge SHA mới của `develop`** | **`280ef0026f0904d87ac03b95c01170e2c9ee9f64`** | `git rev-parse origin/develop` sau merge (2026-10-01, 19:19 +07) |
+| `main` sau gate | `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **KHÔNG ĐỔI** | `git rev-parse origin/main` |
 
 Drift: **expected == actual == merge-base** ⇒ không lệch, được phép merge.
 
-> **Chưa ghi PASS cho tới khi có kết luận CI thật của PR #8.** Bảng trên cố ý để trống
-> cột CI và cột merge SHA: điền sau khi CI chạy xong và merge xong, bằng PR chốt số.
-> Luật của file này: không ghi PASS nếu không có evidence đo được.
+**CI của PR #8 — đọc từng step, không suy từ dấu ✓ của job** (`gh run view --log --job=…`):
+
+| Job | Kết luận | Bằng chứng đọc được từ log |
+|---|---|---|
+| `Secret scan (gitleaks)` | **PASS** (5 s) | 4/4 step chạy, gitleaks 8.30.1 quét toàn bộ lịch sử |
+| `Validate static frontend` | **PASS** (7 s) | 10/10 step chạy, **không step nào bị skip** |
+| `Backend (lint, migration, tests)` | **PASS** (56 s) | ruff: *All checks passed!* + *38 files already formatted*; unit: **57 passed, 223 deselected**; integration: **223 passed, 57 deselected**; full: **280 passed**, 0 failed, 0 skipped |
+
+Con số trên CI khớp đúng con số đo ở máy (280 passed). Không có test nào bị skip.
 
 ---
 
