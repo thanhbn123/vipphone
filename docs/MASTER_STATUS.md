@@ -993,3 +993,94 @@ E2E (webkit thật + PostgreSQL)
 Secret scan (gitleaks)
 Validate static frontend
 ```
+
+---
+
+## 28. SR-4 — PREFLIGHT, SAO LƯU/PHỤC HỒI, SMOKE TẢI, PHÁT HÀNH/QUAY LUI
+
+### 28.1 `scripts/staging_preflight.sh` — 18 mục, thoát mã ≠ 0 nếu chưa đạt
+
+Kiểm: `APP_ENV` · `DATABASE_URL` (kể cả giá trị mẫu) · **database không phải production** ·
+`PUBLIC_BASE_URL` (https + không phải localhost + **khớp `ALLOWED_HOSTS`**) · `STAFF_API_KEYS`
+(có, không mẫu, đủ dài) · **Turnstile khớp `TURNSTILE_REQUIRED`** · `EXPOSE_READINESS_DETAILS` ·
+kết nối database · **migration ở HEAD** · health · readiness · **readiness không lộ chi tiết**.
+
+### 28.2 ĐỐI CHỨNG ÂM — và một phép kiểm **MÃ CHẾT** bị bắt
+
+| # | Cấu hình | Mong đợi | Đo được |
+|---|---|---|---|
+| NC-P1 | staging đúng hoàn toàn | exit 0 | **exit 0** (0 FAIL, 2 WARN) |
+| NC-P2 | `PUBLIC_BASE_URL=http://localhost:8000` | exit 1 | **exit 1** — 3 FAIL (không https · localhost · không khớp ALLOWED_HOSTS) |
+| NC-P3 | `DATABASE_URL` trỏ `vipphone_production` | exit 1 | **lần đầu: exit 0 — SAI** · sau khi sửa: **exit 1** |
+| NC-P4 | `TURNSTILE_REQUIRED=true` thiếu khoá | exit 1 | **exit 1** |
+| NC-P5 | `STAFF_API_KEYS=short` | exit 1 | **exit 1** |
+| NC-P6 | database **chưa** ở head | exit 1 | **exit 1** · sau `upgrade head` → **PASS** |
+
+**NC-P3 bắt được một phép kiểm MÃ CHẾT.** Bản đầu kiểm *"tên database có chữ staging không"*
+**trước**, nên khi `APP_ENV=staging` mà tên là `vipphone_production`, nhánh `WARN` **luôn thắng**
+và phép kiểm production **không bao giờ chạy** — trỏ staging vào database production vẫn **exit 0**.
+Đã đảo thứ tự: kiểm `prod` **trước**.
+
+> Đây là dạng nguy hiểm nhất của "phép đo nói dối": **phép kiểm an ninh trông có, chạy không lỗi,
+> và không bao giờ có thể FAIL.** Nếu chỉ chạy NC-P1 (ca đúng) thì nó đã lọt.
+
+**Chế độ đầy đủ đã chạy thật** với server + PostgreSQL tại máy: kết nối database **PASS**,
+migration ở HEAD **PASS** (`0001_initial`), health **PASS** (HTTP 200), readiness **PASS**,
+readiness không lộ chi tiết **PASS**. Hai FAIL còn lại là `http://127.0.0.1` — **đúng như mong đợi**
+khi chạy tại máy. Server tắt **theo đúng PID** (§16.7), không dùng `pkill`.
+
+### 28.3 `LOCAL BACKUP/RESTORE TEST` — chạy thật, kiểm bằng md5 nội dung
+
+250 lead → `pg_dump -Fc` (23 KB) → `pg_restore` vào database mới → **250 = 250**, đủ 4 bảng,
+28 dòng danh mục, và **md5 nội dung khớp** (`94e4e85b318f9f96…`).
+
+**Vì sao kiểm md5 chứ không chỉ đếm dòng:** đếm dòng chứng minh *có 250 dòng*, không chứng minh
+*đúng 250 dòng ấy*. Số dòng khớp mà nội dung lệch vẫn là bản phục hồi hỏng.
+
+**Phạm vi:** tại máy, cùng máy chạy database, không qua mạng, **không phải staging**.
+Chứng minh **quy trình đúng**, KHÔNG chứng minh sao lưu trên hạ tầng thật chạy được.
+
+### 28.4 Lỗ hổng `.gitignore`: bản dump chứa PII **chưa** bị chặn
+
+`*.sql` đã bị chặn nhưng **`*.dump` thì CHƯA** ⇒ một `pg_dump` đặt trong repo **có thể đã được
+commit**, mang theo **toàn bộ PII khách**. Đã thêm `*.dump`, `*.dump.age`, `*.dump.sha256`,
+`pg-backup/`. Kiểm bằng `git check-ignore` (đạt).
+
+### 28.5 `LOCAL LOAD SMOKE` — hai lỗi **của phép đo**, không phải của server
+
+Lần chạy đầu cho kết quả **vô nghĩa**; cả hai nguyên nhân đều nằm ở **script**, không ở sản phẩm:
+
+| Triệu chứng | Nguyên nhân thật |
+|---|---|
+| `HTTP 422` hàng loạt trên `POST /api/leads` | Script gửi `"iPhone 16"` (**tên hiển thị**) vào trường `iphone_model`, nhưng trường này nhận **`model_code`**. **Script sai.** Nay lấy `model_code` thật từ `/api/catalog` (28 mã) |
+| `URLError: [Errno 49] Can't assign requested address` | Mở kết nối mới cho **mỗi** request ⇒ macOS **cạn cổng tạm**. Nay giữ **một kết nối mỗi luồng** (keep-alive) |
+
+Sau khi sửa (localhost, 8 luồng, 12 giây):
+
+| Kịch bản | req | lỗi thật | 429 | p50 | p95 |
+|---|---|---|---|---|---|
+| `GET /` | 2747 | 0 | 0 | 4.7 ms | 5.4 ms |
+| `GET /api/catalog/iphone-models` | 2613 | 0 | 0 | 4.9 ms | 5.5 ms |
+| `POST /api/leads` | 5025 | 0 | 5016 | 6.3 ms | 21.0 ms |
+| `GET /api/gifts/{code}/qr.png` | 2103 | 0 | 0 | 5.6 ms | 6.2 ms |
+| `GET /api/gifts/{code}` (nhân viên) | 2267 | 0 | 0 | 5.3 ms | 6.1 ms |
+
+**Tổng: 14 755 request / 12 s (1232 req/s) · 0 lỗi thật · p50 gộp 5.1 ms · p95 gộp 6.0 ms.**
+
+**5016 mã 429 KHÔNG phải lỗi** — đó là rate limit (10 lead/phút) **chạy đúng**. Script tách 429
+khỏi tỉ lệ lỗi và chỉ thoát ≠ 0 khi có lỗi **thật**.
+
+**Phạm vi:** cùng máy với server, qua localhost, có keep-alive ⇒ **KHÔNG** nói gì về năng lực
+production. Đây là `LOCAL LOAD SMOKE`, không phải benchmark.
+
+### 28.6 Phát hành / quay lui — `docs/deployment.md` §12
+
+Trình tự 9 bước (chốt mã → preflight → **sao lưu trước khi đổi schema** → migration → khởi động
+lại → health → readiness → **kiểm tay 1 lead thật** → biên bản).
+
+**Luật: mặc định FORWARD-FIX, không downgrade.** `downgrade` chạy được về kỹ thuật nhưng
+**không** đối xứng với `upgrade`: `upgrade` thêm cột và bỏ trống, `downgrade` **xoá cột** — xoá
+luôn dữ liệu đã ghi. Với migration đầu tiên, `downgrade` **xoá sạch bảng** ⇒ mất hết lead và gift
+code. Vì vậy `alembic downgrade` **không** nằm trong quy trình phát hành.
+
+**Chưa lần nào chạy trên hạ tầng thật** — §12 là *thiết kế*, không phải *quy trình đã kiểm*.

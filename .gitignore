@@ -38,3 +38,10 @@ blob-report/
 
 # Log
 *.log
+
+# Bản sao lưu database — chứa ĐẦY ĐỦ PII khách (tên, SĐT, công ty).
+# TUYỆT ĐỐI không commit: bản dump không được hưởng quyền bảo vệ của database.
+*.dump
+*.dump.age
+*.dump.sha256
+pg-backup/
