@@ -803,3 +803,49 @@ Có mục **"Bảng này KHÔNG nói gì"** và mục **"Việc cần Owner quy�
 | Test | **297** backend + **30** E2E, tất cả PASS |
 | CI | **5 job**, xanh trên cả ba PR đã merge |
 | Đối chứng âm | **24 ca** đã đo (16 + 4 + 2 + 2 tất định), phạm vi ghi rõ |
+
+---
+
+## 25. SR-1 — HỢP ĐỒNG CẤU HÌNH STAGING + QUẢN TRỊ PII
+
+Gate đầu của phiên **STAGING READINESS** (sau khi chuỗi G01–G12 đã xong).
+
+### 25.1 Tệp mới
+
+| Tệp | Nội dung |
+|---|---|
+| `.env.staging.example` | Mẫu biến cho staging, không có secret thật |
+| `docs/staging.md` | Hợp đồng cấu hình: phân loại **REQUIRED/OPTIONAL · SECRET/PUBLIC · BUILD-TIME/RUN-TIME** cho **19 biến**, kèm "mã đọc biến này chưa" |
+| `docs/pii-data-map.md` | Bản đồ PII: từng trường, vì sao thu, ai đọc, dùng làm gì |
+| `docs/decisions/PII_RETENTION_OPTIONS.md` | 3 phương án trung lập, **không chọn hộ Owner** |
+| `docs/OWNER_DECISIONS_REQUIRED.md` | D-001…D-004 |
+| `scripts/enable_branch_protection.sh` | In lệnh cho Owner; mặc định **chỉ in**, cần `--apply` mới ghi |
+
+### 25.2 Ba phát hiện khi soạn hợp đồng
+
+1. **Không có `SECRET_KEY`/session signing secret, và không cần.** Stack không dùng cookie/phiên —
+   xác thực nhân viên là khoá API qua header, so bằng `compare_digest`. Ghi rõ "không áp dụng" thay
+   vì bịa ra một biến cho đủ danh sách.
+2. **Không có biến BUILD-TIME nào.** Frontend không có bước build (ADR-0001 §3.2) ⇒ toàn bộ cấu hình
+   là RUN-TIME. Đây là hệ quả của thiết kế, không phải thiếu sót.
+3. **Bẫy Turnstile:** `TURNSTILE_SITE_KEY` chưa được mã đọc và frontend chưa có widget ⇒ bật
+   `TURNSTILE_REQUIRED=true` **hôm nay sẽ chặn mọi lead**. Đã ghi cảnh báo; đường đi đầy đủ thuộc gate sau.
+
+### 25.3 `.gitignore` suýt nuốt mất tệp mẫu
+
+`.gitignore` có `.env.*` với đúng một ngoại lệ `!.env.example` ⇒ `.env.staging.example` **bị bỏ qua**.
+Đã thêm ngoại lệ. **Bài học đo lường:** `git check-ignore -v` in ra dòng phủ định cuối cùng kể cả khi
+tệp **KHÔNG** bị bỏ qua — nhìn nó mà kết luận là sai. Phép thử đáng tin là `git add -n <tệp>`.
+
+### 25.4 Branch protection — đo, không giả PASS
+
+```
+main    : "Branch not protected" (404)
+develop : "Branch not protected" (404)
+rulesets: []
+```
+
+Token phiên này **có `admin=true`** (tức là bật được), nhưng đây là **thao tác chính sách của Owner**,
+nên harness **không tự bật**. Đã tạo script in ra lệnh chính xác. Tên 5 check trong script đã được
+**so từng ký tự** với tên check thật trên GitHub — **khớp**. (Bản in đầu dùng `printf %q` làm hỏng
+tên tiếng Việt `Chromium thật`; đã sửa sang dạng dán được.)

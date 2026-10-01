@@ -5,6 +5,7 @@
 .env
 .env.*
 !.env.example
+!.env.staging.example
 
 # Node
 node_modules/
