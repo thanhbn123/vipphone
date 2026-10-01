@@ -140,25 +140,57 @@ def live_server() -> str:
             process.wait(timeout=5)
 
 
+#: Ba engine được hỗ trợ. Chọn bằng biến môi trường để CI chạy được MA TRẬN
+#: mà không cần parametrize fixture cấp session (vốn rất khó viết đúng).
+SUPPORTED_BROWSERS = ("chromium", "firefox", "webkit")
+
+
+def selected_browser() -> str:
+    """Engine đang chọn. Mặc định `chromium`; sai tên thì DỪNG ngay.
+
+    Dừng ngay thay vì âm thầm dùng chromium: gõ sai tên mà vẫn chạy được nghĩa là
+    CI có thể tưởng đang kiểm WebKit trong khi thật ra chỉ chạy lại Chromium.
+    """
+    name = os.environ.get("E2E_BROWSER", "chromium").strip().lower()
+    if name not in SUPPORTED_BROWSERS:
+        raise RuntimeError(
+            f"E2E_BROWSER={name!r} không hợp lệ. Chọn một trong {SUPPORTED_BROWSERS}."
+        )
+    return name
+
+
 @pytest.fixture(scope="session")
 def browser():
-    """Chromium thật, headless. Thiếu trình duyệt thì BÁO LỖI, không skip."""
+    """Trình duyệt THẬT, headless. Thiếu trình duyệt thì BÁO LỖI, không skip."""
     from playwright.sync_api import Error as PlaywrightError
     from playwright.sync_api import sync_playwright
 
+    name = selected_browser()
+
     with sync_playwright() as playwright:
+        engine = getattr(playwright, name)
         try:
-            instance = playwright.chromium.launch(headless=True)
+            instance = engine.launch(headless=True)
         except PlaywrightError as exc:  # pragma: no cover - phụ thuộc máy
             raise RuntimeError(
-                "Không mở được Chromium của Playwright. Cài bằng:\n"
-                "    .venv/bin/playwright install chromium\n"
+                f"Không mở được {name} của Playwright. Cài bằng:\n"
+                f"    .venv/bin/playwright install {name}\n"
                 f"Lỗi gốc: {exc}"
             ) from exc
         try:
             yield instance
         finally:
             instance.close()
+
+
+@pytest.fixture(scope="session")
+def browser_name() -> str:
+    """Tên engine đang chạy — để test có thể tự bỏ qua phần không hỗ trợ."""
+    return selected_browser()
+
+
+def pytest_report_header(config) -> str:
+    return f"VIP PHONE E2E — trình duyệt: {selected_browser()}"
 
 
 @pytest.fixture

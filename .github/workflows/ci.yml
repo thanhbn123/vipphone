@@ -343,8 +343,17 @@ jobs:
   # PHẦN nên sẽ nói dối về chính sách chống trùng.
   # ---------------------------------------------------------------------
   e2e:
-    name: E2E (Chromium thật + PostgreSQL)
+    # Tên job chứa tên engine ⇒ GitHub sinh BA check riêng. Danh sách check bắt
+    # buộc trong scripts/enable_branch_protection.sh PHẢI khớp cả ba, nếu không
+    # Owner bật protection xong sẽ chờ mãi một check không bao giờ xuất hiện.
+    name: E2E (${{ matrix.browser }} thật + PostgreSQL)
     runs-on: ubuntu-latest
+
+    strategy:
+      # Một engine hỏng KHÔNG được che kết quả của hai engine kia.
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
 
     services:
       postgres:
@@ -380,8 +389,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
 
-      - name: Install Chromium
-        run: python -m playwright install --with-deps chromium
+      - name: Install ${{ matrix.browser }}
+        run: python -m playwright install --with-deps ${{ matrix.browser }}
 
       - name: Wait for PostgreSQL
         run: |
@@ -392,16 +401,18 @@ jobs:
           done
           echo "PostgreSQL không sẵn sàng"; exit 1
 
-      - name: Run E2E suite
+      - name: Run E2E suite (${{ matrix.browser }})
         # KHÔNG truyền `-m` để loại trừ gì, và KHÔNG cho phép skip im lặng:
         # một bộ E2E bị skip là một bộ E2E không bao giờ có thể FAIL.
+        env:
+          E2E_BROWSER: ${{ matrix.browser }}
         run: python -m pytest tests_e2e -q --durations=10
 
       - name: Upload Playwright artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-artifacts
+          name: playwright-artifacts-${{ matrix.browser }}
           path: |
             test-results/
             playwright-report/

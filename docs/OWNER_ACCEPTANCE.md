@@ -51,7 +51,7 @@ make lint && make secret-scan
 | 12 | **TRACKING** | **PASS (một phần)** | Server nhận và lưu `src/ref/utm_source/utm_medium/utm_campaign/utm_content`; giá trị lạ bị **422** (`test_unsafe_tracking_values_are_rejected`); attribution sống sót qua điều hướng (E2E). **CHƯA** nối GTM/GA4/Meta Pixel — `TRACKING = DATA_LAYER_ONLY` |
 | 13 | **MOBILE** | **PASS** | E2E đo **thật**: **0 tràn ngang** tại **375 px, 393 px, 360 px** trên `/` và `/redeem.html`; `test_lead_form_usable_on_mobile` điền **và gửi được** ở 375×667, gift code sinh ra, ảnh QR nằm trọn trong khung (`bounding_box` nằm trong bề rộng) |
 | 14 | **SECURITY** | **PASS (còn mục mở)** | Xem **§B** |
-| 15 | **CI** | **PASS** | **5 job**, xanh trên **cả ba** PR đã merge. Đã kiểm **từng step**, không step nào bị skip. Run: `36860688002` (PR #8), `36861758799` (PR #12), **`36862629800` (PR #14 — 5/5 job, gồm `e2e` chạy Chromium thật và `dependency-scan`)**. Run `36851365921` là CI **ĐỎ** của baseline trước khi sửa |
+| 15 | **CI** | **PASS** | **5 job** (job `e2e` nay là ma trận 3 engine), xanh trên **cả ba** PR đã merge. Đã kiểm **từng step**, không step nào bị skip. Run: `36860688002` (PR #8), `36861758799` (PR #12), **`36862629800` (PR #14 — 5/5 job, gồm `e2e` chạy Chromium thật và `dependency-scan`)**. Run `36851365921` là CI **ĐỎ** của baseline trước khi sửa |
 | 16 | **MIGRATION** | **PASS** | `test_upgrade_creates_expected_schema` trên **database tạm riêng**: đủ bảng, 24 cột `leads`, 7 index; `test_no_pending_migration_diff` chạy **`alembic check`** (bắt được model sửa mà quên migration); `test_seed_inserts_exactly_the_verified_models` = **28 model**, không seed năm rỗng; `test_partial_unique_index_enforces_duplicate_policy` chứng minh **UNIQUE INDEX MỘT PHẦN** chặn trùng ở tầng database |
 | 17 | **ROLLBACK** | **PASS (một phần)** | Migration: `test_downgrade_removes_everything` — `downgrade base` xoá sạch 3 bảng, **đã đo**. Quy trình rollback ứng dụng ghi ở `docs/deployment.md`. **CHƯA** diễn tập rollback trên hạ tầng vì **chưa có hạ tầng** |
 
@@ -100,11 +100,17 @@ make lint && make secret-scan
 Đọc mục này trước khi kết luận "đã xong":
 
 - **Chưa có hạ tầng staging** ⇒ **toàn bộ** số đo là **trên máy**, không phải trên môi trường giống production.
-- **Chưa đo trên Linux.** Mọi phép đo chạy trên macOS (Mac mini M4). Lần chạy đầu trên Linux phải coi là **chưa biết**, không phải "đã biết".
+- **Linux: ĐÃ ĐO, nhưng đúng phạm vi.** CI chạy trên **GitHub-hosted `ubuntu-24.04`, Linux x64** — không phải macOS. Bằng chứng: log runner ghi `Operating System: Ubuntu` + `Image: ubuntu-24.04`, và `setup-python-Linux-x64-24.04-Ubuntu-python-3.12.14`.
+  Cụ thể đã chạy **trên Linux**: lint · unit · integration PostgreSQL · migration (`alembic upgrade` + `alembic check`) · secret scan · dependency scan · **E2E Chromium/Firefox/WebKit**.
+  **Chưa** đo trên Linux: đóng gói artifact, systemd, nginx, TLS, và **chạy thật dưới tải**. Nghĩa là *"mã chạy đúng trên Linux"* đã có bằng chứng; *"triển khai được trên Linux"* thì **chưa**.
+  *(Bản trước của tài liệu này ghi "Chưa đo trên Linux. Mọi phép đo chạy trên macOS" — câu đó **sai**: CI đã chạy Linux từ lâu. Đã sửa.)*
+- **Các phép đo "tại máy" là macOS** (Mac mini M4). Chỗ nào ghi "đo tại máy" thì đó là macOS; chỗ nào ghi CI thì đó là Linux.
 - **Chưa đo tải.** Không có thử đồng thời, không có đo độ trễ dưới tải.
 - **Chưa đo khả năng chịu lỗi database** (mất kết nối giữa chừng, failover).
 - **Chưa có sao lưu, chưa thử phục hồi.**
-- **Chưa đo trên trình duyệt khác Chromium** — E2E chỉ chạy Chromium. Quét QR chỉ chạy trên trình duyệt có `BarcodeDetector`; Safari/iOS và Firefox sẽ **ẩn nút** (đúng thiết kế, nhưng **chưa thử thật**).
+- **Trình duyệt: ĐÃ chạy ma trận 3 engine** — **Chromium**, **Firefox**, **Playwright WebKit**, mỗi engine **33/33 PASS** (trong CI và tại máy).
+  - **`SAFARI REAL` = NOT TESTED.** *Playwright WebKit **không phải** Safari thật.* Cùng nhân WebKit nhưng khác bản dựng, khác hệ điều hành, khác tích hợp. Không được ghi "Safari đã kiểm".
+  - **Quét QR bằng `BarcodeDetector`: KHÔNG engine nào trong ma trận có API này** — đo được `chromium=False, firefox=False, webkit=False` (kể cả Chromium headless của Playwright). Nghĩa là **nhánh "có hỗ trợ quét" chỉ được kiểm bằng GIẢ LẬP** trong test của G04, **chưa** được kiểm bằng engine thật. Trên máy thật (Chrome desktop có camera) hành vi có thể khác — **chưa đo**.
 - **Số test thay đổi theo gate** — con số phải đọc kèm SHA ở đầu tài liệu.
 - **Đối chứng âm có phạm vi.** Tổng cộng đã đo **24 ca** (16 của gate G04-G06, 4 của G08, 2 của G09/G10, 2 tất định của G03). Con số đó phủ **các test an ninh và các bản vá cụ thể**, **KHÔNG** có nghĩa "toàn bộ test của dự án đã được đối chứng âm".
 

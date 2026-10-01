@@ -562,3 +562,31 @@ def test_public_config_endpoint_is_public_and_leaks_no_secret(funnel_page, serve
     assert "turnstile" in body["text"]
     # Tên biến secret không được xuất hiện trong payload công khai.
     assert "secret" not in body["text"].lower() or "site_key" in body["text"]
+
+
+# ------------------------------------------------- năng lực trình duyệt THẬT
+def test_qr_scan_toggle_matches_the_REAL_browser_capability(funnel_page, server, browser_name):
+    """Nút quét QR phải khớp NĂNG LỰC THẬT của engine — không giả lập gì.
+
+    Test của gate G04 **giả lập** `BarcodeDetector` có/không để kiểm logic. Test
+    này KHÔNG giả lập: nó hỏi chính engine đang chạy xem có API đó không, rồi so
+    với thứ trang hiển thị. Nhờ vậy ma trận trình duyệt mới có ý nghĩa —
+    Chromium có API, Firefox/WebKit không, và cả hai đường đều phải đúng.
+    """
+    funnel_page.goto(f"{server['base_url']}/redeem.html", wait_until="load")
+
+    has_api = funnel_page.evaluate("() => typeof window.BarcodeDetector !== 'undefined'")
+    toggle = funnel_page.locator("#scanToggle")
+    assert toggle.count() == 1, "trang nhân viên thiếu nút quét"
+
+    if has_api:
+        assert toggle.is_visible(), (
+            f"{browser_name} CÓ BarcodeDetector nhưng nút quét bị ẩn — đang bỏ sót tính năng"
+        )
+    else:
+        assert not toggle.is_visible(), (
+            f"{browser_name} KHÔNG có BarcodeDetector nhưng nút quét vẫn HIỆN — đang giả vờ"
+        )
+        note = funnel_page.locator("#scanUnsupported")
+        if note.count():
+            assert note.inner_text().strip(), "có chỗ giải thích nhưng nội dung rỗng"
