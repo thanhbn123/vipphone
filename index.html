@@ -4,10 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Đăng ký nhận ốp VIP PHONE miễn phí dành cho cộng đồng VIP ORDER × BNI.">
+  <meta name="robots" content="noindex">
   <title>VIP PHONE — Nhận ốp miễn phí</title>
   <link rel="stylesheet" href="assets/css/styles.css">
 </head>
 <body>
+  <a class="skip-link" href="#main">Bỏ qua điều hướng, tới nội dung chính</a>
+
   <header class="topbar">
     <div class="brand">
       <span class="brand-mark">VIP</span>
@@ -16,41 +19,53 @@
     <span class="co-brand">VIP ORDER × BNI</span>
   </header>
 
-  <main class="container">
-    <section class="hero card">
+  <main class="container" id="main">
+    <section class="hero card" aria-labelledby="hero-title">
       <p class="eyebrow">QUÀ TẶNG DÀNH CHO CỘNG ĐỒNG</p>
-      <h1>Ốp xịn tặng bạn</h1>
+      <h1 id="hero-title">Ốp xịn tặng bạn</h1>
       <p class="hero-copy">
         Chọn đúng dòng iPhone, để lại thông tin và nhận 01 ốp VIP PHONE miễn phí.
       </p>
-      <div class="gift-note">Số lượng quà có giới hạn theo từng dòng máy.</div>
+      <p class="gift-note">Số lượng quà có giới hạn theo từng dòng máy.</p>
     </section>
 
-    <section class="card">
-      <h2>Đăng ký nhận quà</h2>
+    <section class="card" aria-labelledby="form-title">
+      <h2 id="form-title">Đăng ký nhận quà</h2>
+
+      <noscript>
+        <p class="status bad" role="alert">
+          Trang này cần JavaScript để gửi đăng ký. Vui lòng bật JavaScript rồi tải lại trang.
+        </p>
+      </noscript>
+
       <form id="leadForm" novalidate>
+        <p class="form-note">Các trường có dấu <span aria-hidden="true">*</span> là bắt buộc.</p>
+
         <div class="grid two">
-          <label>
-            Họ và tên *
-            <input id="full_name" name="full_name" autocomplete="name" required maxlength="80">
+          <label for="full_name">
+            Họ và tên <span aria-hidden="true">*</span>
+            <input id="full_name" name="full_name" type="text" autocomplete="name"
+                   required maxlength="80" aria-required="true">
           </label>
-          <label>
-            Số điện thoại *
-            <input id="phone" name="phone" inputmode="tel" autocomplete="tel" required maxlength="15"
-                   placeholder="Ví dụ: 0912345678">
+          <label for="phone">
+            Số điện thoại <span aria-hidden="true">*</span>
+            <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel"
+                   required maxlength="15" aria-required="true"
+                   aria-describedby="phone-hint" placeholder="Ví dụ: 0912345678">
+            <span class="field-hint" id="phone-hint">10 số, bắt đầu bằng 03, 05, 07, 08 hoặc 09.</span>
           </label>
         </div>
 
         <div class="grid two">
-          <label>
-            Dòng iPhone *
-            <select id="iphone_model" name="iphone_model" required>
-              <option value="">Đang tải danh sách...</option>
+          <label for="iphone_model">
+            Dòng iPhone <span aria-hidden="true">*</span>
+            <select id="iphone_model" name="iphone_model" required aria-required="true">
+              <option value="">Đang tải danh sách…</option>
             </select>
           </label>
-          <label>
-            Màu ốp mong muốn *
-            <select id="case_color" name="case_color" required>
+          <label for="case_color">
+            Màu ốp mong muốn <span aria-hidden="true">*</span>
+            <select id="case_color" name="case_color" required aria-required="true">
               <option value="">Chọn màu</option>
               <option>Đen</option>
               <option>Trắng</option>
@@ -63,22 +78,23 @@
         </div>
 
         <div class="grid two">
-          <label>
+          <label for="company_name">
             Công ty / đơn vị
-            <input id="company_name" name="company_name" maxlength="120">
+            <input id="company_name" name="company_name" type="text"
+                   autocomplete="organization" maxlength="120">
           </label>
-          <label>
+          <label for="bni_chapter">
             Chapter BNI
-            <input id="bni_chapter" name="bni_chapter" maxlength="80">
+            <input id="bni_chapter" name="bni_chapter" type="text" maxlength="80">
           </label>
         </div>
 
         <div class="grid two">
-          <label>
+          <label for="referrer_name">
             Người giới thiệu
-            <input id="referrer_name" name="referrer_name" maxlength="80">
+            <input id="referrer_name" name="referrer_name" type="text" maxlength="80">
           </label>
-          <label>
+          <label for="source">
             Nguồn biết chương trình
             <select id="source" name="source">
               <option value="">Chọn nguồn</option>
@@ -92,19 +108,22 @@
           </label>
         </div>
 
-        <label class="consent">
-          <input type="checkbox" id="consent" name="consent" required>
-          <span>Tôi đồng ý để VIP PHONE liên hệ xác nhận quà và gửi thông tin liên quan đến chương trình.</span>
+        <label class="consent" for="consent">
+          <input type="checkbox" id="consent" name="consent" required aria-required="true">
+          <span>
+            Tôi đồng ý để VIP PHONE liên hệ xác nhận quà và gửi thông tin liên quan
+            đến chương trình. <span aria-hidden="true">*</span>
+          </span>
         </label>
 
-        <div id="formError" class="error" role="alert" hidden></div>
+        <div id="formError" class="status bad form-error" role="alert" aria-live="assertive" hidden></div>
 
         <button id="submitBtn" type="submit" class="primary-btn">NHẬN ỐP MIỄN PHÍ</button>
       </form>
     </section>
 
-    <section class="card muted">
-      <h3>VIP PHONE</h3>
+    <section class="card muted" aria-labelledby="about-title">
+      <h2 id="about-title" class="h3">VIP PHONE</h2>
       <p>
         Quà tặng giúp VIP PHONE kết nối với khách hàng trước khi mở rộng sang phụ kiện,
         bảo hành, chăm sóc khách hàng và chương trình giới thiệu.
@@ -112,11 +131,17 @@
     </section>
   </main>
 
+  <footer class="site-footer">
+    <p>VIP PHONE — chương trình quà tặng cho cộng đồng VIP ORDER × BNI.</p>
+  </footer>
+
+  <script src="assets/js/tracking.js"></script>
+  <script src="assets/js/util.js"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
-    window.dataLayer.push({event: "vipphone_landing_view"});
+    window.dataLayer.push({ event: "vipphone_landing_view" });
   </script>
-  <script src="assets/js/qr-lite.js"></script>
+  <script src="assets/js/qr.js"></script>
   <script src="assets/js/app.js"></script>
 </body>
 </html>

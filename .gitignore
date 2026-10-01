@@ -1,7 +1,39 @@
+# macOS
 .DS_Store
+
+# Secret / môi trường — KHÔNG BAO GIỜ commit file thật
 .env
 .env.*
+!.env.example
+
+# Node
 node_modules/
 dist/
 coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# Database cục bộ — không commit dữ liệu thật
+*.sqlite3
+*.sqlite3-journal
+*.db
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# Log
 *.log

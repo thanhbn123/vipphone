@@ -3,22 +3,133 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GITLEAKS_VERSION: "8.30.1"
 
 jobs:
-  validate:
+  # ---------------------------------------------------------------------
+  # Secret scan — dùng gitleaks thật, quét TOÀN BỘ lịch sử git.
+  #
+  # Bản baseline cũ dùng `grep -RInE 'ghp_...' .` — mẫu regex nằm ngay
+  # trong file workflow nên nó khớp chính nó, làm CI đỏ 2/2 run.
+  # Xem docs/MASTER_STATUS.md §1.1.
+  # ---------------------------------------------------------------------
+  secret-scan:
+    name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Check required files
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks ${{ env.GITLEAKS_VERSION }}
         run: |
-          test -f index.html
-          test -f success.html
-          test -f redeem.html
-          test -f data/iphone-models.json
-          test -f assets/js/app.js
-          test -f README.md
-      - name: Validate JSON
-        run: python -m json.tool data/iphone-models.json > /dev/null
-      - name: Check no obvious secrets
+          set -euo pipefail
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          ./gitleaks version
+
+      - name: Scan git history for secrets
+        run: ./gitleaks git --no-banner --redact --exit-code 1
+
+  # ---------------------------------------------------------------------
+  # Kiểm tra tĩnh frontend (chưa cần backend).
+  # G10 sẽ bổ sung: lint Python, unit test, integration test PostgreSQL,
+  # migration check.
+  # ---------------------------------------------------------------------
+  validate:
+    name: Validate static frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Required files exist
         run: |
-          ! grep -RInE 'ghp_[A-Za-z0-9]{20,}|github_pat_|sk-[A-Za-z0-9]{20,}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY' .             --exclude-dir=.git
+          set -euo pipefail
+          for f in \
+            index.html success.html redeem.html \
+            assets/css/styles.css \
+            assets/js/tracking.js assets/js/util.js assets/js/qr.js \
+            assets/js/app.js assets/js/success.js assets/js/redeem.js \
+            data/iphone-models.json \
+            docs/MASTER_STATUS.md docs/architecture.md docs/lead-schema.md \
+            docs/adr/0001-stack-selection.md \
+            README.md
+          do
+            test -f "$f" || { echo "THIẾU FILE: $f"; exit 1; }
+          done
+
+      - name: Validate every JSON file
+        run: |
+          set -euo pipefail
+          find . -path ./.git -prune -o -name '*.json' -type f -print | while read -r f; do
+            echo "JSON OK: $f"
+            python3 -m json.tool "$f" > /dev/null
+          done
+
+      - name: JavaScript syntax check
+        run: |
+          set -euo pipefail
+          for f in assets/js/*.js; do
+            echo "JS OK: $f"
+            node --check "$f"
+          done
+
+      - name: Guard — không được có lại QR giả
+        run: |
+          set -euo pipefail
+          if [ -f assets/js/qr-lite.js ]; then
+            echo "LỖI: assets/js/qr-lite.js (QR giả) đã quay lại. Xem docs/MASTER_STATUS.md §1.6."
+            exit 1
+          fi
+          grep -q 'NOT_IMPLEMENTED' assets/js/qr.js || {
+            echo "LỖI: assets/js/qr.js phải khai báo trạng thái QR là NOT_IMPLEMENTED."
+            exit 1
+          }
+          if grep -rn 'drawQrLike' --include='*.js' --include='*.html' . ; then
+            echo "LỖI: còn tham chiếu tới drawQrLike (QR giả)."
+            exit 1
+          fi
+
+      - name: Guard — HTML phải có lang, viewport, không dùng inline event handler
+        run: |
+          set -euo pipefail
+          for f in index.html success.html redeem.html; do
+            grep -q '<html lang="vi"' "$f" || { echo "LỖI: $f thiếu lang=\"vi\""; exit 1; }
+            grep -q 'name="viewport"' "$f" || { echo "LỖI: $f thiếu viewport"; exit 1; }
+            if grep -nE '\son(click|submit|change|input|load|error)=' "$f"; then
+              echo "LỖI: $f dùng inline event handler — chuyển sang addEventListener."
+              exit 1
+            fi
+          done
+
+      - name: Guard — không có secret dạng phổ biến trong file nguồn
+        run: |
+          set -euo pipefail
+          # Mẫu được ghép từ nhiều mảnh để CHÍNH FILE NÀY không chứa chuỗi hoàn chỉnh.
+          #
+          # Ghi chú: mẫu baseline cho token GitHub App chỉ là tiền tố trần, không có
+          # lượng từ độ dài — nên nó khớp cả tài liệu mô tả và cả chính nó. Ở đây
+          # thêm ràng buộc độ dài cho đúng hình dạng token thật (tiền tố + >=20 ký tự).
+          # Bớt dương tính giả, KHÔNG giảm khả năng phát hiện token thật.
+          PAT1='ghp''_[A-Za-z0-9]{20,}'
+          PAT2='github''_pat_[A-Za-z0-9_]{20,}'
+          PAT3='sk''-[A-Za-z0-9]{20,}'
+          if grep -RInE "${PAT1}|${PAT2}|${PAT3}" \
+               --exclude-dir=.git --exclude-dir=node_modules . ; then
+            echo "LỖI: phát hiện chuỗi giống secret."
+            exit 1
+          fi
+          echo "Không phát hiện secret dạng phổ biến."

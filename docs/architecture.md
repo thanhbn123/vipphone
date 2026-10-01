@@ -1,5 +1,8 @@
 # VIP PHONE — Architecture
 
+> Trạng thái thật của từng phần: [`MASTER_STATUS.md`](MASTER_STATUS.md).
+> Quyết định stack: [`adr/0001-stack-selection.md`](adr/0001-stack-selection.md).
+
 ## Funnel
 
 QR / campaign link
@@ -12,22 +15,35 @@ QR / campaign link
 → Staff confirms gift
 → CRM/marketing later
 
-## Starter architecture
+## Hiện trạng (sau G01)
 
 Client-only demo:
 
 - HTML
 - CSS
-- Vanilla JavaScript
-- `localStorage`
+- Vanilla JavaScript (không build step)
+- `localStorage` — **chỉ để demo, không phải nguồn chân lý**
 - JSON configuration for iPhone models
+
+Mọi thứ dưới đây trong mục "Production target" là **thiết kế đích, CHƯA có mã** cho tới khi
+gate tương ứng hoàn tất. Không được coi là đã có.
 
 ## Production target
 
-Frontend
-→ API
-→ PostgreSQL
-→ CRM / Marketing / Analytics
+```
+Trình duyệt
+  │  (static: index.html, success.html, redeem.html, assets/)
+  ▼
+FastAPI  ──►  Gift Engine  ──►  PostgreSQL 16 (Alembic migration)
+  │                │
+  │                ├──► Audit log
+  │                └──► Redeem engine (atomic, chống double-spend)
+  │
+  ├──► /admin/leads   (có xác thực)
+  └──► CRM / Marketing / Analytics (qua webhook + dataLayer)
+```
+
+Một tiến trình phục vụ cả API lẫn file tĩnh → deploy và rollback đơn giản.
 
 ### API contract
 

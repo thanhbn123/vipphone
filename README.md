@@ -1,91 +1,143 @@
-# VIP PHONE Starter
+# VIP PHONE
 
-Bộ starter cho landing nhận ốp VIP PHONE miễn phí.
+Landing nhận ốp điện thoại miễn phí cho cộng đồng **VIP ORDER × BNI** — kèm luồng
+phát quà, tra cứu gift code và (đang xây) backend + admin.
 
-## Có gì trong gói này
+> **Trạng thái thật của repo nằm ở [`docs/MASTER_STATUS.md`](docs/MASTER_STATUS.md).**
+> Đây là nguồn trạng thái chính. README chỉ tóm tắt; khi hai chỗ lệch nhau, tin `MASTER_STATUS.md`.
 
-- `index.html`: landing page thu lead
-- `success.html`: trang hiển thị mã nhận quà
-- `redeem.html`: giao diện nhân viên xác nhận phát quà
-- `data/iphone-models.json`: danh sách model iPhone theo năm
-- `assets/js/app.js`: validation, lead capture, chống submit trùng cơ bản
-- `assets/js/success.js`: đọc lead gần nhất và hiển thị mã quà
-- `assets/js/redeem.js`: xác nhận redeem một lần
-- `assets/js/qr-lite.js`: placeholder QR-like local
-- `docs/architecture.md`: kiến trúc
-- `docs/lead-schema.md`: schema lead
-- `.github/workflows/ci.yml`: CI kiểm tra file cơ bản
+---
 
-## Chạy local
+## 1. Hiện trạng (đo ngày 2026-10-01)
 
-Không nên mở `index.html` trực tiếp bằng `file://` vì browser có thể chặn `fetch()`.
+| Lớp | Trạng thái |
+|---|---|
+| Frontend | **Có** — HTML/CSS/JS thuần, không build step |
+| Backend | **CHƯA CÓ** |
+| Database | **CHƯA CÓ** |
+| Lưu trữ | `localStorage` của trình duyệt khách (chỉ để demo) |
+| QR | **NOT_PRODUCTION** — chưa sinh mã QR chuẩn (xem §4) |
+| Xác thực nhân viên | **CHƯA CÓ** — `STAFF AUTH = OPEN` |
+| Test | **0 test** |
+| Staging | **NOT DEPLOYED** |
+| Production | **NOT DEPLOYED** |
 
-Ví dụ:
+Kiến trúc đích và quyết định stack: [`docs/adr/0001-stack-selection.md`](docs/adr/0001-stack-selection.md)
+(**Python + FastAPI + SQLAlchemy 2.0 + Alembic + PostgreSQL 16**).
+
+---
+
+## 2. Có gì trong repo
+
+```
+index.html                      landing thu lead
+success.html                    hiển thị gift code sau khi đăng ký
+redeem.html                     giao diện nhân viên xác nhận phát quà
+assets/css/styles.css           giao diện
+assets/js/tracking.js           dataLayer + thu thập src/ref/utm (whitelist)
+assets/js/util.js               escape HTML, chuẩn hoá SĐT, gift code
+assets/js/qr.js                 render QR — hiện là NOT_IMPLEMENTED (xem §4)
+assets/js/app.js                landing: validation, chống trùng, sinh gift code
+assets/js/success.js            trang thành công
+assets/js/redeem.js             nhân viên: tra cứu + xác nhận phát quà
+data/iphone-models.json         danh mục iPhone theo năm
+docs/MASTER_STATUS.md           NGUỒN TRẠNG THÁI CHÍNH
+docs/adr/0001-stack-selection.md quyết định stack backend
+docs/architecture.md            kiến trúc
+docs/lead-schema.md             schema lead
+.github/workflows/ci.yml        CI: gitleaks + kiểm tra tĩnh
+```
+
+---
+
+## 3. Chạy local
+
+Không mở `index.html` trực tiếp bằng `file://` — trình duyệt sẽ chặn `fetch()`
+khiến danh mục iPhone không tải được.
 
 ```bash
 python3 -m http.server 8080
+# mở http://localhost:8080
 ```
 
-Sau đó mở:
+---
 
-```text
-http://localhost:8080
-```
+## 4. ⚠️ QR hiện tại KHÔNG phải mã QR thật
 
-## Lưu ý quan trọng trước production
+Bản starter cũ có `assets/js/qr-lite.js` vẽ một hình **trông giống** mã QR nhưng
+bit sinh từ hash + PRNG, **không theo chuẩn ISO/IEC 18004**. Không đầu đọc QR nào
+quét được hình đó. Một hình giả trông như thật là cái bẫy ngay tại quầy phát quà.
 
-Starter hiện dùng `localStorage` để demo luồng, vì repo ban đầu chưa có backend.
+File đó **đã bị gỡ**. `assets/js/qr.js` hiện chủ động **không vẽ hình giống QR**,
+mà hiển thị:
 
-Điều này có nghĩa:
+- dòng chữ *"Mã QR chưa khả dụng"*,
+- URL nhận quà dạng văn bản,
+- nút sao chép liên kết.
 
-- lead chỉ tồn tại trên trình duyệt đã đăng ký;
-- nhân viên ở máy khác không nhìn thấy lead;
-- chưa có database;
-- chưa có xác thực nhân viên;
-- chưa có chống spam/phá form ở mức server;
-- chưa có CRM/webhook.
+QR chuẩn (thư viện `qrcode`, sinh ở server, chỉ chứa URL công khai + gift code —
+**không chứa PII**) được thêm ở gate **G02**. CI có chốt chặn để QR giả không
+quay lại.
 
-`qr-lite.js` chỉ là placeholder trực quan để demo luồng. Trước production cần thay bằng QR chuẩn thông qua thư viện thật hoặc backend service.
+---
 
-## Bước production tiếp theo
+## 5. ⚠️ Giới hạn của bản demo hiện tại
 
-Khuyến nghị thêm backend:
+Đây là bản demo client-only. Cụ thể:
 
-- `POST /api/leads`
-- `GET /api/gifts/{gift_code}`
-- `POST /api/gifts/{gift_code}/redeem`
+- Lead chỉ nằm trên **đúng trình duyệt** đã đăng ký. Nhân viên ở máy khác **không thấy**.
+- Xoá dữ liệu trình duyệt = **mất lead**. Không có nguồn chân lý.
+- Chống trùng chỉ chạy ở client → đổi trình duyệt là vô hiệu.
+- Validation chỉ ở client → sửa được bằng DevTools.
+- `redeem.html` mở công khai, **không có xác thực nhân viên**.
+- Không rate limit, không audit trail, không chống double-spend.
+- Không có security header (chưa có server để đặt).
 
-Database tối thiểu:
+Danh sách lỗ hổng đầy đủ: [`docs/MASTER_STATUS.md`](docs/MASTER_STATUS.md) §1.11.
 
-- PostgreSQL
-- bảng `leads`
-- bảng `gift_redemptions` hoặc audit log
+---
 
-Nên có:
+## 6. Roadmap gate
 
-- Cloudflare Turnstile/reCAPTCHA
-- rate limit
-- staff authentication
-- audit log
-- webhook CRM
-- GTM/GA4/Meta Pixel
-- export CSV/XLSX lead
+| Gate | Nội dung |
+|---|---|
+| G01 | Baseline hardening + sửa CI đỏ |
+| G02 | Backend thật: API + PostgreSQL + migration |
+| G03 | Redeem engine (atomic, chống double-spend) + audit log |
+| G04 | Staff redeem UI + xác thực nhân viên |
+| G05 | Admin leads (tìm kiếm, lọc, phân trang, export CSV) |
+| G06 | Danh mục iPhone trong database |
+| G07 | Campaign / source / UTM tracking |
+| G08 | Security pass |
+| G09 | Test (14 kịch bản bắt buộc + E2E) |
+| G10 | CI đầy đủ (lint, unit, integration PostgreSQL, migration check, secret scan) |
+| G11 | Staging readiness (`.env.example`, `/api/ready`, `docs/deployment.md`) |
+| G12 | Owner acceptance pack |
 
-## Đẩy lên GitHub
+Tiến độ thật: xem bảng "TRẠNG THÁI GATE" trong [`docs/MASTER_STATUS.md`](docs/MASTER_STATUS.md) §3.
+
+---
+
+## 7. Luật vận hành repo
+
+- **KHÔNG** commit thẳng lên `main`.
+- **KHÔNG** force push `main` / `develop`.
+- **KHÔNG** bỏ qua CI.
+- **KHÔNG** commit secret hay credential. Dùng `.env` (đã ignore) và `.env.example`.
+- **KHÔNG** deploy production khi chưa có lệnh release của Owner.
+- Mọi thay đổi đi theo: issue → branch → code → test → PR → CI xanh → merge `develop`.
+
+---
+
+## 8. Kiểm tra chất lượng tại máy
 
 ```bash
-git init
-git add .
-git commit -m "feat: bootstrap VIP PHONE gift lead funnel"
-git branch -M main
-git remote add origin https://github.com/thanhbn123/vipphone.git
-git push -u origin main
-```
+# Secret scan (cùng phiên bản CI dùng)
+gitleaks git --no-banner --redact
 
-Nếu repo đã được tạo và clone sẵn thì chỉ cần copy file vào repo rồi:
+# Cú pháp JavaScript
+for f in assets/js/*.js; do node --check "$f"; done
 
-```bash
-git add .
-git commit -m "feat: bootstrap VIP PHONE gift lead funnel"
-git push
+# JSON hợp lệ
+python3 -m json.tool data/iphone-models.json > /dev/null
 ```

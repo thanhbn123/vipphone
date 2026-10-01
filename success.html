@@ -3,20 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
   <title>VIP PHONE — Đăng ký thành công</title>
   <link rel="stylesheet" href="assets/css/styles.css">
 </head>
 <body>
+  <a class="skip-link" href="#main">Bỏ qua điều hướng, tới nội dung chính</a>
+
   <header class="topbar">
-    <div class="brand"><span class="brand-mark">VIP</span><span class="brand-name">PHONE</span></div>
+    <div class="brand">
+      <span class="brand-mark">VIP</span>
+      <span class="brand-name">PHONE</span>
+    </div>
     <span class="co-brand">VIP ORDER × BNI</span>
   </header>
 
-  <main class="container narrow">
-    <section class="card success-card">
-      <div class="success-icon">✓</div>
+  <main class="container narrow" id="main">
+    <section class="card success-card" aria-labelledby="success-title">
+      <div class="success-icon" aria-hidden="true">✓</div>
       <p class="eyebrow">ĐĂNG KÝ THÀNH CÔNG</p>
-      <h1>Giữ mã này để nhận quà</h1>
+      <h1 id="success-title">Giữ mã này để nhận quà</h1>
 
       <div id="giftDetails" class="gift-details"></div>
 
@@ -25,14 +31,22 @@
         <strong id="giftCode">---</strong>
       </div>
 
-      <div id="qr" class="qr-box" aria-label="QR nhận quà"></div>
-      <p class="helper">Đưa mã hoặc QR này cho nhân viên VIP PHONE khi nhận sản phẩm.</p>
+      <div id="qr" class="qr-box" aria-label="Khu vực mã QR nhận quà"></div>
+      <p class="helper">
+        Đưa mã này cho nhân viên VIP PHONE khi nhận sản phẩm.
+      </p>
 
       <a class="secondary-btn" href="index.html">Đăng ký người khác</a>
     </section>
   </main>
 
-  <script src="assets/js/qr-lite.js"></script>
+  <footer class="site-footer">
+    <p>VIP PHONE — chương trình quà tặng cho cộng đồng VIP ORDER × BNI.</p>
+  </footer>
+
+  <script src="assets/js/tracking.js"></script>
+  <script src="assets/js/util.js"></script>
+  <script src="assets/js/qr.js"></script>
   <script src="assets/js/success.js"></script>
 </body>
 </html>
