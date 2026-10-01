@@ -201,3 +201,95 @@ def clean_database(live_server) -> None:
             conn.execute(INITIAL_MIGRATION.MODELS_TABLE.insert(), INITIAL_MIGRATION.seed_rows())
     finally:
         engine.dispose()
+
+
+# =============================================================================
+# BỔ SUNG CHO BỘ E2E "FUNNEL" — DÁN VÀO CUỐI `tests_e2e/conftest.py`
+#
+# Cố ý CHỈ THÊM, KHÔNG SỬA phần phía trên. Hai lý do:
+#   1. Phần trên là của gate G04-G06, đã được đo bằng bộ test của họ. Sửa vào đó
+#      là làm hỏng phép đo của người khác mà không có lợi gì.
+#   2. Thêm mới thì gộp không thể xung đột: hai bộ test dùng hai tên fixture khác
+#      nhau (`page` của họ, `funnel_page` của tôi) trên cùng một `browser`.
+#
+# VÌ SAO CẦN `funnel_page` RIÊNG: `window.dataLayer` là biến của TỪNG TRANG, nên
+# đọc nó sau khi điều hướng sẽ MẤT event của trang trước. Đó là lỗi phép đo đã
+# dính thật (MASTER_STATUS §17 ca 3): test báo "gift_code_created không phát ra"
+# trong khi event có phát — chỉ là đã bị mất khi sang trang. `funnel_page` gắn
+# thêm một bộ ghi vào `sessionStorage` để event sống sót qua điều hướng.
+# =============================================================================
+
+EVENTS_STORAGE_KEY = "__e2e_events__"
+
+
+@pytest.fixture
+def server(live_server) -> dict:
+    """Gói thông tin máy chủ cho bộ test funnel.
+
+    `live_server` của gate trả về CHUỖI base_url. Bộ funnel cần thêm khoá nhân
+    viên và URL database, nên bọc lại thành dict — KHÔNG đổi `live_server`, để
+    bộ test của gate không phải sửa gì.
+    """
+    return {
+        "base_url": live_server,
+        "staff_key": STAFF_KEY,
+        "database_url": TEST_DATABASE_URL,
+    }
+
+
+@pytest.fixture
+def funnel_page(browser):
+    """Trang có bộ ghi dataLayer BỀN QUA CÁC LẦN ĐIỀU HƯỚNG."""
+    context = browser.new_context(viewport={"width": 1280, "height": 900})
+    page = context.new_page()
+    page.add_init_script(
+        """
+        (function () {
+            window.dataLayer = window.dataLayer || [];
+            var KEY = '__e2e_events__';
+            var record = function (arg) {
+                try {
+                    var list = JSON.parse(sessionStorage.getItem(KEY) || '[]');
+                    list.push(arg && arg.event ? arg.event : String(arg));
+                    sessionStorage.setItem(KEY, JSON.stringify(list));
+                } catch (e) {}
+            };
+            var original = window.dataLayer.push.bind(window.dataLayer);
+            window.dataLayer.push = function () {
+                for (var i = 0; i < arguments.length; i++) record(arguments[i]);
+                return original.apply(null, arguments);
+            };
+        })();
+        """
+    )
+    try:
+        yield page
+    finally:
+        context.close()
+
+
+@pytest.fixture
+def mobile_context(browser):
+    """Tạo ngữ cảnh trình duyệt với cỡ khung nhìn cho trước (để đo trên điện thoại)."""
+    created: list = []
+
+    def _make(width: int, height: int):
+        context = browser.new_context(viewport={"width": width, "height": height})
+        page = context.new_page()
+        created.append(context)
+        return page
+
+    try:
+        yield _make
+    finally:
+        for context in created:
+            context.close()
+
+
+def recorded_events(page) -> list[str]:
+    """Mọi `dataLayer` event đã phát, GỘP QUA CÁC LẦN ĐIỀU HƯỚNG.
+
+    Đọc từ `sessionStorage` (bộ ghi của `funnel_page`), KHÔNG đọc
+    `window.dataLayer` — vì biến đó chỉ thuộc trang hiện tại.
+    """
+    return page.evaluate(f"JSON.parse(sessionStorage.getItem('{EVENTS_STORAGE_KEY}') || '[]')")

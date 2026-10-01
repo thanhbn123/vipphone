@@ -28,9 +28,9 @@
 | G03 | Redeem engine (atomic, chống double-spend) + audit | **DONE** | [#6](https://github.com/thanhbn123/vipphone/pull/6) | **PASS** | `92a4952d54c1d2009a85f69ba74a44becc4651df` |
 | G04+G05+G06 | Staff redeem UI (quét QR) + Admin leads/CSV + Danh mục iPhone qua admin | **DONE** | [#8](https://github.com/thanhbn123/vipphone/pull/8) | **PASS — 3/3 job** | `280ef0026f0904d87ac03b95c01170e2c9ee9f64` |
 | G07 | Campaign / source tracking | MỘT PHẦN (đã có ở G02: nhận & lưu ở server) | — | — | — |
-| G08 | Security pass | **DONE** — PR #12, chưa merge tại thời điểm ghi; còn Turnstile/dependency scan → §21 | #12 | NOT RUN (xem PR) | — |
-| G09 | Tests đầy đủ | MỘT PHẦN (280 backend + **14 E2E trình duyệt thật**; E2E **chưa nối vào CI**) | — | — | — |
-| G10 | CI đầy đủ | MỘT PHẦN (lint, migration, unit, integration PG, secret scan) | — | — | — |
+| G08 | Security pass | **DONE** | [#12](https://github.com/thanhbn123/vipphone/pull/12) | **PASS** | `381abefdcb304376a177b2153daac4044ca7fd6e` |
+| G09 | Tests đầy đủ | **DONE** — 297 backend + 30 E2E (Chromium thật) | #14 | NOT RUN (xem PR) | — |
+| G10 | CI đầy đủ | **DONE** — 5 job, gồm E2E chạy thật và quét phụ thuộc | #14 | NOT RUN (xem PR) | — |
 | G11 | Staging readiness | MỘT PHẦN (`.env.example`, `/api/ready` đã có; `docs/deployment.md` chưa) | — | — | — |
 | G12 | Owner acceptance pack | NOT STARTED | — | NOT RUN | — |
 
@@ -362,7 +362,7 @@ không được lưu. Có danh sách ĐEN riêng cho `phone`, `full_name`, `comp
 | — | **Thay đổi danh mục iPhone KHÔNG ghi audit** — bảng `audit_events` có CHECK constraint liệt kê 4 `event_type`; thêm loại mới cần migration. Chưa làm trong gate này | G08 |
 | — | **Trang `admin-leads.html` được phục vụ công khai** (chỉ là vỏ, không chứa dữ liệu). Chặn ở tầng trang là chặn nhầm chỗ vì trình duyệt không gửi được header xác thực khi mở HTML | chấp nhận có ghi lý do |
 | — | **CSV không có BOM** ⇒ Excel có thể hiển thị sai dấu tiếng Việt khi mở trực tiếp | G08 |
-| — | **Bộ E2E chưa nối vào CI** (CI không có Chromium) ⇒ dễ bị bỏ quên | G10 |
+| — | **Bộ E2E chưa nối vào CI** (CI không có Chromium) ⇒ dễ bị bỏ quên | G10 | CI đầy đủ | **DONE** — 5 job, gồm E2E chạy thật và quét phụ thuộc | #14 | NOT RUN (xem PR) | — |
 | — | Chưa rà soát PII lọt vào log production | G08 |
 
 ---
@@ -678,3 +678,65 @@ từng thấy qua `lsof`/`ps` thì nay không còn chạy, và nó xác nhận *
 **Luật rút ra:** dừng tiến trình nền thì **ghi ra** (ai dừng, PID nào, lúc nào). Một tiến
 trình biến mất mà không ai nhận là một câu hỏi chẩn đoán tốn thời gian cho phiên sau —
 đúng ca 16:35:39 mà `CLAUDE.md` §16.7 đã ghi.
+
+---
+
+## 23. G09+G10 — TESTS + CI (ba lỗ hổng CI đã vá)
+
+### 23.1 Ba lỗ hổng CI, đo được trước khi vá
+
+| # | Lỗ hổng | Bằng chứng |
+|---|---|---|
+| 1 | CI **LINT** `tests_e2e` nhưng **KHÔNG CHẠY** nó | `pytest.ini` đặt `testpaths = tests`; cả ba lệnh pytest đều nằm trong phạm vi đó ⇒ **bộ E2E hỏng vẫn qua CI** |
+| 2 | Không quét lỗ hổng phụ thuộc | `grep -n pip-audit ci.yml` → không có |
+| 3 | `pytest.ini` thiếu marker `e2e` mà `--strict-markers` đang BẬT | dùng `pytest.mark.e2e` là **lỗi thu thập** ngay |
+
+Lỗ hổng 1 đúng dạng bị cấm: **báo PASS trong khi test không chạy**. Một bộ test chỉ được
+*lint* thì không bao giờ có thể FAIL.
+
+**Vá:** thêm marker `e2e`; thêm job `e2e` (PostgreSQL 16 service container + Chromium thật,
+upload trace khi hỏng) và job `dependency-scan` (`pip-audit --strict` cho cả hai file
+requirements). CI nay có **5 job**.
+
+### 23.2 Gộp hai bộ E2E — BỔ SUNG, không trùng
+
+| Bộ | Nội dung | Số test |
+|---|---|---|
+| Của gate G04-G06 | danh mục → landing vẽ `<option>`, ẩn nút quét QR khi không hỗ trợ, khoá nhân viên không lưu lâu dài | 14 |
+| Của controller | funnel: landing → lead → chuẩn hoá SĐT → QR giải mã → redeem → idempotent → RBAC → **mobile** | 16 |
+
+**Cách gộp: chỉ THÊM, không SỬA.** Khối bổ sung nằm ở **cuối** `tests_e2e/conftest.py`
+(`server`, `funnel_page`, `mobile_context`, `recorded_events`); 203 dòng đầu của gate
+**không đổi một ký tự** (đã `diff` xác nhận). Trong module test funnel có bí danh cục bộ:
+
+```python
+@pytest.fixture
+def page(funnel_page):
+    return funnel_page
+```
+
+Pytest cho fixture khai trong module **đè** fixture cùng tên ở `conftest.py` **chỉ cho module
+đó** — nên bộ funnel dùng bộ ghi event bền, còn test của gate vẫn dùng fixture gốc.
+
+### 23.3 Vì sao funnel cần bộ ghi event RIÊNG
+
+`window.dataLayer` là biến của **từng trang**; đọc sau khi điều hướng sẽ MẤT event của trang
+trước — lỗi đo đã dính thật (§17 ca 3). Bộ ghi ghi vào `sessionStorage` để event sống sót.
+
+### 23.4 Vá kèm: CSV thiếu BOM UTF-8
+
+Gate G05 đã tự ghi nhận *"CSV không có BOM ⇒ Excel có thể hiển thị sai dấu tiếng Việt"*.
+Đây là lỗi người dùng cuối gặp **ngay lần mở file đầu tiên**, nên vá kèm: `_csv_response`
+nay thêm 3 byte `EF BB BF` ở đầu.
+
+**Đổi hợp đồng:** file CSV nay **có BOM**. Test `test_csv_has_stable_header` được cập nhật
+để bỏ BOM trước khi so (đúng cách một trình đọc CSV chuẩn xử lý), và thêm test mới
+`test_csv_starts_with_utf8_bom_for_excel` khẳng định byte đầu là BOM **và** phần sau BOM vẫn
+giữ đúng dấu tiếng Việt.
+
+### 23.5 Đối chứng âm
+
+| Phá gì | Kết quả | Khôi phục |
+|---|---|---|
+| Bỏ BOM khỏi CSV | **1 failed** | 1 passed |
+| Tiêm PII vào payload QR | **1 failed** (đúng test PII) | 1 passed |

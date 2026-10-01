@@ -386,9 +386,33 @@ def test_csv_has_stable_header(client, staff_headers):
 
     response = client.get("/api/admin/leads.csv", headers=staff_headers)
     assert response.status_code == 200
-    header = response.text.splitlines()[0]
+    # Bỏ BOM ở đầu trước khi so — xem `test_csv_starts_with_utf8_bom_for_excel`
+    # giải thích vì sao file CÓ BOM. Người đọc CSV đúng chuẩn đều phải bỏ qua nó,
+    # nên đây cũng là cách một trình đọc đúng chuẩn sẽ xử lý.
+    header = response.text.lstrip("\ufeff").splitlines()[0]
     assert header.split(",")[: len(CSV_COLUMNS)] == list(CSV_COLUMNS)
     assert "attachment" in response.headers["content-disposition"]
+
+
+def test_csv_starts_with_utf8_bom_for_excel(client, valid_lead_payload, staff_headers):
+    """File CSV phải mở đầu bằng BOM UTF-8, để Excel không làm sai dấu tiếng Việt.
+
+    VÌ SAO CẦN: Excel trên Windows không suy ra bảng mã từ `charset=utf-8` trong
+    Content-Type khi người dùng bấm tải file — nó đoán theo locale máy. Thiếu BOM
+    thì "Nguyễn Văn A" hiện thành mojibake, dù dữ liệu trong database ĐÚNG. Lỗi
+    này người dùng cuối gặp ngay lần mở file đầu tiên.
+    """
+    create_lead(client, valid_lead_payload)
+    response = client.get("/api/admin/leads.csv", headers=staff_headers)
+
+    assert response.status_code == 200
+    assert response.content.startswith(b"\xef\xbb\xbf"), (
+        "CSV thiếu BOM UTF-8 — Excel sẽ hiển thị sai dấu tiếng Việt"
+    )
+
+    # Và phần SAU BOM phải giải mã đúng, giữ nguyên dấu.
+    body = response.content[len(b"\xef\xbb\xbf") :].decode("utf-8")
+    assert "Nguyễn Văn A" in body, body[:200]
 
 
 def test_csv_uses_the_same_filters_as_the_list(client, valid_lead_payload, staff_headers):
