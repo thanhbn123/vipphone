@@ -83,6 +83,8 @@ jobs:
             docs/staging.md docs/pii-data-map.md docs/OWNER_DECISIONS_REQUIRED.md \
             docs/decisions/PII_RETENTION_OPTIONS.md \
             .env.staging.example scripts/enable_branch_protection.sh \
+            scripts/staging_preflight.sh scripts/staging_preflight.py \
+            scripts/load_smoke.py docs/backup-restore.md \
             requirements.txt requirements-dev.txt \
             README.md
           do
@@ -276,8 +278,8 @@ jobs:
       - name: Lint (ruff)
         run: |
           set -euo pipefail
-          ruff check app tests tests_e2e migrations
-          ruff format --check app tests tests_e2e migrations
+          ruff check app tests tests_e2e migrations scripts
+          ruff format --check app tests tests_e2e migrations scripts
 
       - name: Wait for PostgreSQL
         run: |

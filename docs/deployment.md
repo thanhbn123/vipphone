@@ -277,3 +277,74 @@ không có Chromium nên nếu gộp sẽ đỏ vì thiếu trình duyệt chứ
 
 **Đã dính một lần:** trước đây CI chỉ **lint** `tests_e2e` mà **không chạy** nó — bộ E2E hỏng
 vẫn qua CI. Một bộ test chỉ được lint thì **không bao giờ có thể FAIL**.
+
+---
+
+## 12. Phát hành và quay lui (release / rollback)
+
+### 12.1 Trình tự phát hành staging
+
+Mỗi bước **phải** đạt rồi mới sang bước sau. Không gộp bước.
+
+| # | Bước | Lệnh / cách kiểm | Đạt khi |
+|---|---|---|---|
+| 1 | Chốt mã | `git rev-parse HEAD` | Ghi lại SHA vào biên bản phát hành |
+| 2 | Kiểm cấu hình | `scripts/staging_preflight.sh` | thoát **0** |
+| 3 | **Sao lưu trước khi đổi schema** | xem `docs/backup-restore.md` §3.1 | File dump tồn tại + có SHA-256 |
+| 4 | Migration | `alembic upgrade head` | thoát 0 |
+| 5 | Khởi động lại tiến trình | `systemctl restart vipphone` | Service `active (running)` |
+| 6 | Health | `curl -fsS $PUBLIC_BASE_URL/api/health` | HTTP 200, `"status":"ok"` |
+| 7 | Readiness | `curl -fsS $PUBLIC_BASE_URL/api/ready` | HTTP 200 |
+| 8 | Kiểm nhanh bằng tay | Tạo 1 lead thật → mở QR → tra cứu → phát quà | Gift code đổi trạng thái `REDEEMED` |
+| 9 | Ghi biên bản | SHA · giờ · người làm · kết quả | — |
+
+**Bước 3 không được bỏ.** Migration có thể hỏng giữa chừng; không có bản sao lưu thì không có
+đường lui.
+
+**Bước 8 không được thay bằng test tự động.** Test chạy trên database test; bước 8 là lần duy
+nhất chứng minh **hạ tầng thật** phục vụ được.
+
+### 12.2 Quay lui ứng dụng
+
+Quay lui **mã** dễ hơn quay lui **schema**:
+
+```bash
+git checkout <SHA-đang-chạy-tốt>
+systemctl restart vipphone
+curl -fsS $PUBLIC_BASE_URL/api/ready
+```
+
+### 12.3 Quay lui migration — **KHÔNG** mặc định là an toàn
+
+`alembic downgrade` **chạy được về mặt kỹ thuật** (có test `test_downgrade_removes_everything`)
+nhưng **KHÔNG** có nghĩa là dùng được trong sự cố:
+
+- `downgrade` của migration đầu tiên **XOÁ BẢNG** ⇒ **mất toàn bộ lead và gift code**.
+- Migration về sau có thể thêm cột mà mã cũ không biết; quay lui mã mà không quay lui schema
+  thì cũng lệch.
+- Quay lui schema **không** khôi phục dữ liệu đã bị migration làm mất.
+
+**Luật: mặc định là FORWARD-FIX, không phải downgrade.**
+
+| Tình huống | Cách xử lý |
+|---|---|
+| Migration **chạy xong**, mã mới có lỗi | Quay lui **mã** (§12.2). Giữ nguyên schema. |
+| Migration **hỏng giữa chừng** | Alembic chạy trong transaction ⇒ PostgreSQL tự rollback. Kiểm `alembic current`, sửa migration rồi chạy lại. |
+| Migration **chạy xong** nhưng sai thiết kế | Viết migration **mới** sửa tiếp (forward-fix). **Không** downgrade. |
+| Buộc phải downgrade | **Chỉ khi** đã có bản sao lưu §12.1 bước 3, và **chỉ** sau khi Owner đồng ý bằng lời. Ghi rõ mất mát dữ liệu dự kiến. |
+
+### 12.4 Vì sao mặc định forward-fix
+
+Trong production, `downgrade` thường **không** đối xứng với `upgrade`: `upgrade` thêm cột và
+**bỏ trống** dữ liệu cũ, còn `downgrade` **xoá cột** — xoá luôn dữ liệu đã ghi vào đó.
+Quay lui trông như "về lại như cũ" nhưng thật ra là **mất dữ liệu**.
+
+Đây là lý do tài liệu này **không** đưa `alembic downgrade` vào quy trình phát hành.
+
+### 12.5 Điều kiện chưa đạt để phát hành thật
+
+- **Chưa có staging** ⇒ trình tự trên **chưa lần nào chạy trên hạ tầng thật**. Nó là *thiết kế*,
+  không phải *quy trình đã kiểm*.
+- **Chưa chạy dưới tải** trên hạ tầng thật
+- **Chưa diễn tập quay lui**
+- **Chưa có người được giao** đọc tài liệu này và làm theo

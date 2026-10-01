@@ -354,8 +354,12 @@ def test_admin_page_renders_leads_without_console_or_csp_errors(
 
     # Chi tiết: bấm "Xem" của dòng đầu.
     page.locator("#leadRows button", has_text="Xem").first.click()
+    # Chờ ĐÚNG thứ sắp khẳng định (mã quà), không chờ một tiêu đề tĩnh.
+    # Tiêu đề "Chi tiết lead" có thể hiện ra trước khi nội dung được đổ vào — cùng
+    # loại race với `test_admin_page_adds_a_model_and_landing_sees_it`.
     page.wait_for_function(
-        "() => document.getElementById('detailBox').innerText.includes('Chi tiết lead')",
+        "(code) => document.getElementById('detailBox').innerText.includes(code)",
+        arg=created["gift_code"],
         timeout=10_000,
     )
     assert created["gift_code"] in page.locator("#detailBox").inner_text()
@@ -417,6 +421,22 @@ def test_admin_page_adds_a_model_and_landing_sees_it(page, live_server, staff_ke
 
     page.wait_for_function(
         "() => document.getElementById('modelStatus').innerText.includes('Đã thêm')",
+        timeout=10_000,
+    )
+
+    # PHẢI CHỜ BẢNG VẼ LẠI, không được assert ngay.
+    #
+    # VÌ SAO: `admin-leads.js` đặt chữ "Đã thêm" TRƯỚC rồi mới gọi `loadModels()`
+    # — hai việc KHÁC NHAU. Chờ chữ "Đã thêm" rồi assert bảng ngay là đọc bảng
+    # TRƯỚC KHI nó được vẽ lại. Trên máy nhanh thì thắng race; trên CI chậm hơn
+    # thì thua ⇒ test ĐỎ vì lý do không liên quan tới sản phẩm.
+    #
+    # Đã đo, không suy đoán: tiêm độ trễ 1,5 giây ngay trước `loadModels()` thì
+    # test bản cũ FAIL đúng y hệt lỗi thấy trên CI
+    # (`assert 'iphone-17-pro' in 'iphone-16\tiPhone 16…'`). Bản này chờ đúng
+    # điều kiện đang được khẳng định nên vượt qua cả khi có độ trễ.
+    page.wait_for_function(
+        "() => document.getElementById('modelRows').innerText.includes('iphone-17-pro')",
         timeout=10_000,
     )
     assert "iphone-17-pro" in page.locator("#modelRows").inner_text()
