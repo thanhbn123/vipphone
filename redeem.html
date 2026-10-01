@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VIP PHONE — Redeem quà</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">VIP</span><span class="brand-name">PHONE</span></div>
+    <span class="co-brand">STAFF REDEEM</span>
+  </header>
+
+  <main class="container narrow">
+    <section class="card">
+      <p class="eyebrow">NHÂN VIÊN VIP PHONE</p>
+      <h1>Xác nhận phát quà</h1>
+      <p>Nhập mã nhận quà của khách. Bản starter lưu dữ liệu trên chính trình duyệt hiện tại.</p>
+
+      <form id="redeemForm">
+        <label>
+          Gift code
+          <input id="redeemCode" required placeholder="VIP-26-XXXXXX" autocomplete="off">
+        </label>
+        <button class="primary-btn" type="submit">KIỂM TRA MÃ</button>
+      </form>
+
+      <div id="redeemResult" class="redeem-result"></div>
+    </section>
+  </main>
+
+  <script src="assets/js/redeem.js"></script>
+</body>
+</html>

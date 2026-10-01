@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Đăng ký nhận ốp VIP PHONE miễn phí dành cho cộng đồng VIP ORDER × BNI.">
+  <title>VIP PHONE — Nhận ốp miễn phí</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">VIP</span>
+      <span class="brand-name">PHONE</span>
+    </div>
+    <span class="co-brand">VIP ORDER × BNI</span>
+  </header>
+
+  <main class="container">
+    <section class="hero card">
+      <p class="eyebrow">QUÀ TẶNG DÀNH CHO CỘNG ĐỒNG</p>
+      <h1>Ốp xịn tặng bạn</h1>
+      <p class="hero-copy">
+        Chọn đúng dòng iPhone, để lại thông tin và nhận 01 ốp VIP PHONE miễn phí.
+      </p>
+      <div class="gift-note">Số lượng quà có giới hạn theo từng dòng máy.</div>
+    </section>
+
+    <section class="card">
+      <h2>Đăng ký nhận quà</h2>
+      <form id="leadForm" novalidate>
+        <div class="grid two">
+          <label>
+            Họ và tên *
+            <input id="full_name" name="full_name" autocomplete="name" required maxlength="80">
+          </label>
+          <label>
+            Số điện thoại *
+            <input id="phone" name="phone" inputmode="tel" autocomplete="tel" required maxlength="15"
+                   placeholder="Ví dụ: 0912345678">
+          </label>
+        </div>
+
+        <div class="grid two">
+          <label>
+            Dòng iPhone *
+            <select id="iphone_model" name="iphone_model" required>
+              <option value="">Đang tải danh sách...</option>
+            </select>
+          </label>
+          <label>
+            Màu ốp mong muốn *
+            <select id="case_color" name="case_color" required>
+              <option value="">Chọn màu</option>
+              <option>Đen</option>
+              <option>Trắng</option>
+              <option>Trong suốt</option>
+              <option>Xanh</option>
+              <option>Hồng</option>
+              <option>Khác</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="grid two">
+          <label>
+            Công ty / đơn vị
+            <input id="company_name" name="company_name" maxlength="120">
+          </label>
+          <label>
+            Chapter BNI
+            <input id="bni_chapter" name="bni_chapter" maxlength="80">
+          </label>
+        </div>
+
+        <div class="grid two">
+          <label>
+            Người giới thiệu
+            <input id="referrer_name" name="referrer_name" maxlength="80">
+          </label>
+          <label>
+            Nguồn biết chương trình
+            <select id="source" name="source">
+              <option value="">Chọn nguồn</option>
+              <option value="bni">BNI</option>
+              <option value="viporder">VIP ORDER</option>
+              <option value="facebook">Facebook</option>
+              <option value="tiktok">TikTok</option>
+              <option value="qr">QR</option>
+              <option value="other">Khác</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="consent">
+          <input type="checkbox" id="consent" name="consent" required>
+          <span>Tôi đồng ý để VIP PHONE liên hệ xác nhận quà và gửi thông tin liên quan đến chương trình.</span>
+        </label>
+
+        <div id="formError" class="error" role="alert" hidden></div>
+
+        <button id="submitBtn" type="submit" class="primary-btn">NHẬN ỐP MIỄN PHÍ</button>
+      </form>
+    </section>
+
+    <section class="card muted">
+      <h3>VIP PHONE</h3>
+      <p>
+        Quà tặng giúp VIP PHONE kết nối với khách hàng trước khi mở rộng sang phụ kiện,
+        bảo hành, chăm sóc khách hàng và chương trình giới thiệu.
+      </p>
+    </section>
+  </main>
+
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({event: "vipphone_landing_view"});
+  </script>
+  <script src="assets/js/qr-lite.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

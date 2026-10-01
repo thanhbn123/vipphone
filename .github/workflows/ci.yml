@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required files
+        run: |
+          test -f index.html
+          test -f success.html
+          test -f redeem.html
+          test -f data/iphone-models.json
+          test -f assets/js/app.js
+          test -f README.md
+      - name: Validate JSON
+        run: python -m json.tool data/iphone-models.json > /dev/null
+      - name: Check no obvious secrets
+        run: |
+          ! grep -RInE 'ghp_[A-Za-z0-9]{20,}|github_pat_|sk-[A-Za-z0-9]{20,}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY' .             --exclude-dir=.git
