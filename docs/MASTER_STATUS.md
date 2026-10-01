@@ -1084,3 +1084,37 @@ luôn dữ liệu đã ghi. Với migration đầu tiên, `downgrade` **xoá s�
 code. Vì vậy `alembic downgrade` **không** nằm trong quy trình phát hành.
 
 **Chưa lần nào chạy trên hạ tầng thật** — §12 là *thiết kế*, không phải *quy trình đã kiểm*.
+
+### 28.7 Ma trận trình duyệt phát hiện một test FLAKY có sẵn từ G04-G06
+
+Lần chạy CI đầu của SR-4: **chromium PASS**, nhưng **firefox và webkit FAIL** ở
+`test_admin_page_adds_a_model_and_landing_sees_it`. SR-4 **không đụng** mã E2E, nên đây
+không phải hồi quy — mà là **race có sẵn**, chỉ lộ ra khi CI chạy E2E **thêm hai lần nữa**.
+
+**Nguyên nhân, đọc từ mã:** `assets/js/admin-leads.js` đặt chữ `"Đã thêm …"` (dòng 528)
+**TRƯỚC**, rồi mới gọi `loadModels()` (dòng 533). Test chờ chữ `"Đã thêm"` rồi **assert bảng
+ngay** — tức đọc bảng **trước khi nó được vẽ lại**. Máy nhanh thì thắng race, CI chậm hơn thì thua.
+
+**Đã CHỨNG MINH, không suy đoán.** Tiêm độ trễ 1,5 giây ngay trước `loadModels()`:
+
+| | test bản CŨ | test bản ĐÃ SỬA |
+|---|---|---|
+| chromium (có độ trễ) | **FAIL** — đúng y lỗi thấy trên CI | PASS |
+| firefox (có độ trễ) | — | **PASS** |
+| webkit (có độ trễ) | — | **PASS** |
+
+Thông báo lỗi tái hiện **giống hệt** CI:
+`assert 'iphone-17-pro' in 'iphone-16\tiPhone 16…'`.
+
+**Sửa:** chờ **đúng điều kiện đang được khẳng định** (bảng có chứa `iphone-17-pro`) thay vì
+chờ một thông báo xuất hiện trước đó. Đây **không** phải làm yếu test — nó vẫn khẳng định đúng
+thứ cũ, chỉ chờ cho điều kiện đó thành hiện thực.
+
+**Bước "còn hỏng kiểu đó ở đâu nữa" (mục 12.2 bước 4):** đã đi qua **toàn bộ** `wait_for_function`
+trong `tests_e2e/`. Tìm thêm **một** chỗ cùng loại: `test_g04_g06_browser.py` chờ tiêu đề **tĩnh**
+`"Chi tiết lead"` rồi assert mã quà trong cùng khung — tiêu đề có thể hiện trước nội dung. Đã siết
+thành chờ **chính mã quà**.
+
+**Bài học:** ma trận trình duyệt không chỉ kiểm sản phẩm — nó **tăng số lần chạy** và nhờ vậy
+**phơi ra race** mà một engine duy nhất đã che mất. Một test flaky là **nợ**: nó sẽ đỏ vào đúng
+lúc không ai rảnh để điều tra, và lần đó người ta sẽ học cách bỏ qua nó.
