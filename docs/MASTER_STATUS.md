@@ -7,10 +7,13 @@
 > Chưa chạy thì ghi `NOT RUN`. Chưa deploy thì ghi `NOT DEPLOYED`.
 > Kết luận dạng "0 lỗi" phải ghi kèm **công cụ đo**, **phạm vi đo** và **cái nằm ngoài phạm vi**.
 
-- Cập nhật lần cuối: **2026-10-01, 19:19 +07**
+- Cập nhật lần cuối: **2026-10-01, 19:21 +07**
 - Người cập nhật: DEEPSEEK HARNESS — VIP PHONE PROJECT CONTROLLER
 - Gate vừa xong: **G04 + G05 + G06** (issue [#7](https://github.com/thanhbn123/vipphone/issues/7), PR [#8](https://github.com/thanhbn123/vipphone/pull/8), merge `280ef00`)
-- `develop`: `280ef0026f0904d87ac03b95c01170e2c9ee9f64` · `main`: `7d6162cf31eb96ea27879be3a4671812a9cd7e01` (không đổi)
+- `main`: `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **KHÔNG ĐỔI suốt cả gate**
+- **Merge SHA của gate này vào `develop`: `280ef0026f0904d87ac03b95c01170e2c9ee9f64`**
+  (đỉnh `develop` KHÔNG được ghi ở đây — chính commit tài liệu này làm nó đổi; đọc bằng
+  `git rev-parse origin/develop`. Ghi một giá trị sẽ hết đúng ngay sau khi ghi.)
 - Repo: <https://github.com/thanhbn123/vipphone>
 
 ---
@@ -44,8 +47,14 @@ Chi tiết baseline đầy đủ nằm ở lịch sử git (`git show 7d6162c`) 
 | Actual develop (trước merge) | `92a4952d54c1d2009a85f69ba74a44becc4651df` | `git rev-parse origin/develop` |
 | Merge-base | `92a4952d54c1d2009a85f69ba74a44becc4651df` | `git merge-base origin/develop <PR HEAD>` |
 | PR HEAD | `cd460d29c95bb2d7b9d700349bde91f8ed999f00` | `gh pr view 8 --json headRefOid` |
-| **Merge SHA mới của `develop`** | **`280ef0026f0904d87ac03b95c01170e2c9ee9f64`** | `git rev-parse origin/develop` sau merge (2026-10-01, 19:19 +07) |
+| **Merge SHA của gate vào `develop`** | **`280ef0026f0904d87ac03b95c01170e2c9ee9f64`** | `git rev-parse origin/develop` ngay sau khi merge PR #8 (2026-10-01, 19:19 +07) |
 | `main` sau gate | `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **KHÔNG ĐỔI** | `git rev-parse origin/main` |
+| PR chốt số | [#9](https://github.com/thanhbn123/vipphone/pull/9) (chỉ `docs/MASTER_STATUS.md`) | `gh pr view 9` |
+
+> **Vì sao không ghi "đỉnh `develop` hiện tại":** tài liệu này nằm trong `develop`, nên mỗi lần
+> cập nhật nó lại tạo một đỉnh mới — giá trị ghi ra sẽ sai ngay sau khi ghi. Ghi **merge SHA của
+> gate** (bất biến) thay vì **đỉnh nhánh** (luôn đổi). Đây là cùng một luật với mục 12.1: chỉ
+> được nói trong đúng phạm vi đo được, và ở đây phạm vi đo được là "thời điểm merge PR #8".
 
 Drift: **expected == actual == merge-base** ⇒ không lệch, được phép merge.
 
