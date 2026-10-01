@@ -33,15 +33,17 @@ Kiến trúc đích và quyết định stack: [`docs/adr/0001-stack-selection.m
 
 ```
 # Frontend (không build step)
-index.html success.html redeem.html
+index.html success.html redeem.html admin-leads.html
 assets/css/styles.css
 assets/js/config.js        cấu hình (apiBase)
 assets/js/tracking.js      dataLayer + thu thập src/ref/utm (whitelist)
 assets/js/util.js          escape HTML, chuẩn hoá SĐT, gift code
 assets/js/qr.js            render QR chuẩn lấy từ server
-assets/js/app.js           landing: gọi POST /api/leads
+assets/js/app.js           landing: gọi POST /api/leads, đọc danh mục từ API
 assets/js/success.js       trang thành công
-assets/js/redeem.js        nhân viên: tra cứu + xác nhận phát quà (xác nhận → G03)
+assets/js/redeem.js        nhân viên: tra cứu + xác nhận phát quà
+assets/js/qr-scan.js       quét QR bằng BarcodeDetector (chỉ khi trình duyệt hỗ trợ)
+assets/js/admin-leads.js   quản trị: lead, lọc, phân trang, export CSV, danh mục iPhone
 
 # Backend
 app/main.py                app factory + static + router
@@ -53,11 +55,11 @@ app/phone.py               chuẩn hoá SĐT Việt Nam
 app/giftcodes.py           sinh / chuẩn hoá gift code
 app/security.py            security header, rate limit, xác thực nhân viên, Turnstile
 app/audit.py               audit trail (metadata qua danh sách trắng)
-app/services/              nghiệp vụ lead + gift
-app/routers/               health, catalog, leads, gifts
+app/services/              nghiệp vụ lead + gift + admin (truy vấn lead, CSV)
+app/routers/               health, catalog, leads, gifts, admin
 migrations/                Alembic
 tests/                     pytest (unit + integration PostgreSQL)
-tests_e2e/                 Playwright (chưa có nội dung — gate G09)
+tests_e2e/                 Playwright thật: máy chủ + PostgreSQL + Chromium (`make test-e2e`)
 
 # Vận hành
 .github/workflows/ci.yml   CI: gitleaks + kiểm tra tĩnh + backend trên PostgreSQL
@@ -126,8 +128,14 @@ make test-unit         # chỉ unit test, không cần database
 make lint              # ruff check + format --check
 make migrate-check     # alembic upgrade head + alembic check
 make secret-scan       # gitleaks trên toàn bộ lịch sử git
+make test-e2e          # E2E TRÌNH DUYỆT THẬT (Chromium + máy chủ + PostgreSQL)
 make check             # gộp: lint + test + secret-scan
 ```
+
+`make test-e2e` dựng một máy chủ uvicorn thật trên database `_test`, mở Chromium
+thật và đo hành vi DOM. Bộ này **không chạy trong CI**; chạy tay trước khi merge
+khi có đụng tới HTML/JS. Nó là thứ duy nhất bắt được các lỗi như nút "đã ẩn" mà
+vẫn hiện, hay landing không đọc danh mục từ API.
 
 `TEST_DATABASE_URL` phải trỏ tới database có tên **kết thúc bằng `_test`**.
 `tests/conftest.py` **từ chối chạy** nếu không đúng — để không xoá nhầm database thật.
@@ -147,8 +155,16 @@ UNIQUE INDEX MỘT PHẦN, và redeem dựa trên khoá hàng — SQLite không 
 | POST | `/api/leads` | công khai (rate limit; Turnstile nếu cấu hình) |
 | GET | `/api/gifts/{gift_code}` | nhân viên |
 | GET | `/api/gifts/{gift_code}/qr.png` | công khai |
-| POST | `/api/gifts/{gift_code}/redeem` | **chưa có → G03** |
-| GET | `/api/admin/leads` | **chưa có → G05** |
+| POST | `/api/gifts/{gift_code}/redeem` | nhân viên |
+| GET | `/api/admin/leads` | **nhân viên** — lọc, phân trang, tổng số |
+| GET | `/api/admin/leads.csv` | **nhân viên** — cùng bộ lọc, có trần dòng |
+| GET | `/api/admin/leads/{lead_id}` | **nhân viên** — chi tiết |
+| GET | `/api/admin/iphone-models` | **nhân viên** — cả model đã tắt |
+| POST | `/api/admin/iphone-models` | **nhân viên** — thêm model |
+| PATCH | `/api/admin/iphone-models/{model_code}` | **nhân viên** — sửa/tắt model |
+
+Khu vực `/api/admin/*` **fail CLOSED**: chưa cấu hình `STAFF_API_KEYS` thì trả **503**,
+không mở toang. Khoá gửi qua header `X-Staff-Key` hoặc `Authorization: Bearer …`.
 
 ```bash
 curl -s localhost:8000/api/health
@@ -171,14 +187,18 @@ curl -s -X POST localhost:8000/api/leads -H 'Content-Type: application/json' -d 
 
 Đây là bản đang phát triển, **chưa deploy ở đâu**. Cụ thể:
 
-- **Chưa có xác nhận phát quà.** `POST /api/gifts/{code}/redeem` thuộc gate G03. Trang
-  `redeem.html` nói thẳng điều này thay vì giả vờ thành công.
-- **Chưa có admin leads** (G05).
+- **Chưa deploy ở đâu cả** (không staging, không production) ⇒ **không có cơ sở nào để
+  nói "secure production"**. Xem `docs/MASTER_STATUS.md` §16.
+- **Trang `admin-leads.html` được phục vụ công khai** (nó chỉ là cái vỏ, không chứa dữ liệu).
+  Toàn bộ dữ liệu nằm sau `/api/admin/*` và đều bắt buộc xác thực.
+- **Thay đổi danh mục iPhone chưa ghi audit** — cần thêm `event_type` mới + migration.
+- **Export CSV không có BOM** ⇒ Excel có thể hiển thị sai dấu tiếng Việt khi mở trực tiếp.
 - **Chưa nối GTM/GA4/Meta Pixel.** Mới có `window.dataLayer`.
 - **Rate limit nằm trong bộ nhớ tiến trình** → chạy nhiều instance thì mỗi instance đếm riêng.
   Muốn chính xác khi scale ngang phải dùng Redis.
 - **Turnstile mới có adapter**, chưa cấu hình secret thật ở đâu.
-- **Chưa có bộ test E2E trong repo** (`tests_e2e/` còn rỗng) — gate G09.
+- **Bộ E2E đã có trong repo** (`tests_e2e/`, chạy bằng `make test-e2e`) nhưng **chưa nối vào CI** —
+  CI không có Chromium. Một bộ test không chạy tự động là bộ test sẽ bị bỏ quên.
 - **Chưa có `docs/deployment.md`** và **chưa có hạ tầng staging** — gate G11.
 
 Danh sách đầy đủ: [`docs/MASTER_STATUS.md`](docs/MASTER_STATUS.md) §13.2.
@@ -190,11 +210,11 @@ Danh sách đầy đủ: [`docs/MASTER_STATUS.md`](docs/MASTER_STATUS.md) §13.2
 | Gate | Nội dung | Trạng thái |
 |---|---|---|
 | G01 | Baseline hardening + sửa CI đỏ | **DONE** |
-| G02 | Backend thật: API + PostgreSQL + migration + QR chuẩn + catalog | đang làm |
-| G03 | Redeem engine (atomic, chống double-spend) + audit | chờ |
-| G04 | Staff redeem UI + xác thực nhân viên | chờ |
-| G05 | Admin leads (tìm kiếm, lọc, phân trang, export CSV) | chờ |
-| G06 | Danh mục iPhone (DB + seed + API: xong ở G02) | một phần |
+| G02 | Backend thật: API + PostgreSQL + migration + QR chuẩn + catalog | **DONE** |
+| G03 | Redeem engine (atomic, chống double-spend) + audit | **DONE** |
+| G04 | Staff redeem UI (quét QR) + ranh giới xác thực | **DONE** |
+| G05 | Admin leads (tìm kiếm, lọc, phân trang, export CSV) | **DONE** |
+| G06 | Danh mục iPhone: admin thêm/sửa model, không sửa HTML landing | **DONE** |
 | G07 | Campaign / source / UTM tracking | một phần |
 | G08 | Security pass đầy đủ | một phần |
 | G09 | Test đầy đủ + E2E | một phần |

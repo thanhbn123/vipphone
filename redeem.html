@@ -36,8 +36,9 @@
           <input id="staffKey" name="staffKey" type="password" autocomplete="off"
                  spellcheck="false" aria-describedby="staffKey-hint">
           <span class="field-hint" id="staffKey-hint">
-            Do quản trị hệ thống cấp. Khoá chỉ được giữ trong phiên làm việc này,
-            không lưu lâu dài trên trình duyệt.
+            Do quản trị hệ thống cấp. Khoá <strong>chỉ sống trong phiên làm việc
+            của tab này</strong> (bộ nhớ tạm của phiên) — đóng tab là mất, và hệ
+            thống <strong>không</strong> lưu khoá lâu dài trên trình duyệt.
           </span>
         </label>
 
@@ -55,6 +56,26 @@
         <button class="primary-btn" type="submit">KIỂM TRA MÃ</button>
       </form>
 
+      <div class="scan-block">
+        <button type="button" class="secondary-btn" id="scanToggle" hidden
+                aria-expanded="false" aria-controls="scanPanel">
+          QUÉT QR BẰNG CAMERA
+        </button>
+        <p class="field-hint" id="scanUnsupported" hidden>
+          Trình duyệt hoặc thiết bị này <strong>không</strong> hỗ trợ quét QR trực
+          tiếp, nên nút quét được ẩn thay vì hiện ra mà không hoạt động.
+          Nhập mã bằng tay ở ô trên, hoặc dùng ứng dụng camera của điện thoại để
+          mở liên kết in trong mã QR.
+        </p>
+        <div class="scan-panel" id="scanPanel" hidden>
+          <video id="scanVideo" class="scan-video" playsinline muted
+                 aria-label="Khung hình camera dùng để quét mã QR"></video>
+          <p class="field-hint">Đưa mã QR trên phiếu quà vào giữa khung hình.</p>
+          <button type="button" class="secondary-btn" id="scanStop">DỪNG QUÉT</button>
+        </div>
+        <p class="field-hint" id="scanStatus" role="status" aria-live="polite"></p>
+      </div>
+
       <div id="redeemResult" class="redeem-result" aria-live="polite"></div>
     </section>
   </main>
@@ -66,6 +87,7 @@
   <script src="assets/js/config.js"></script>
   <script src="assets/js/tracking.js"></script>
   <script src="assets/js/util.js"></script>
+  <script src="assets/js/qr-scan.js"></script>
   <script src="assets/js/redeem.js"></script>
 </body>
 </html>

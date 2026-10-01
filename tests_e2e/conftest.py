@@ -1,0 +1,203 @@
+"""Bộ khung test E2E: máy chủ thật + PostgreSQL thật + Chromium thật.
+
+VÌ SAO CẦN LỚP NÀY (đọc trước khi sửa):
+
+Test trong `tests/` đo tầng API. Nhưng hai yêu cầu của gate G04/G06 chỉ đo được
+bằng **trình duyệt thật**:
+
+- "thêm model qua API admin → **landing** thấy model đó": `tests/` chỉ chứng minh
+  API danh mục trả về model; nó KHÔNG chứng minh được landing vẽ ra `<option>`.
+- "phải **ẩn nút** quét QR khi không hỗ trợ — không được giả vờ": đây là hành vi
+  của DOM dưới một năng lực trình duyệt cụ thể. Không có cách nào đo bằng API.
+- "khoá nhân viên **không** lưu lâu dài": phải đọc `localStorage` THẬT của một
+  trình duyệt THẬT sau khi thao tác thật.
+
+Lớp này KHÔNG chạy trong CI (CI chỉ chạy `tests/`). Chạy tay bằng `make test-e2e`.
+Nếu Chromium chưa cài, bộ này **báo lỗi rõ ràng** chứ không tự bỏ qua: một test
+E2E bị skip im lặng là một test không bao giờ có thể FAIL (xem MASTER_STATUS §17).
+"""
+
+from __future__ import annotations
+
+import os
+import socket
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# `tests_e2e/` không phải một package, nên gốc repo có thể chưa nằm trên `sys.path`
+# (chỉ chắc chắn có khi chạy `python -m pytest`). Chèn tường minh để `from tests.*
+# import ...` chạy được với mọi cách gọi.
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+# Dùng CHUNG nguồn với `tests/` để hai bên không lệch nhau: khoá nhân viên của
+# test, chốt an toàn `_test`, hàm dựng migration, và dữ liệu seed danh mục.
+from tests.conftest import (  # noqa: E402
+    STAFF_KEY,
+    TEST_DATABASE_URL,
+    alembic_config,
+    reset_public_schema,
+)
+
+
+def _free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def _wait_for_health(base_url: str, process: subprocess.Popen, *, timeout: float = 60.0) -> None:
+    """Chờ máy chủ sống. Nếu tiến trình chết trước đó thì nói NGAY, kèm log."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError(f"uvicorn thoát sớm với mã {process.returncode}:\n{_read_log()}")
+        try:
+            with urllib.request.urlopen(base_url + "/api/health", timeout=1) as response:
+                if response.status == 200:
+                    return
+        except (urllib.error.URLError, OSError):
+            time.sleep(0.3)
+    raise RuntimeError(f"máy chủ không lên sau {timeout:.0f}s:\n{_read_log()}")
+
+
+LOG_PATH = Path("/tmp/vipphone-e2e-uvicorn.log")
+
+
+def _read_log() -> str:
+    try:
+        return LOG_PATH.read_text()[-3000:]
+    except OSError:
+        return "(không đọc được log)"
+
+
+@pytest.fixture(scope="session")
+def live_server() -> str:
+    """Máy chủ uvicorn THẬT trên database test (tên kết thúc bằng `_test`).
+
+    Tiến trình do chính fixture này khởi động nên tắt bằng `terminate()` trên
+    đúng đối tượng Popen — không săn tiến trình theo tên (CLAUDE.md §16.7).
+    """
+    from alembic import command
+
+    reset_public_schema(TEST_DATABASE_URL)
+    command.upgrade(alembic_config(TEST_DATABASE_URL), "head")
+
+    port = _free_port()
+    base_url = f"http://127.0.0.1:{port}"
+
+    env = {
+        **os.environ,
+        "APP_ENV": "test",
+        "DATABASE_URL": TEST_DATABASE_URL,
+        "PUBLIC_BASE_URL": base_url,
+        "STAFF_API_KEYS": STAFF_KEY,
+        "RATE_LIMIT_ENABLED": "false",
+        "TURNSTILE_SECRET_KEY": "",
+        "TURNSTILE_REQUIRED": "false",
+        "LOG_LEVEL": "warning",
+        "PYTHONPATH": str(REPO_ROOT),
+    }
+
+    with LOG_PATH.open("w") as log:
+        process = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "app.main:app",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(port),
+                "--log-level",
+                "warning",
+            ],
+            cwd=REPO_ROOT,
+            env=env,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+        )
+
+    try:
+        _wait_for_health(base_url, process)
+        os.environ["E2E_BASE_URL"] = base_url
+        yield base_url
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:  # pragma: no cover - chỉ khi treo
+            process.kill()
+            process.wait(timeout=5)
+
+
+@pytest.fixture(scope="session")
+def browser():
+    """Chromium thật, headless. Thiếu trình duyệt thì BÁO LỖI, không skip."""
+    from playwright.sync_api import Error as PlaywrightError
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            instance = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:  # pragma: no cover - phụ thuộc máy
+            raise RuntimeError(
+                "Không mở được Chromium của Playwright. Cài bằng:\n"
+                "    .venv/bin/playwright install chromium\n"
+                f"Lỗi gốc: {exc}"
+            ) from exc
+        try:
+            yield instance
+        finally:
+            instance.close()
+
+
+@pytest.fixture
+def console_errors() -> list[str]:
+    """Nơi hứng lỗi console/JS của trang. Test nào cần thì xin fixture này."""
+    return []
+
+
+@pytest.fixture
+def page(browser, console_errors):
+    context = browser.new_context()
+    page = context.new_page()
+
+    # CSP vi phạm và lỗi JS hiện ra ở console. Đây là phép đo THẬT cho yêu cầu
+    # "không inline script/style/handler" — mạnh hơn grep nội dung file.
+    page.on(
+        "console",
+        lambda message: message.type == "error" and console_errors.append(message.text),
+    )
+    page.on("pageerror", lambda error: console_errors.append(str(error)))
+
+    try:
+        yield page
+    finally:
+        context.close()
+
+
+@pytest.fixture(autouse=True)
+def clean_database(live_server) -> None:
+    """Mỗi test bắt đầu từ database sạch, danh mục dựng lại như migration."""
+    from sqlalchemy import create_engine, text
+
+    from tests.conftest import INITIAL_MIGRATION
+
+    engine = create_engine(TEST_DATABASE_URL, future=True)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("TRUNCATE TABLE audit_events, leads RESTART IDENTITY CASCADE"))
+            conn.execute(text("TRUNCATE TABLE iphone_models RESTART IDENTITY CASCADE"))
+            conn.execute(INITIAL_MIGRATION.MODELS_TABLE.insert(), INITIAL_MIGRATION.seed_rows())
+    finally:
+        engine.dispose()

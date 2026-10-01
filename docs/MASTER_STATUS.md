@@ -7,8 +7,9 @@
 > Chưa chạy thì ghi `NOT RUN`. Chưa deploy thì ghi `NOT DEPLOYED`.
 > Kết luận dạng "0 lỗi" phải ghi kèm **công cụ đo**, **phạm vi đo** và **cái nằm ngoài phạm vi**.
 
-- Cập nhật lần cuối: **2026-10-01, 19:05 +07**
+- Cập nhật lần cuối: **2026-10-01, 19:35 +07**
 - Người cập nhật: DEEPSEEK HARNESS — VIP PHONE PROJECT CONTROLLER
+- Gate vừa xong: **G04 + G05 + G06** (issue [#7](https://github.com/thanhbn123/vipphone/issues/7))
 - Repo: <https://github.com/thanhbn123/vipphone>
 
 ---
@@ -20,19 +21,35 @@
 | Phase 0 | Discovery / Baseline | **DONE** | — | — | — |
 | G01 | Baseline hardening + sửa CI đỏ | **DONE** | [#2](https://github.com/thanhbn123/vipphone/pull/2) | **PASS** | `7dabe0ade68797a6eead65dd315924f52748987a` |
 | G02 | Real backend (API + DB + migration + QR chuẩn + catalog) | **DONE** | [#4](https://github.com/thanhbn123/vipphone/pull/4) | **PASS** | `b4ca55d3bedcf67c910d0223029da92e37ed6492` |
-| G03 | Redeem engine (atomic, chống double-spend) + audit | **IN PROGRESS** | — | NOT RUN | — |
-| G04 | Staff redeem UI + xác thực nhân viên | NOT STARTED | — | NOT RUN | — |
-| G05 | Admin leads | NOT STARTED | — | NOT RUN | — |
-| G06 | iPhone catalog | MỘT PHẦN (đã có ở G02: DB + seed + API) | — | — | — |
+| G03 | Redeem engine (atomic, chống double-spend) + audit | **DONE** | [#6](https://github.com/thanhbn123/vipphone/pull/6) | **PASS** | `92a4952d54c1d2009a85f69ba74a44becc4651df` |
+| G04+G05+G06 | Staff redeem UI (quét QR) + Admin leads/CSV + Danh mục iPhone qua admin | **CODE XONG — CHỜ CI + MERGE** (PR #8) | [#8](https://github.com/thanhbn123/vipphone/pull/8) | xem PR #8 | điền ở PR chốt số sau merge |
 | G07 | Campaign / source tracking | MỘT PHẦN (đã có ở G02: nhận & lưu ở server) | — | — | — |
-| G08 | Security pass | MỘT PHẦN (đã có ở G02: header, rate limit, auth boundary) | — | — | — |
-| G09 | Tests đầy đủ | MỘT PHẦN (143 test backend; E2E trong repo chưa có) | — | — | — |
+| G08 | Security pass | MỘT PHẦN (đã có ở G02 + **G05: IDOR, CSV injection**; còn Turnstile/dependency scan) | — | — | — |
+| G09 | Tests đầy đủ | MỘT PHẦN (280 backend + **14 E2E trình duyệt thật**; E2E **chưa nối vào CI**) | — | — | — |
 | G10 | CI đầy đủ | MỘT PHẦN (lint, migration, unit, integration PG, secret scan) | — | — | — |
 | G11 | Staging readiness | MỘT PHẦN (`.env.example`, `/api/ready` đã có; `docs/deployment.md` chưa) | — | — | — |
 | G12 | Owner acceptance pack | NOT STARTED | — | NOT RUN | — |
 
 **Baseline gốc của dự án:** `7d6162cf31eb96ea27879be3a4671812a9cd7e01` (1 commit, 14 file, CI đỏ 2/2 run).
 Chi tiết baseline đầy đủ nằm ở lịch sử git (`git show 7d6162c`) và ở PR #2.
+
+### 1.1 Gate G04+G05+G06 — số đo
+
+| Mục | Giá trị đo được | Cách đo |
+|---|---|---|
+| Issue | [#7](https://github.com/thanhbn123/vipphone/issues/7) | `gh issue list` |
+| PR | [#8](https://github.com/thanhbn123/vipphone/pull/8) | `gh pr view 8` |
+| Expected develop | `92a4952d54c1d2009a85f69ba74a44becc4651df` | `git rev-parse origin/develop` |
+| Actual develop (trước merge) | `92a4952d54c1d2009a85f69ba74a44becc4651df` | `git rev-parse origin/develop` |
+| Merge-base | `92a4952d54c1d2009a85f69ba74a44becc4651df` | `git merge-base origin/develop <PR HEAD>` |
+| PR HEAD | `gate/g04-g05-g06-staff-admin` | `git rev-parse origin/gate/g04-g05-g06-staff-admin` |
+| Merge SHA mới | điền ở PR chốt số sau khi merge (không sửa trực tiếp `develop`) | `git rev-parse origin/develop` |
+
+Drift: **expected == actual == merge-base** ⇒ không lệch, được phép merge.
+
+> **Chưa ghi PASS cho tới khi có kết luận CI thật của PR #8.** Bảng trên cố ý để trống
+> cột CI và cột merge SHA: điền sau khi CI chạy xong và merge xong, bằng PR chốt số.
+> Luật của file này: không ghi PASS nếu không có evidence đo được.
 
 ---
 
@@ -53,6 +70,11 @@ Trình duyệt (HTML/CSS/JS thuần, KHÔNG build step)
    ├── POST /api/leads                   → tạo lead + cấp gift code
    ├── GET  /api/gifts/{code}            → tra cứu cho nhân viên (cần xác thực)
    ├── GET  /api/gifts/{code}/qr.png     → ảnh QR chuẩn (công khai, không PII)
+   ├── POST /api/gifts/{code}/redeem    → phát quà (nhân viên, nguyên tử)
+   ├── GET  /api/admin/leads            → tra cứu lead (nhân viên)
+   ├── GET  /api/admin/leads.csv        → export CSV (nhân viên)
+   ├── GET  /api/admin/leads/{id}       → chi tiết lead (nhân viên)
+   ├── GET/POST/PATCH /api/admin/iphone-models → danh mục iPhone (nhân viên)
    ├── GET  /api/health | /api/ready     → liveness / readiness
    │
    └── FastAPI  ──►  PostgreSQL 16 (Alembic migration)
@@ -108,7 +130,32 @@ Kiểm tra ràng buộc (`pg_constraint`):
 | GET | `/api/gifts/{gift_code}` | **nhân viên** | **CÓ** |
 | GET | `/api/gifts/{gift_code}/qr.png` | công khai | **CÓ** |
 | POST | `/api/gifts/{gift_code}/redeem` | **nhân viên** | **CÓ** (G03) — nguyên tử, idempotent |
-| GET | `/api/admin/leads` | **nhân viên** | **CHƯA CÓ** → G05 |
+| GET | `/api/admin/leads` | **nhân viên** | **CÓ** (G05) — lọc, phân trang, tổng số |
+| GET | `/api/admin/leads.csv` | **nhân viên** | **CÓ** (G05) — cùng bộ lọc, trần 5.000 dòng |
+| GET | `/api/admin/leads/{lead_id}` | **nhân viên** | **CÓ** (G05) — chi tiết |
+| GET | `/api/admin/iphone-models` | **nhân viên** | **CÓ** (G06) — cả model đã tắt |
+| POST | `/api/admin/iphone-models` | **nhân viên** | **CÓ** (G06) |
+| PATCH | `/api/admin/iphone-models/{model_code}` | **nhân viên** | **CÓ** (G06) |
+
+### 5.1 Bộ lọc của `/api/admin/leads` (dùng CHUNG với `leads.csv`)
+
+| Tham số | Kiểu | Ghi chú |
+|---|---|---|
+| `phone` | chuỗi | khớp MỘT PHẦN; chỉ giữ chữ số; `%`/`_` bị escape nên không thành ký tự đại diện |
+| `iphone_model` | chuỗi | nhận `model_code` (UI gửi) hoặc tên hiển thị (dữ liệu đã lưu) |
+| `source` | chuỗi | khớp chính xác |
+| `gift_status` | chuỗi | một trong `NEW/CONFIRMED/READY/REDEEMED/CANCELLED`, sai → 422 |
+| `created_from` | `YYYY-MM-DD` | từ 00:00 UTC |
+| `created_to` | `YYYY-MM-DD` | **trọn ngày** (cận trên độc quyền = 00:00 UTC hôm sau) |
+| `page` | số ≥ 1 | mặc định 1 |
+| `page_size` | 1…200 | mặc định 50; vượt trần → **422**, không cắt im lặng |
+
+Thứ tự: `created_at DESC, id DESC` — thêm `id` để thứ tự **tất định** khi trùng mốc thời gian
+(thiếu nó thì hai trang liên tiếp có thể lặp hoặc sót hàng, và đó là lỗi im lặng).
+
+`/api/admin/leads.csv` **không** nhận `page`/`page_size`; nó dùng chung hàm dựng truy vấn với
+danh sách nên hai đường không thể lệch nhau. Có trần `CSV_MAX_ROWS = 5_000` và trả header
+`X-VIPPHONE-CSV-Truncated: true` khi bị cắt — **không cắt im lặng**.
 
 `POST /api/leads` trả về:
 
@@ -183,6 +230,21 @@ phân biệt được hai nội dung khác nhau (nếu không, phép đo vô ngh
 | Audit `GIFT_STATUS_CHANGED` + `GIFT_REDEEMED` | **CÓ**, ghi cùng transaction |
 | Trạng thái được phép chuyển | `NEW` / `CONFIRMED` / `READY` → `REDEEMED`. `CANCELLED` → **409, không phát quà** |
 
+### 9.1 Giao diện nhân viên (G04)
+
+| Mục | Trạng thái |
+|---|---|
+| Nhập gift code, xem thông tin tối thiểu, xác nhận phát quà, hiện trạng thái đã redeem | **CÓ** |
+| Quét QR bằng camera | **CÓ, có điều kiện** — dùng `BarcodeDetector` của chính trình duyệt, không nạp thư viện ngoài (CSP `script-src 'self'` sẽ chặn CDN) |
+| Không hỗ trợ thì ẩn nút | **CÓ** — test E2E giả lập **cả hai** nhánh trình duyệt và đo DOM thật |
+| Khoá nhân viên | chỉ `sessionStorage`, **không** `localStorage`/cookie/query string. UI ghi rõ khoá chỉ sống trong phiên |
+| Dữ liệu trả về | tối thiểu: SĐT che (`0912***678`), không UTM, không công ty |
+| Ranh giới xác thực | `require_staff`, **fail closed 503** — giữ nguyên từ G02 |
+
+Nội dung QR khi quét: **chỉ nhận URL công khai `/redeem?code=…`** (đúng thứ server sinh ra).
+QR lạ (ví dụ `https://evil.example/…`) → trang nói thẳng "không phải phiếu quà VIP PHONE",
+**không** nhét mã rác vào ô và **không** gọi API tra cứu.
+
 **Cơ chế chống double-spend:** `SELECT … FOR UPDATE` khoá hàng TRƯỚC khi đọc trạng thái.
 Ở mức READ COMMITTED, transaction thứ hai **chờ**; khi được giải phóng, PostgreSQL đọc lại
 hàng ĐÃ CẬP NHẬT nên bên thua thấy `REDEEMED` và trả idempotent thay vì ghi lần hai.
@@ -214,7 +276,20 @@ không được lưu. Có danh sách ĐEN riêng cho `phone`, `full_name`, `comp
 - Seed trong migration: **28 model** đúng bằng `data/iphone-models.json`. Năm 2025 và 2026
   rỗng trong file gốc nên **không seed** — không tự bịa model.
 - Landing đọc từ `/api/catalog/iphone-models`; **không hard-code model trong HTML**.
-- Thêm model mới = INSERT vào bảng (hoặc qua admin ở G05), **không phải sửa HTML**. Có test.
+- Thêm model mới = INSERT vào bảng hoặc qua API admin (G06), **không phải sửa HTML**. Có test.
+- **G06 đã xong phần còn lại:**
+  - `POST /api/admin/iphone-models` — thêm model. Validate `model_code` theo slug
+    `^[a-z0-9][a-z0-9-]{0,63}$`, `year` trong `2007..2100`, `extra="forbid"`.
+  - `PATCH /api/admin/iphone-models/{model_code}` — sửa `display_name`, `active`, `sort_order`.
+    **Không** cho sửa `model_code`/`year` (đổi mã là làm gãy dữ liệu cũ); gửi trường lạ → **422**.
+  - Trùng `model_code` → **409** (kể cả khi hai admin thêm cùng lúc: ràng buộc UNIQUE ở DB thắng).
+  - **Không tự bịa model**: hệ thống không suy model kế tiếp, không seed kèm. Test đo
+    "thêm MỘT model thì bảng tăng ĐÚNG một dòng".
+- **Bằng chứng "không phải sửa HTML" (ba phép đo độc lập):**
+  1. Băm SHA-256 của **mọi file `.html`** trước và sau khi thêm model — giống nhau từng byte.
+  2. `/api/catalog/iphone-models` (đúng thứ landing gọi) có model mới.
+  3. **Chromium thật** nạp `/`, đọc `<option>` trong `#iphone_model` và thấy model mới
+     (`tests_e2e/test_g04_g06_browser.py`).
 - Model không có trong danh mục, hoặc `active = false`, bị API **từ chối** (`MODEL_NOT_IN_CATALOG`).
 
 ---
@@ -253,7 +328,12 @@ không được lưu. Có danh sách ĐEN riêng cho `phone`, `full_name`, `comp
 | S12 | `redeemed_by` hard-code | **XONG** — actor suy từ khoá nhân viên, không hard-code |
 | — | PII minimization | Che SĐT (`0912***678`), không trả UTM/công ty/BNI cho nhân viên, không lưu SĐT vào `sessionStorage` |
 | — | SQL injection | Tham số hoá toàn bộ qua SQLAlchemy; có test chèn `'); DROP TABLE leads;--` và xác nhận lưu nguyên văn, bảng còn nguyên |
-| — | XSS | Escape mọi nội dung người dùng; CSP `script-src 'self'`; **không** inline script/style trong HTML (CI chặn) |
+| — | XSS | Escape mọi nội dung người dùng; CSP `script-src 'self'`; **không** inline script/style trong HTML (CI chặn). Trang quản trị dựng DOM bằng `textContent`/`createTextNode`, **không** dùng `innerHTML` cho dữ liệu |
+| S2 | Khu vực dữ liệu đầy đủ | **CÓ** (G05) — `/api/admin/*` có xác thực riêng, trả đủ trường. Màn nhân viên tại quầy vẫn che SĐT |
+| S6 | **IDOR** | **CÓ test** (G05) — thiếu/sai khoá ⇒ 401 cho mọi route admin và **không** byte nào của lead lọt ra; lead có và lead không tồn tại trả **cùng** kết quả |
+| — | **CSV formula injection** | **CÓ** (G05) — ô bắt đầu bằng `=`, `+`, `-`, `@`, TAB, CR bị thêm `'` ở đầu. Đo bằng 14 test + trình duyệt thật tải file |
+| — | Trần dữ liệu ra | `page_size ≤ 200` (422 nếu vượt), CSV `≤ 5.000` dòng kèm header báo bị cắt |
+| — | Ranh giới ghi danh mục | `POST`/`PATCH` model đều `require_staff`; test đo **số dòng trong bảng** không đổi khi thiếu khoá |
 
 ### 13.2 CÒN MỞ (ghi đúng, không tô hồng)
 
@@ -262,16 +342,24 @@ không được lưu. Có danh sách ĐEN riêng cho `phone`, `full_name`, `comp
 | — | Turnstile chỉ có **adapter**, chưa bật ở đâu (chưa có secret thật) | G08 / cần Owner |
 | — | Rate limit **trong bộ nhớ tiến trình** → nhiều instance thì mỗi instance đếm riêng. Ghi rõ, **không** giả vờ đủ cho production nhiều instance | G08 |
 | — | Chưa có `pip-audit` / dependency scan trong CI | G08 |
-| — | Chưa có admin leads (S2: dữ liệu đầy đủ chỉ nên xem ở khu vực có xác thực riêng) | G05 |
-| — | Chưa có test IDOR cho route admin (route admin chưa tồn tại) | G05/G08 |
+| — | **Thay đổi danh mục iPhone KHÔNG ghi audit** — bảng `audit_events` có CHECK constraint liệt kê 4 `event_type`; thêm loại mới cần migration. Chưa làm trong gate này | G08 |
+| — | **Trang `admin-leads.html` được phục vụ công khai** (chỉ là vỏ, không chứa dữ liệu). Chặn ở tầng trang là chặn nhầm chỗ vì trình duyệt không gửi được header xác thực khi mở HTML | chấp nhận có ghi lý do |
+| — | **CSV không có BOM** ⇒ Excel có thể hiển thị sai dấu tiếng Việt khi mở trực tiếp | G08 |
+| — | **Bộ E2E chưa nối vào CI** (CI không có Chromium) ⇒ dễ bị bỏ quên | G10 |
 | — | Chưa rà soát PII lọt vào log production | G08 |
 
 ---
 
 ## 14. TESTS
 
-**163 test, tất cả PASS** — đo bằng `python -m pytest -q` trên **PostgreSQL 16 thật**.
-Phạm vi: `tests/` (unit + integration). **Chưa có** bộ E2E nằm trong repo.
+**280 test backend, tất cả PASS** — đo bằng `python -m pytest -q` trên **PostgreSQL 16 thật**.
+Phạm vi: `tests/` (unit + integration). Trước gate này: **163** ⇒ **+117**.
+
+**14 test E2E trình duyệt thật, tất cả PASS** — đo bằng `make test-e2e`
+(`.venv/bin/python -m pytest -q tests_e2e`). Phạm vi: `tests_e2e/`, dựng uvicorn thật +
+PostgreSQL `_test` thật + Chromium thật. **Bộ này KHÔNG chạy trong CI.**
+
+Tổng: **294 test**, chia làm hai lệnh vì E2E cần Chromium.
 
 | File | Nội dung |
 |---|---|
@@ -282,6 +370,10 @@ Phạm vi: `tests/` (unit + integration). **Chưa có** bộ E2E nằm trong rep
 | `tests/test_gifts_api.py` | xác thực, che PII, mã sai, **QR giải mã thật**, danh mục |
 | `tests/test_redeem_api.py` | redeem thành công, idempotent, CANCELLED bị từ chối, phân quyền, **khoá hàng tất định**, đa luồng |
 | `tests/test_migrations.py` | upgrade/downgrade trên **database tạm riêng**, seed, UNIQUE một phần, CHECK, `alembic check` |
+| `tests/test_admin_leads_api.py` | **mới (G05)** — 54 ca: xác thực/IDOR, phân trang, trần `page_size`, mọi bộ lọc, chi tiết, CSV (chống injection, trần dòng, cùng bộ lọc) |
+| `tests/test_admin_catalog_api.py` | **mới (G06)** — 51 ca: xác thực, validate slug/năm, trùng mã, PATCH, "thêm model không đổi byte HTML nào" |
+| `tests/test_admin_pages.py` | **mới** — trang mới phục vụ được, CSP vẫn NGHIÊM, script chỉ từ chính origin |
+| `tests_e2e/test_g04_g06_browser.py` | **mới** — 14 ca Chromium thật: nút quét QR ẩn/hiện theo năng lực trình duyệt, khoá chỉ ở `sessionStorage`, landing thấy model mới, trang quản trị không lỗi CSP |
 
 Đối chiếu với 14 kịch bản bắt buộc của G09:
 
@@ -311,8 +403,8 @@ Workflow: `.github/workflows/ci.yml`. 3 job:
 | Job | Nội dung |
 |---|---|
 | `Secret scan (gitleaks)` | gitleaks 8.30.1, `fetch-depth: 0`, quét toàn bộ lịch sử |
-| `Validate static frontend` | file bắt buộc, JSON hợp lệ, `node --check`, chốt chặn QR giả / QR phải từ server / không quay lại `localStorage` / HTML không inline |
-| `Backend (lint, migration, tests)` | PostgreSQL 16 service container, ruff, `alembic upgrade head` + `alembic check`, unit test, integration test, full suite |
+| `Validate static frontend` | file bắt buộc (đã thêm `admin-leads.html`, `qr-scan.js`, `admin-leads.js`, `app/routers/admin.py`), JSON hợp lệ, `node --check`, chốt chặn QR giả / QR phải từ server / **khoá nhân viên chỉ ở `sessionStorage`** (phủ cả `redeem.js` và `admin-leads.js`, có đối chứng dương) / HTML không inline (phủ thêm `admin-leads.html`) |
+| `Backend (lint, migration, tests)` | PostgreSQL 16 service container, ruff (đã thêm `tests_e2e`), `alembic upgrade head` + `alembic check`, unit test, integration test, full suite |
 
 Trạng thái CI của G02: **cập nhật ngay sau khi PR được tạo** (xem PR tương ứng).
 
@@ -333,6 +425,10 @@ có tên kết thúc bằng `_test` — tránh xoá nhầm database thật.
 | STAGING | **NOT DEPLOYED** |
 | PRODUCTION | **NOT DEPLOYED** |
 
+**Không có câu nào trong tài liệu này được phép đọc thành "secure production".** Chưa có
+hạ tầng, chưa có HTTPS thật, chưa có secret thật, chưa có giám sát, chưa có diễn tập khôi phục.
+Gate G04/G05/G06 làm phần mềm **đúng hơn**, không làm nó **đã triển khai được**.
+
 ---
 
 ## 17. BÀI HỌC ĐO LƯỜNG (ghi lại để không lặp)
@@ -352,6 +448,11 @@ Trong phiên này, **năm lần** thứ dùng để kiểm chứng tự nó khô
 
 | 8 | Test đồng thời `test_concurrent_redeem_only_one_wins` **PASS 5/5 lần dù ĐÃ BỎ `with_for_update()`** | Test không phân biệt được. Nguyên nhân đo được: 8 luồng mất ~20ms bắt tay kết nối (scram) nên các `SELECT` bị so le, cuộc đua **không xảy ra** (đo trực tiếp: 1 lần ghi thắng). Bản vá đầu tiên (kiểm "service có ném lỗi khoá không") **cũng không phân biệt được** — bỏ khoá thì service chờ ở câu `UPDATE`, vẫn ném cùng loại lỗi. Bản vá thật: đọc `pg_stat_activity` để xem backend đang chờ **Ở CÂU NÀO** — phải là `SELECT … FOR UPDATE`. **Đã kiểm bằng đối chứng âm**: bỏ khoá → 2 test FAIL; khôi phục → 2 test PASS |
 
+| 9 | Test "nút quét QR phải ẨN khi trình duyệt không hỗ trợ" **PASS giả** ở lần chạy đầu: test báo FAIL, nhưng nguyên nhân là **sản phẩm sai**, không phải test sai. CSS `.secondary-btn{display:inline-block}` **đè** lên `[hidden]` của stylesheet gốc, nên nút "đã ẩn" theo HTML vẫn **HIỆN**. Đọc mã thấy `hidden`, grep thấy `hidden` — chỉ Chromium thật nói ra sự thật | Thêm `[hidden]{display:none!important}`. Ghi lại thành đối chứng âm NC13: bỏ quy tắc đó → test FAIL |
+| 10 | **Hai test PASS vì lý do KHÁC với điều mình tưởng.** (a) "PATCH không cho sửa `model_code`" đạt nhờ validator *"thiếu trường hợp lệ"*, **không** nhờ `extra="forbid"` — đổi sang `extra="ignore"` test vẫn PASS. (b) "SĐT không được thành wildcard" đạt nhờ lớp *chuẩn hoá chữ số*, **không** nhờ `escape_like` — bỏ `escape_like` test vẫn PASS | Sửa (a): parametrize thêm ca **trộn** trường hợp lệ + trường lạ → `extra="ignore"` làm 3/4 ca FAIL. Đo (b) bằng **hai** đối chứng: bỏ lớp chuẩn hoá mà giữ escape → vẫn PASS (escape đủ chặn); bỏ **cả hai** → FAIL. Không xoá `escape_like` vì nó là lớp phòng thủ thật, nhưng ghi rõ nó chỉ quan sát được ở ca thứ hai |
+| 11 | `page.goto(..., wait_until="networkidle")` **không bao giờ đạt** trên `/redeem.html?code=…`: Playwright treo tới hết 30 s dù trang đã render xong và API đã trả lời (thấy `RESPONSE 401` trong sự kiện, nhưng không có `requestfinished`). Đo thêm: cùng lỗi với mã hợp lệ (200) và với `fetch` gọi từ `page.evaluate` — kể cả `fetch` danh mục vốn vẫn idles được khi chạy lúc tải trang. **Nguyên nhân gốc chưa chốt được** | **Không** kết luận gì về sản phẩm. Bỏ hẳn `networkidle`, chuyển sang `wait_until="load"` + chờ **điều kiện DOM cụ thể**. Điều kiện chờ không giải thích được là điều kiện chờ không được tin |
+| 12 | Test đầu tiên của G06 vừa liệt kê `iphone--` vào danh sách slug **SAI**, vừa liệt kê nó vào danh sách slug **ĐÚNG** | Đọc lại đề bài: regex `^[a-z0-9][a-z0-9-]{0,63}$` **cho phép** gạch ngang cuối. Bỏ khỏi danh sách sai. Bài học: danh sách ca thử cũng là một phép đo, và nó cũng có thể tự mâu thuẫn |
+
 **Nguyên tắc rút ra (bổ sung sau ca 8):** một test **PASS** không có nghĩa là nó
 **kiểm được điều mình tưởng**. Muốn biết một test có thật sự phân biệt được không, phải
 **phá thứ nó định bảo vệ rồi xem nó có FAIL không** — gọi là đối chứng âm. Test nào không
@@ -361,6 +462,11 @@ Khi một chốt chặn báo động, câu hỏi đầu tiên phải là *"chố
 và câu trả lời phải bằng **một phép đo**, không bằng cảm giác. Bốn lần đầu là **công cụ sai**;
 lần 5 và 6 là **dữ liệu/thiết lập sai** (chỉ lộ trên CI); lần 7 là **giá trị thử nghiệm gây nhiễu**;
 lần 8 là **phép đo không phân biệt được**. Sửa đúng chỗ, không sửa cho vừa mắt.
+
+**Ca 9–12 (gate G04+G05+G06) là loại khó nhất:** ở ca 10, *test xanh, sản phẩm đúng, mà kết luận
+vẫn sai* — vì test đạt nhờ một cơ chế khác với cơ chế mình tưởng nó đang kiểm. Cách duy nhất
+phát hiện là **đối chứng âm**, và ở ca 10 đối chứng âm đầu tiên **không FAIL** nên phải đổi
+chính phép đo.
 
 ---
 
@@ -393,8 +499,72 @@ gh pr list    --repo thanhbn123/vipphone --state all
 gh run list   --repo thanhbn123/vipphone --limit 20
 
 # Chất lượng
-make lint                     # ruff check + format --check
+make lint                     # ruff check + format --check (app, tests, tests_e2e, migrations)
 make test                     # pytest trên PostgreSQL thật
+make test-e2e                 # E2E Chromium thật + máy chủ thật + PostgreSQL _test
 make migrate-check            # alembic upgrade head + alembic check
-make secret-scan              # gitleaks toàn bộ lịch sử
+make secret-scan              # gitleaks toàn bộ lịch sử git
 ```
+
+```bash
+# Khu vực quản trị (thay <KEY> bằng khoá trong STAFF_API_KEYS)
+curl -s -H "X-Staff-Key: <KEY>" 'localhost:8000/api/admin/leads?phone=0912&page_size=25'
+curl -s -H "X-Staff-Key: <KEY>" 'localhost:8000/api/admin/leads.csv?source=bni' -o leads.csv
+curl -s -H "X-Staff-Key: <KEY>" 'localhost:8000/api/admin/leads/<lead_id>'
+curl -s -H "X-Staff-Key: <KEY>" -X POST localhost:8000/api/admin/iphone-models \
+     -H 'Content-Type: application/json' \
+     -d '{"model_code":"iphone-17-pro","display_name":"iPhone 17 Pro","year":2027,"sort_order":-5}'
+
+# Chốt an toàn: không có khoá ⇒ 401; chưa cấu hình ⇒ 503
+curl -s -o /dev/null -w '%{http_code}\n' localhost:8000/api/admin/leads
+```
+
+---
+
+## 20. ĐỐI CHỨNG ÂM (gate G04+G05+G06) — đo, không suy đoán
+
+**Luật:** với **mọi** test an ninh, phải tạm **phá** đúng thứ nó định bảo vệ, chạy lại, và
+chứng minh nó **FAIL**. Rồi khôi phục và chứng minh nó **PASS**. Test nào không FAIL khi phá
+thì **chưa kiểm gì cả**, dù nó xanh.
+
+Cách chạy: script vá từng chỗ trong mã nguồn, chạy đúng test liên quan, **khôi phục nguyên
+trạng** rồi chạy lại. Không dùng `git checkout` để khôi phục (các file đang có thay đổi chưa
+commit); sao lưu từng file ra ngoài rồi ghi đè lại, và sau cùng `diff` để xác nhận không sót.
+**16/16 ca đạt.**
+
+| Kết luận | Ca phá | File bị vá | Khi ĐÃ PHÁ | Sau khi KHÔI PHỤC |
+|---|---|---|---|---|
+| **ĐẠT** | NC1 — bỏ xác thực ở route danh sách lead | `app/routers/admin.py` | 1 failed / 3 passed | 0 failed / 4 passed |
+| **ĐẠT** | NC2 — bỏ chống CSV formula injection | `app/services/admin_leads.py` | 14 failed / 0 passed | 0 failed / 14 passed |
+| **ĐẠT** | NC3 — bỏ trần page_size | `app/routers/admin.py` | 2 failed / 2 passed | 0 failed / 4 passed |
+| **ĐẠT** | NC4 — nới regex slug model_code | `app/schemas.py` | 8 failed / 1 passed | 0 failed / 9 passed |
+| **ĐẠT** | NC5 — bỏ chặn year < 2007 | `app/schemas.py` | 5 failed / 0 passed | 0 failed / 5 passed |
+| **ĐẠT** | NC6 — bỏ trần số dòng CSV | `app/routers/admin.py` | 1 failed / 0 passed | 0 failed / 1 passed |
+| **ĐẠT** | NC7 — CSV bỏ qua bộ lọc (khác danh sách) | `app/routers/admin.py` | 1 failed / 0 passed | 0 failed / 1 passed |
+| **ĐẠT** | NC8a — bỏ lớp 1 (chuẩn hoá chữ số), GIỮ escape LIKE | `app/services/admin_leads.py` | 0 failed / 1 passed | 0 failed / 1 passed |
+| **ĐẠT** | NC8b — bỏ CẢ HAI lớp (chuẩn hoá chữ số + escape LIKE) | `app/services/admin_leads.py` | 1 failed / 0 passed | 0 failed / 1 passed |
+| **ĐẠT** | NC9 — bộ lọc SĐT rỗng lặng lẽ thành 'không lọc gì' | `app/services/admin_leads.py` | 1 failed / 0 passed | 0 failed / 1 passed |
+| **ĐẠT** | NC10 — nút quét QR hiện vô điều kiện | `assets/js/redeem.js` | 1 failed / 0 passed | 0 failed / 1 passed |
+| **ĐẠT** | NC11 — ghi khoá nhân viên vào localStorage | `assets/js/redeem.js` | 1 failed / 0 passed | 0 failed / 1 passed |
+| **ĐẠT** | NC12 — landing dùng danh sách cứng thay vì gọi API danh mục | `assets/js/app.js` | 1 failed / 0 passed | 0 failed / 1 passed |
+| **ĐẠT** | NC13 — bỏ quy tắc [hidden] (đúng lỗi CSS đã bắt được) | `assets/css/styles.css` | 1 failed / 0 passed | 0 failed / 1 passed |
+| **ĐẠT** | NC14 — require_staff fail OPEN khi chưa cấu hình | `app/security.py` | 1 failed / 0 passed | 0 failed / 1 passed |
+| **ĐẠT** | NC15 — PATCH cho phép gửi trường lạ (model_code/year) | `app/schemas.py` | 3 failed / 1 passed | 0 failed / 4 passed |
+
+Đọc bảng này cho đúng:
+
+- **NC8a là ca CỐ Ý để test vẫn PASS** khi phá. Nó không phải ca hỏng: nó chứng minh lớp
+  phòng thủ thứ hai (`escape_like`) một mình đã đủ chặn. Ca NC8b (bỏ cả hai lớp) mới là ca
+  chứng minh test **sống**.
+- **NC13 là ca đáng chú ý nhất**: nó phá đúng quy tắc CSS mà lỗi thật đã dính (ca 9 ở §17).
+  Nghĩa là test E2E bắt được **đúng** lỗi cũ, không phải một lỗi tưởng tượng.
+- **NC10, NC11, NC12, NC13 chạy trên Chromium thật** (`tests_e2e/`), không phải bằng grep.
+- Hai ca đầu tiên của NC8/NC15 **không FAIL**; xem §17 ca 10 để biết đã sửa phép đo thế nào.
+
+**Phạm vi đã đo (nói đúng phạm vi, không suy rộng):** 16 đối chứng âm này phủ các test an ninh
+**mới của gate G04/G05/G06** — xác thực/IDOR route admin, chống CSV formula injection, trần
+`page_size`, trần dòng CSV, "CSV cùng bộ lọc", validate slug/năm của model, `extra="forbid"`
+khi PATCH, escape LIKE, fail-closed khi chưa cấu hình, ẩn nút quét QR, khoá chỉ ở sessionStorage,
+landing đọc danh mục từ API. **Nằm NGOÀI phạm vi:** các test an ninh của G01–G03 (đã có đối
+chứng âm riêng ở gate đó) và các test không mang tính an ninh (validate định dạng, sắp xếp,
+phân trang thường). Không có nghĩa "toàn bộ test của dự án đã được đối chứng âm".

@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>VIP PHONE — Quản trị lead &amp; danh mục</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-vp-page="admin-leads">
+  <a class="skip-link" href="#main">Bỏ qua điều hướng, tới nội dung chính</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">VIP</span>
+      <span class="brand-name">PHONE</span>
+    </div>
+    <span class="co-brand">ADMIN</span>
+  </header>
+
+  <main class="container" id="main">
+    <p class="banner banner-warn" role="note">
+      <strong>KHU VỰC QUẢN TRỊ.</strong>
+      Trang này hiển thị <strong>dữ liệu đầy đủ</strong> của khách (gồm số điện
+      thoại chưa che). Mọi yêu cầu dữ liệu đều đi qua API có xác thực nhân viên;
+      chưa cấu hình xác thực thì API <strong>đóng</strong> (503) chứ không mở toang.
+      Khoá truy cập chỉ sống trong phiên làm việc của tab này.
+    </p>
+
+    <section class="card" aria-labelledby="auth-title">
+      <h1 id="auth-title" class="h3">Khoá truy cập nhân viên</h1>
+      <label for="staffKey">
+        Khoá truy cập
+        <input id="staffKey" name="staffKey" type="password" autocomplete="off"
+               spellcheck="false" aria-describedby="staffKey-hint">
+        <span class="field-hint" id="staffKey-hint">
+          Do quản trị hệ thống cấp. Khoá <strong>chỉ sống trong phiên làm việc của
+          tab này</strong> — đóng tab là mất, hệ thống <strong>không</strong> lưu
+          lâu dài trên trình duyệt.
+        </span>
+      </label>
+    </section>
+
+    <section class="card" aria-labelledby="filters-title">
+      <h2 id="filters-title" class="h3">Tìm kiếm &amp; lọc lead</h2>
+
+      <form id="filterForm" novalidate>
+        <div class="grid two">
+          <label for="fPhone">
+            Số điện thoại (khớp một phần)
+            <input id="fPhone" name="phone" type="tel" inputmode="tel" autocomplete="off"
+                   maxlength="32" placeholder="Ví dụ: 0912">
+          </label>
+          <label for="fModel">
+            Dòng iPhone
+            <select id="fModel" name="iphone_model">
+              <option value="">Tất cả</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="grid two">
+          <label for="fSource">
+            Nguồn
+            <select id="fSource" name="source">
+              <option value="">Tất cả</option>
+              <option value="bni">BNI</option>
+              <option value="viporder">VIP ORDER</option>
+              <option value="facebook">Facebook</option>
+              <option value="tiktok">TikTok</option>
+              <option value="qr">QR</option>
+              <option value="other">Khác</option>
+            </select>
+          </label>
+          <label for="fStatus">
+            Trạng thái quà
+            <select id="fStatus" name="gift_status">
+              <option value="">Tất cả</option>
+              <option value="NEW">NEW</option>
+              <option value="CONFIRMED">CONFIRMED</option>
+              <option value="READY">READY</option>
+              <option value="REDEEMED">REDEEMED</option>
+              <option value="CANCELLED">CANCELLED</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="grid two">
+          <label for="fFrom">
+            Tạo từ ngày
+            <input id="fFrom" name="created_from" type="date">
+          </label>
+          <label for="fTo">
+            Đến hết ngày
+            <input id="fTo" name="created_to" type="date">
+          </label>
+        </div>
+
+        <div class="grid two">
+          <label for="fPageSize">
+            Số dòng mỗi trang
+            <select id="fPageSize" name="page_size">
+              <option value="25">25</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+              <option value="200">200 (trần)</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="admin-actions">
+          <button class="primary-btn" type="submit" id="searchBtn">TÌM KIẾM</button>
+          <button class="secondary-btn" type="button" id="resetBtn">XOÁ BỘ LỌC</button>
+          <button class="secondary-btn" type="button" id="exportBtn">XUẤT CSV</button>
+        </div>
+      </form>
+
+      <p class="field-hint" id="statusLine" role="status" aria-live="polite"></p>
+      <div id="errorBox" class="status bad" role="alert" hidden></div>
+    </section>
+
+    <section class="card" aria-labelledby="results-title">
+      <h2 id="results-title" class="h3">Kết quả</h2>
+      <div class="table-wrap">
+        <table class="data-table" id="leadTable">
+          <caption class="field-hint">
+            Danh sách lead, mới nhất trước. Bấm “Xem” để mở chi tiết một lead.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Mã quà</th>
+              <th scope="col">Khách</th>
+              <th scope="col">SĐT</th>
+              <th scope="col">Dòng máy</th>
+              <th scope="col">Nguồn</th>
+              <th scope="col">Trạng thái</th>
+              <th scope="col">Tạo lúc</th>
+              <th scope="col">Chi tiết</th>
+            </tr>
+          </thead>
+          <tbody id="leadRows">
+            <tr><td colspan="8">Chưa tải dữ liệu.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pager">
+        <button class="secondary-btn" type="button" id="prevBtn">‹ TRANG TRƯỚC</button>
+        <span class="pager-info" id="pageInfo">—</span>
+        <button class="secondary-btn" type="button" id="nextBtn">TRANG SAU ›</button>
+      </div>
+
+      <div id="detailBox" class="detail-panel" aria-live="polite"></div>
+    </section>
+
+    <section class="card" aria-labelledby="models-title">
+      <h2 id="models-title" class="h3">Danh mục iPhone</h2>
+      <p class="field-hint">
+        Thêm hoặc sửa model <strong>ngay tại đây</strong>. Landing đọc danh mục từ
+        API nên model mới hiện ra mà <strong>không phải sửa file HTML nào</strong>.
+        Hệ thống không tự bịa model — chỉ nhận đúng dữ liệu nhập ở form này.
+      </p>
+
+      <form id="modelForm" novalidate>
+        <div class="grid two">
+          <label for="mCode">
+            Mã model (slug)
+            <input id="mCode" name="model_code" type="text" maxlength="64"
+                   placeholder="iphone-17-pro" autocapitalize="none" spellcheck="false"
+                   aria-describedby="mCode-hint">
+            <span class="field-hint" id="mCode-hint">
+              Chữ thường a-z, số 0-9, gạch ngang; bắt đầu bằng chữ hoặc số.
+            </span>
+          </label>
+          <label for="mName">
+            Tên hiển thị
+            <input id="mName" name="display_name" type="text" maxlength="120"
+                   placeholder="iPhone 17 Pro">
+          </label>
+        </div>
+        <div class="grid two">
+          <label for="mYear">
+            Năm (>= 2007)
+            <input id="mYear" name="year" type="number" min="2007" max="2100" step="1">
+          </label>
+          <label for="mSort">
+            Thứ tự sắp xếp
+            <input id="mSort" name="sort_order" type="number" step="1" value="0"
+                   aria-describedby="mSort-hint">
+            <span class="field-hint" id="mSort-hint">Số nhỏ đứng trước trên landing.</span>
+          </label>
+        </div>
+        <label class="consent" for="mActive">
+          <input type="checkbox" id="mActive" name="active" checked>
+          <span>Hiện model này trên landing</span>
+        </label>
+
+        <div class="admin-actions">
+          <button class="primary-btn" type="submit" id="modelSubmit">THÊM MODEL</button>
+        </div>
+      </form>
+
+      <p class="field-hint" id="modelStatus" role="status" aria-live="polite"></p>
+      <div id="modelError" class="status bad" role="alert" hidden></div>
+
+      <div class="table-wrap">
+        <table class="data-table" id="modelTable">
+          <caption class="field-hint">Toàn bộ danh mục, kể cả model đang tắt.</caption>
+          <thead>
+            <tr>
+              <th scope="col">Mã</th>
+              <th scope="col">Tên hiển thị</th>
+              <th scope="col">Năm</th>
+              <th scope="col">Thứ tự</th>
+              <th scope="col">Đang hiện</th>
+              <th scope="col">Bật/tắt</th>
+            </tr>
+          </thead>
+          <tbody id="modelRows">
+            <tr><td colspan="6">Chưa tải danh mục.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>VIP PHONE — khu vực quản trị. Chưa có hạ tầng production; không tuyên bố “secure production”.</p>
+  </footer>
+
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/tracking.js"></script>
+  <script src="assets/js/util.js"></script>
+  <script src="assets/js/admin-leads.js"></script>
+</body>
+</html>

@@ -10,6 +10,17 @@
  * Việc xác nhận (`POST /api/gifts/{code}/redeem`) được hoàn thiện ở gate G03
  * với giao dịch nguyên tử ở server. Trước khi route đó tồn tại, trang báo rõ
  * chức năng chưa khả dụng thay vì giả vờ thành công.
+ *
+ * ⚠️  KHOÁ NHÂN VIÊN — SỐNG TRONG PHIÊN, KHÔNG LƯU LÂU DÀI
+ * Khoá chỉ được ghi vào `sessionStorage` (bộ nhớ tạm của TAB, mất khi đóng tab).
+ * TUYỆT ĐỐI không ghi vào `localStorage`/cookie/indexedDB — khoá nằm lại trên
+ * máy là khoá dùng được cho người kế tiếp mở máy đó. Có test E2E đo hành vi này
+ * bằng trình duyệt thật, và đối chứng âm của nó ở docs/MASTER_STATUS.md §20.
+ *
+ * ⚠️  QUÉT QR — CHỈ KHI THẬT SỰ HỖ TRỢ
+ * Nút quét chỉ được HIỆN sau khi `VPQrScan.isSupported()` trả `true`. Không hỗ
+ * trợ thì nút nằm im (thuộc tính `hidden`) và trang nói thẳng lý do. Không có
+ * nhánh nào hiện nút rồi bấm vào không có gì xảy ra.
  */
 "use strict";
 
@@ -24,6 +35,13 @@
   var codeInput = document.getElementById("redeemCode");
   var keyInput = document.getElementById("staffKey");
   var result = document.getElementById("redeemResult");
+
+  var scanToggle = document.getElementById("scanToggle");
+  var scanPanel = document.getElementById("scanPanel");
+  var scanVideo = document.getElementById("scanVideo");
+  var scanStop = document.getElementById("scanStop");
+  var scanStatus = document.getElementById("scanStatus");
+  var scanUnsupported = document.getElementById("scanUnsupported");
 
   if (!form || !codeInput || !result) return;
 
@@ -43,10 +61,122 @@
   function rememberStaffKey(key) {
     if (!key) return;
     try {
+      // CHỈ sessionStorage. Xem ghi chú đầu file: khoá không được sống lâu hơn
+      // phiên làm việc của tab này.
       sessionStorage.setItem(STAFF_KEY_STORAGE, key);
     } catch (err) {
       /* chế độ riêng tư */
     }
+  }
+
+  /* ------------------------------------------------------------ quét QR */
+
+  function setScanStatus(message) {
+    if (scanStatus) scanStatus.textContent = message || "";
+  }
+
+  /** Rút gift code ra khỏi nội dung QR. Nội dung QR là URL công khai `/redeem?code=…`. */
+  function giftCodeFromScannedText(text) {
+    var raw = String(text || "").trim();
+    if (!raw) return "";
+
+    var candidate = raw;
+    var match = raw.match(/[?&]code=([^&\s]+)/);
+    if (match) {
+      try {
+        candidate = decodeURIComponent(match[1]);
+      } catch (err) {
+        candidate = match[1];
+      }
+    } else if (raw.indexOf("/") !== -1) {
+      // URL không có tham số `code` — không phải phiếu quà của VIP PHONE.
+      var parts = raw.split("/");
+      candidate = parts[parts.length - 1];
+    }
+
+    return util.normalizeGiftCode(candidate);
+  }
+
+  function handleScannedText(text) {
+    var code = giftCodeFromScannedText(text);
+    hideScanPanel();
+
+    if (!code || !util.isWellFormedGiftCode(code)) {
+      setScanStatus(
+        "Mã QR này không phải phiếu quà VIP PHONE (định dạng VIP-YY-XXXXXX). Thử lại hoặc nhập tay."
+      );
+      track("vipphone_gift_lookup_failed", { reason: "QR_NOT_GIFT_CODE" });
+      return;
+    }
+
+    codeInput.value = code;
+    setScanStatus("Đã đọc mã từ QR: " + code);
+    lookup(code);
+  }
+
+  function showScanPanel() {
+    if (!scanPanel) return;
+    scanPanel.hidden = false;
+    if (scanToggle) scanToggle.setAttribute("aria-expanded", "true");
+    setScanStatus("Đang mở camera…");
+    window.VPQrScan.start(
+      scanVideo,
+      handleScannedText,
+      function (message) {
+        hideScanPanel();
+        setScanStatus(message);
+      }
+    );
+  }
+
+  function hideScanPanel() {
+    window.VPQrScan.stop();
+    if (scanPanel) scanPanel.hidden = true;
+    if (scanToggle) scanToggle.setAttribute("aria-expanded", "false");
+  }
+
+  function initScanner() {
+    if (!scanToggle || !scanPanel || !scanVideo) return;
+
+    var supported =
+      window.VPQrScan &&
+      typeof window.VPQrScan.isSupported === "function" &&
+      typeof window.VPQrScan.start === "function";
+
+    if (!supported) {
+      // Không có module quét → coi như KHÔNG hỗ trợ. Không hiện nút.
+      if (scanUnsupported) scanUnsupported.hidden = false;
+      return;
+    }
+
+    window.VPQrScan.isSupported().then(function (ok) {
+      if (!ok || !window.VPQrScan.cameraAvailable()) {
+        // ẨN nút, và nói rõ vì sao. Không có "nút trang trí".
+        scanToggle.hidden = true;
+        if (scanUnsupported) scanUnsupported.hidden = false;
+        return;
+      }
+      scanToggle.hidden = false;
+      if (scanUnsupported) scanUnsupported.hidden = true;
+    });
+
+    scanToggle.addEventListener("click", function () {
+      if (scanPanel.hidden) {
+        showScanPanel();
+      } else {
+        hideScanPanel();
+        setScanStatus("");
+      }
+    });
+
+    if (scanStop) {
+      scanStop.addEventListener("click", function () {
+        hideScanPanel();
+        setScanStatus("");
+      });
+    }
+
+    window.addEventListener("pagehide", hideScanPanel);
   }
 
   /* ------------------------------------------------------------ hiển thị */
@@ -245,6 +375,8 @@
     event.preventDefault();
     lookup(codeInput.value);
   });
+
+  initScanner();
 
   if (keyInput) {
     try {
