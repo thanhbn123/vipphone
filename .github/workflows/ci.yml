@@ -16,6 +16,12 @@ env:
   GITLEAKS_VERSION: "8.30.1"
   PYTHON_VERSION: "3.12"
   #: Database dùng cho integration test (service container bên dưới).
+  #:
+  #: ⚠️  CỐ Ý ĐỂ PASSWORD TRONG URL. Đừng "dọn dẹp" thành `trust` không mật
+  #: khẩu: chính việc URL CÓ password mới làm lộ nhóm lỗi mà máy local không
+  #: thấy. Đã dính một lần — `str(URL)` của SQLAlchemy che password thành
+  #: `***` nên 7 test migration pass ở máy mà FAIL trên CI. Giữ password lại
+  #: chính là giữ phép đo phủ đúng ca đó. Xem docs/MASTER_STATUS.md §17.
   TEST_DATABASE_URL: "postgresql+psycopg://vipphone:vipphone@localhost:5432/vipphone_test"
 
 jobs:
