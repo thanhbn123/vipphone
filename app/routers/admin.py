@@ -117,8 +117,21 @@ def _csv_response(export: CsvExport) -> Response:
     nhận từ ngoài nên không có đường chèn.
     """
     stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%d-%H%M%S")
+
+    # BOM UTF-8 ở đầu file.
+    #
+    # VÌ SAO: Excel trên Windows không suy ra bảng mã từ `charset=utf-8` trong
+    # Content-Type khi người dùng bấm tải file — nó đoán theo locale máy. Không
+    # có BOM thì tên khách có dấu tiếng Việt hiện sai (mojibake), trong khi dữ
+    # liệu trong database hoàn toàn đúng. Đây là lỗi người dùng cuối gặp NGAY
+    # lần mở file đầu tiên, nên phải vá.
+    #
+    # BOM chỉ là 3 byte `EF BB BF` ở đầu; mọi công cụ đọc CSV đúng chuẩn đều bỏ
+    # qua nó. Có test khẳng định byte đầu là BOM và phần còn lại vẫn giải mã đúng.
+    content = b"\xef\xbb\xbf" + export.text.encode("utf-8")
+
     return Response(
-        content=export.text,
+        content=content,
         media_type="text/csv; charset=utf-8",
         headers={
             "Content-Disposition": f'attachment; filename="{CSV_FILENAME_TEMPLATE.format(stamp=stamp)}"',

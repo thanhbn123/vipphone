@@ -277,3 +277,105 @@ jobs:
 
       - name: Full test suite
         run: python -m pytest -q --durations=10
+
+  # ---------------------------------------------------------------------
+  # G10 — Quét lỗ hổng phụ thuộc.
+  # ---------------------------------------------------------------------
+  dependency-scan:
+    name: Dependency scan (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip pip-audit
+
+      - name: Audit runtime dependencies
+        run: pip-audit -r requirements.txt --strict --desc
+
+      - name: Audit dev dependencies
+        # Bộ dev gồm Playwright/ruff/pytest — không phải đường chạy production,
+        # nhưng vẫn chạy trong CI nên vẫn phải soi.
+        run: pip-audit -r requirements-dev.txt --strict --desc
+
+  # ---------------------------------------------------------------------
+  # G10 — E2E trình duyệt THẬT.
+  #
+  # VÌ SAO CẦN JOB NÀY: trước đây CI chỉ *lint* `tests_e2e` mà KHÔNG CHẠY nó
+  # (pytest.ini đặt `testpaths = tests`). Nghĩa là bộ E2E hỏng vẫn qua CI —
+  # đúng dạng "báo PASS trong khi test không chạy".
+  #
+  # Cố ý dùng PostgreSQL service container: SQLite không có UNIQUE INDEX MỘT
+  # PHẦN nên sẽ nói dối về chính sách chống trùng.
+  # ---------------------------------------------------------------------
+  e2e:
+    name: E2E (Chromium thật + PostgreSQL)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: vipphone
+          POSTGRES_PASSWORD: vipphone
+          POSTGRES_DB: vipphone_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vipphone"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Wait for PostgreSQL
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            if pg_isready -h localhost -p 5432 -U vipphone; then exit 0; fi
+            sleep 2
+          done
+          echo "PostgreSQL không sẵn sàng"; exit 1
+
+      - name: Run E2E suite
+        # KHÔNG truyền `-m` để loại trừ gì, và KHÔNG cho phép skip im lặng:
+        # một bộ E2E bị skip là một bộ E2E không bao giờ có thể FAIL.
+        run: python -m pytest tests_e2e -q --durations=10
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
