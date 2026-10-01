@@ -3,7 +3,7 @@
 - Ngày đo: **2026-10-01** (giờ máy +07)
 - Người đo: DEEPSEEK HARNESS — VIP PHONE PROJECT CONTROLLER
 - Repo: <https://github.com/thanhbn123/vipphone>
-- `develop`: `93e6aae11f6f17b860b083abbba7c7832bb2ae67` (sau khi G11+G12 merge — CI **5/5 job PASS**)
+- `develop`: `1d1e2a581ca8b0c83fc5cfb5f915c1f05aebae1c` (sau phiên STAGING READINESS — CI **7/7 check PASS**)
 - `main`: `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **KHÔNG ĐỔI suốt phiên**
 - **STAGING: NOT DEPLOYED** · **PRODUCTION: NOT DEPLOYED**
 
@@ -122,7 +122,10 @@ make lint && make secret-scan
 2. **Khoá Turnstile/reCAPTCHA** — để bật bot protection thật.
 3. **Bật branch protection cho `main`** (bắt buộc PR + CI xanh) — hiện đang **TẮT**.
 4. **Lệnh release production** — **chưa có**, nên PRODUCTION vẫn **NOT DEPLOYED**. Phiên này **KHÔNG** deploy production và **KHÔNG** merge `main`.
-5. **Chính sách lưu trữ PII** — lưu lead và log IP bao lâu?
+5. **Chính sách lưu trữ PII** — lưu lead và log IP bao lâu? (3 phương án ở `docs/decisions/PII_RETENTION_OPTIONS.md`)
+6. **RPO/RTO và lịch sao lưu** — mất tối đa bao nhiêu dữ liệu là chấp nhận được? Giữ bản sao lưu bao lâu, ở đâu? Xem `docs/backup-restore.md` §4.
+
+Toàn bộ danh sách kèm hướng dẫn thao tác: **`docs/OWNER_DECISIONS_REQUIRED.md`**.
 
 ---
 
@@ -138,5 +141,44 @@ make lint && make secret-scan
 | G08 | Security pass | **DONE** |
 | G09+G10 | Tests đầy đủ + CI đầy đủ (5 job) | **DONE** |
 | G11+G12 | Staging readiness + gói nghiệm thu này | **DONE** |
+| **SR-1** | Hợp đồng cấu hình staging + bản đồ PII + phương án retention | **DONE** |
+| **SR-2** | Nối trọn đường Turnstile qua env + ranh giới xác thực kiểm bằng liệt kê | **DONE** |
+| **SR-3** | Ma trận trình duyệt Chromium/Firefox/WebKit + sửa câu SAI về Linux | **DONE** |
+| **SR-4** | Preflight staging + sao lưu/phục hồi + smoke tải + phát hành/quay lui | **DONE** |
 
 Xem `docs/MASTER_STATUS.md` để biết trạng thái chi tiết và SHA từng gate.
+
+---
+
+## F. STAGING READINESS — trạng thái repo-side
+
+| Hạng mục | Trạng thái | Bằng chứng |
+|---|---|---|
+| Hợp đồng cấu hình | **PASS** | `docs/staging.md` — 19 biến phân loại REQUIRED/OPTIONAL · SECRET/PUBLIC · BUILD/RUN; 0 biến thiếu so với `Settings.model_fields` |
+| Mẫu biến staging | **PASS** | `.env.staging.example` |
+| Kiểm trước deploy | **PASS** | `scripts/staging_preflight.sh` — **18 mục**, **6 đối chứng âm** |
+| Turnstile adapter | **PASS** | Server xác minh, CSP có điều kiện, widget frontend; **17 test** |
+| Turnstile credential thật | **BLOCKED_EXTERNAL_CREDENTIAL** | Chưa có khoá ⇒ bot protection **TẮT** |
+| Ranh giới xác thực | **PASS** | **14 route** liệt kê từ `app.openapi()`: 6 công khai + **8 có khoá** |
+| Trình duyệt | **PASS** | Chromium **33/33** · Firefox **33/33** · Playwright WebKit **33/33** |
+| CI | **PASS** | **7 check**, chạy trên **ubuntu-24.04 Linux x64** |
+| Sao lưu / phục hồi | **LOCAL PASS** | `docs/backup-restore.md`; 250 lead, md5 nội dung khớp |
+| Smoke tải | **LOCAL PASS** | 14 755 request / 12 s · **0 lỗi thật** · p50 5.1 ms · p95 6.0 ms |
+| Bản đồ PII | **PASS** | `docs/pii-data-map.md` |
+| Phát hành / quay lui | **PASS (thiết kế)** | `docs/deployment.md` §12 — **chưa chạy trên hạ tầng thật** |
+| Hạ tầng staging | **BLOCKED_EXTERNAL_INFRA** | Chưa có máy chủ/domain |
+| Branch protection | **OWNER_ACTION_REQUIRED** | `main` và `develop` đều **chưa** được bảo vệ (`404`) |
+| Retention PII | **OWNER_DECISION_REQUIRED** | 3 phương án ở `docs/decisions/PII_RETENTION_OPTIONS.md` |
+
+**`REPO_SIDE_STAGING_READINESS = PASS`** — mọi việc làm được ở phía repo đã xong.
+Phần còn lại **đều là chặn bên ngoài**, không phải việc code.
+
+### F.1 Wording chính xác cho từng phép đo
+
+| Cách nói SAI | Cách nói ĐÚNG |
+|---|---|
+| "Safari đã kiểm" | **`PLAYWRIGHT WEBKIT = PASS`** · `SAFARI REAL = NOT TESTED` |
+| "đã kiểm Linux" (vì máy Mac chạy được) | **CI Linux PASS** (ubuntu-24.04) · máy là **macOS** |
+| "đã kiểm quét QR" | **giả lập** `BarcodeDetector`; **không engine nào** trong ma trận có API thật |
+| "đã kiểm tải" | **`LOCAL LOAD SMOKE`** — cùng máy với server, **không** phải benchmark |
+| "sao lưu đã chạy" | **`LOCAL BACKUP/RESTORE TEST`** — chưa có lịch tự động, chưa có staging |

@@ -42,8 +42,18 @@ hai artifact lệch phiên bản với nhau. Xem `docs/adr/0001-stack-selection.
 | PostgreSQL | **16** | CI dùng `postgres:16` service container |
 | Reverse proxy | bất kỳ | nginx/Caddy/Traefik — phải có TLS |
 
-Hệ điều hành: đã đo trên macOS (máy phát triển). **Chưa đo trên Linux** — nếu triển khai
-trên Linux thì đó là lần chạy đầu, phải nghiệm thu lại chứ đừng coi là đã biết chạy.
+Hệ điều hành: **Linux ĐÃ ĐƯỢC ĐO** — CI chạy trên GitHub-hosted **`ubuntu-24.04`, Linux x64**
+(log runner ghi `Operating System: Ubuntu`, `Image: ubuntu-24.04`,
+`setup-python-Linux-x64-24.04-Ubuntu-python-3.12.14`). Trên Linux đã chạy: **lint · unit ·
+integration PostgreSQL · migration (`alembic upgrade` + `alembic check`) · secret scan ·
+dependency scan · E2E trên CẢ BA engine (Chromium, Firefox, WebKit)**.
+
+**Phạm vi — đọc cho đúng:** điều đã chứng minh là *"MÃ chạy đúng trên Linux"*.
+Điều **CHƯA** đo là *"TRIỂN KHAI được trên Linux"*: đóng gói artifact, systemd, nginx,
+TLS, và chạy dưới tải — **chưa lần nào chạy**. Các phép đo *"tại máy"* khác trong tài liệu
+này là trên **macOS** (Mac mini M4).
+
+*(Câu cũ ở đây viết "Chưa đo trên Linux" — câu đó **SAI**; xem `MASTER_STATUS` §29.2.)*
 
 ---
 
