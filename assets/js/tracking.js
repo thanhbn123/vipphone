@@ -112,4 +112,12 @@
   };
 
   captureAttribution();
+
+  // `vipphone_landing_view` phát ra dựa trên thuộc tính `data-vp-page` của
+  // <body>, KHÔNG bằng <script> nội tuyến. Lý do: CSP nghiêm `script-src 'self'`
+  // chặn mọi script nội tuyến — xem app/security.py.
+  var pageName = document.body && document.body.getAttribute("data-vp-page");
+  if (pageName === "landing") {
+    track("vipphone_landing_view");
+  }
 })();

@@ -1,0 +1,162 @@
+"""Điểm vào ứng dụng VIP PHONE.
+
+MỘT tiến trình phục vụ cả API lẫn file tĩnh → deploy và rollback đơn giản
+(xem docs/adr/0001-stack-selection.md §3.2).
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from . import __version__
+from .config import Settings, get_settings
+from .errors import ApiError
+from .giftcodes import is_well_formed_gift_code, normalize_gift_code
+from .routers import catalog, gifts, health, leads
+from .security import apply_security_headers
+
+logger = logging.getLogger("vipphone")
+
+STATIC_PAGES = {
+    "/index.html": "index.html",
+    "/success.html": "success.html",
+    "/redeem.html": "redeem.html",
+}
+
+
+def configure_logging(settings: Settings) -> None:
+    logging.basicConfig(
+        level=getattr(logging, settings.log_level.upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    app_settings = settings or get_settings()
+    configure_logging(app_settings)
+
+    app = FastAPI(
+        title="VIP PHONE API",
+        version=__version__,
+        description=(
+            "API cho chương trình tặng ốp VIP PHONE: thu lead, cấp gift code, phát quà có audit."
+        ),
+        docs_url="/docs" if not app_settings.is_production else None,
+        redoc_url="/redoc" if not app_settings.is_production else None,
+        openapi_url="/openapi.json" if not app_settings.is_production else None,
+    )
+    app.state.settings = app_settings
+
+    # ---------------------------------------------------------- middleware
+    @app.middleware("http")
+    async def security_middleware(request: Request, call_next):
+        response = await call_next(request)
+        apply_security_headers(response, request.url.path, is_https=request.url.scheme == "https")
+        return response
+
+    # ------------------------------------------------------- xử lý ngoại lệ
+    @app.exception_handler(ApiError)
+    async def handle_api_error(request: Request, exc: ApiError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.to_payload(),
+            headers=exc.headers or None,
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def handle_request_validation(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        fields = {
+            ".".join(str(part) for part in error["loc"]): error.get("msg", "Giá trị không hợp lệ")
+            for error in exc.errors()
+        }
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": {
+                    "code": "VALIDATION_FAILED",
+                    "message": "Dữ liệu gửi lên không hợp lệ.",
+                    "fields": fields,
+                }
+            },
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def handle_http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        if request.url.path.startswith("/api/"):
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={
+                    "error": {
+                        "code": f"HTTP_{exc.status_code}",
+                        "message": str(exc.detail),
+                    }
+                },
+            )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"error": {"code": f"HTTP_{exc.status_code}", "message": str(exc.detail)}},
+        )
+
+    # ------------------------------------------------------------- routers
+    app.include_router(health.router)
+    app.include_router(catalog.router)
+    app.include_router(leads.router)
+    app.include_router(gifts.router)
+
+    # -------------------------------------------------------------- tĩnh
+    static_root: Path = app_settings.static_dir
+
+    assets_dir = static_root / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    data_dir = static_root / "data"
+    if data_dir.is_dir():
+        app.mount("/data", StaticFiles(directory=data_dir), name="data")
+
+    @app.get("/", include_in_schema=False)
+    def index() -> FileResponse:
+        return FileResponse(static_root / "index.html")
+
+    for route_path, filename in STATIC_PAGES.items():
+
+        def make_handler(target: str):
+            def handler() -> FileResponse:
+                return FileResponse(static_root / target)
+
+            return handler
+
+        app.get(route_path, include_in_schema=False)(make_handler(filename))
+
+    @app.get("/gift/{gift_code}", include_in_schema=False)
+    def gift_shortlink(gift_code: str) -> RedirectResponse:
+        """Liên kết ngắn cho QR: /gift/VIP-26-XXXXXX → /redeem?code=..."""
+        code = normalize_gift_code(gift_code)
+        if not is_well_formed_gift_code(code):
+            return RedirectResponse(url="/redeem", status_code=302)
+        return RedirectResponse(url=f"/redeem?code={code}", status_code=302)
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon() -> JSONResponse:
+        return JSONResponse(status_code=204, content=None)
+
+    logger.info(
+        "VIP PHONE khởi động: env=%s, docs=%s, staff_auth=%s",
+        app_settings.app_env,
+        "on" if not app_settings.is_production else "off",
+        "configured" if app_settings.staff_auth_configured else "NOT_CONFIGURED",
+    )
+
+    return app
+
+
+app = create_app()

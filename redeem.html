@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
-  <title>VIP PHONE — Redeem quà (nhân viên)</title>
+  <title>VIP PHONE — Phát quà (nhân viên)</title>
   <link rel="stylesheet" href="assets/css/styles.css">
 </head>
 <body>
@@ -19,10 +19,10 @@
   </header>
 
   <main class="container narrow" id="main">
-    <p class="banner banner-warn" role="note">
-      <strong>BẢN DEMO — CHƯA CÓ XÁC THỰC NHÂN VIÊN.</strong>
-      Trang này hiện mở công khai và chỉ đọc/ghi dữ liệu trên chính trình duyệt này.
-      Không dùng cho vận hành thật cho tới khi có xác thực nhân viên và backend.
+    <p class="banner banner-info" role="note">
+      <strong>KHU VỰC NHÂN VIÊN.</strong>
+      Trang yêu cầu khoá truy cập nhân viên. Hệ thống chỉ hiển thị thông tin
+      tối thiểu cần cho việc phát quà; số điện thoại của khách được che bớt.
     </p>
 
     <section class="card" aria-labelledby="redeem-title">
@@ -31,6 +31,16 @@
       <p>Nhập mã nhận quà của khách để tra cứu và xác nhận phát quà.</p>
 
       <form id="redeemForm" novalidate>
+        <label for="staffKey">
+          Khoá truy cập nhân viên
+          <input id="staffKey" name="staffKey" type="password" autocomplete="off"
+                 spellcheck="false" aria-describedby="staffKey-hint">
+          <span class="field-hint" id="staffKey-hint">
+            Do quản trị hệ thống cấp. Khoá chỉ được giữ trong phiên làm việc này,
+            không lưu lâu dài trên trình duyệt.
+          </span>
+        </label>
+
         <label for="redeemCode">
           Mã nhận quà
           <input id="redeemCode" name="redeemCode" type="text" required
@@ -41,6 +51,7 @@
             Không phân biệt chữ hoa/thường. Định dạng: VIP-YY-XXXXXX.
           </span>
         </label>
+
         <button class="primary-btn" type="submit">KIỂM TRA MÃ</button>
       </form>
 
@@ -52,6 +63,7 @@
     <p>VIP PHONE — khu vực nhân viên.</p>
   </footer>
 
+  <script src="assets/js/config.js"></script>
   <script src="assets/js/tracking.js"></script>
   <script src="assets/js/util.js"></script>
   <script src="assets/js/redeem.js"></script>

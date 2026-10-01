@@ -1,73 +1,34 @@
 /*!
- * VIP PHONE — render QR
+ * VIP PHONE — render QR chuẩn lấy từ server.
  *
- * ⚠️  NOT_PRODUCTION — CHƯA CÓ QR THẬT.
+ * QR được sinh ở SERVER bằng thư viện `qrcode` (chuẩn ISO/IEC 18004) và phục
+ * vụ tại `GET /api/gifts/{gift_code}/qr.png`.
  *
- * Bản baseline trước đây (`qr-lite.js`) VẼ một hình trông giống mã QR nhưng
- * bit sinh từ FNV-1a hash + XOR-shift PRNG, KHÔNG theo chuẩn ISO/IEC 18004.
- * Không đầu đọc QR nào quét được hình đó. Một hình giả trông như thật là
- * cái bẫy: nhân viên có thể đưa điện thoại ra quét và thất bại ngay tại
- * quầy phát quà.
+ * Nội dung QR CHỈ gồm URL công khai dạng `<PUBLIC_BASE_URL>/redeem?code=...`.
+ * KHÔNG chứa tên, số điện thoại, công ty hay bất kỳ PII nào. Điều này được
+ * kiểm bằng test giải mã QR thật (`tests/test_gifts_api.py`).
  *
- * Vì vậy file này CHỦ ĐỘNG KHÔNG VẼ HÌNH GIỐNG QR. Nó hiển thị:
- *   1. dòng chữ nói rõ QR chưa khả dụng,
- *   2. URL nhận quà dạng văn bản để nhân viên gõ tay / dán,
- *   3. nút sao chép URL.
- *
- * QR chuẩn (thư viện `qrcode`, ISO/IEC 18004, sinh ở server) được thêm ở G02.
- * Cho tới lúc đó: QR = NOT_PRODUCTION và phải giữ nguyên nhãn này.
+ * Lịch sử: bản baseline cũ (`qr-lite.js`) VẼ một hình trông giống mã QR nhưng
+ * không theo chuẩn nào và không đầu đọc nào quét được. File đó đã bị gỡ.
  */
 "use strict";
 
 (function () {
-  var QR_STATE = "NOT_IMPLEMENTED";
+  var QR_STATE = "SERVER_QR_STANDARD";
 
-  function renderQrUnavailable(container, redeemUrl) {
-    if (!container) return;
+  function apiBase() {
+    var config = window.VIPPHONE_CONFIG || {};
+    return config.apiBase || "";
+  }
 
-    container.innerHTML = "";
-    container.classList.add("qr-placeholder");
-    container.setAttribute("role", "group");
-    container.setAttribute("aria-label", "Mã QR nhận quà chưa khả dụng");
+  function qrImageUrl(giftCode) {
+    return apiBase() + "/api/gifts/" + encodeURIComponent(giftCode) + "/qr.png";
+  }
 
-    var title = document.createElement("p");
-    title.className = "qr-placeholder-title";
-    title.textContent = "Mã QR chưa khả dụng";
-    container.appendChild(title);
-
-    var note = document.createElement("p");
-    note.className = "qr-placeholder-note";
-    note.textContent =
-      "Bản này chưa sinh mã QR chuẩn. Vui lòng dùng liên kết bên dưới.";
-    container.appendChild(note);
-
-    if (redeemUrl) {
-      var link = document.createElement("a");
-      link.className = "qr-placeholder-link";
-      link.href = redeemUrl;
-      link.textContent = redeemUrl;
-      container.appendChild(link);
-
-      var copyBtn = document.createElement("button");
-      copyBtn.type = "button";
-      copyBtn.className = "secondary-btn qr-placeholder-copy";
-      copyBtn.textContent = "SAO CHÉP LIÊN KẾT";
-      copyBtn.addEventListener("click", function () {
-        copyText(redeemUrl).then(function (ok) {
-          copyBtn.textContent = ok ? "ĐÃ SAO CHÉP" : "KHÔNG SAO CHÉP ĐƯỢC";
-          window.setTimeout(function () {
-            copyBtn.textContent = "SAO CHÉP LIÊN KẾT";
-          }, 2000);
-        });
-      });
-      container.appendChild(copyBtn);
-    }
-
-    if (window.console && console.warn) {
-      console.warn(
-        "[VIP PHONE] QR = " + QR_STATE + " — hình QR giả đã bị gỡ để tránh gây nhầm lẫn."
-      );
-    }
+  function redeemUrl(giftCode) {
+    var url = new URL("redeem.html", window.location.href);
+    url.searchParams.set("code", giftCode);
+    return url.toString();
   }
 
   function copyText(text) {
@@ -80,8 +41,71 @@
     return Promise.resolve(false);
   }
 
+  function renderFallback(container, fallbackUrl) {
+    container.innerHTML = "";
+    container.classList.add("qr-placeholder");
+
+    var title = document.createElement("p");
+    title.className = "qr-placeholder-title";
+    title.textContent = "Chưa tải được mã QR";
+    container.appendChild(title);
+
+    var note = document.createElement("p");
+    note.className = "qr-placeholder-note";
+    note.textContent = "Vui lòng dùng liên kết bên dưới để nhận quà.";
+    container.appendChild(note);
+
+    var link = document.createElement("a");
+    link.className = "qr-placeholder-link";
+    link.href = fallbackUrl;
+    link.textContent = fallbackUrl;
+    container.appendChild(link);
+
+    var copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "secondary-btn qr-placeholder-copy";
+    copyBtn.textContent = "SAO CHÉP LIÊN KẾT";
+    copyBtn.addEventListener("click", function () {
+      copyText(fallbackUrl).then(function (ok) {
+        copyBtn.textContent = ok ? "ĐÃ SAO CHÉP" : "KHÔNG SAO CHÉP ĐƯỢC";
+        window.setTimeout(function () {
+          copyBtn.textContent = "SAO CHÉP LIÊN KẾT";
+        }, 2000);
+      });
+    });
+    container.appendChild(copyBtn);
+  }
+
+  /**
+   * Hiển thị QR chuẩn. Nếu ảnh không tải được (mất mạng, mã không tồn tại),
+   * hiện URL dạng văn bản để nhân viên vẫn làm việc được — không im lặng.
+   */
+  function renderQr(container, giftCode) {
+    if (!container) return;
+
+    container.innerHTML = "";
+    container.classList.remove("qr-placeholder");
+
+    var fallbackUrl = redeemUrl(giftCode);
+
+    var img = document.createElement("img");
+    img.className = "qr-image";
+    img.alt = "Mã QR nhận quà cho mã " + giftCode;
+    img.width = 220;
+    img.height = 220;
+    img.src = qrImageUrl(giftCode);
+
+    img.addEventListener("error", function () {
+      renderFallback(container, fallbackUrl);
+    });
+
+    container.appendChild(img);
+  }
+
   window.VPQr = {
     state: QR_STATE,
-    renderQrUnavailable: renderQrUnavailable
+    renderQr: renderQr,
+    qrImageUrl: qrImageUrl,
+    redeemUrl: redeemUrl
   };
 })();
