@@ -3,7 +3,7 @@
 - Ngày đo: **2026-10-01** (giờ máy +07)
 - Người đo: DEEPSEEK HARNESS — VIP PHONE PROJECT CONTROLLER
 - Repo: <https://github.com/thanhbn123/vipphone>
-- `develop`: `d4648f46cd801cf323b715a3eba334ff3570ca4e` *(đo trước khi gate G11+G12 merge)*
+- `develop`: `93e6aae11f6f17b860b083abbba7c7832bb2ae67` (sau khi G11+G12 merge — CI **5/5 job PASS**)
 - `main`: `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **KHÔNG ĐỔI suốt phiên**
 - **STAGING: NOT DEPLOYED** · **PRODUCTION: NOT DEPLOYED**
 
