@@ -65,13 +65,14 @@ jobs:
         run: |
           set -euo pipefail
           for f in \
-            index.html success.html redeem.html \
+            index.html success.html redeem.html admin-leads.html \
             assets/css/styles.css \
             assets/js/config.js assets/js/tracking.js assets/js/util.js \
             assets/js/qr.js assets/js/app.js assets/js/success.js \
-            assets/js/redeem.js \
+            assets/js/redeem.js assets/js/qr-scan.js assets/js/admin-leads.js \
             data/iphone-models.json \
             app/main.py app/config.py app/models.py \
+            app/routers/admin.py app/services/admin_leads.py \
             alembic.ini Makefile pytest.ini .env.example \
             migrations/versions/0001_initial.py \
             docs/MASTER_STATUS.md docs/architecture.md docs/lead-schema.md \
@@ -143,6 +144,16 @@ jobs:
             exit 1
           fi
 
+          # Khoá nhân viên: CHỈ sessionStorage. Ghi vào localStorage là để khoá
+          # nằm lại trên máy cho người kế tiếp mở máy đó — khoá sống lâu hơn
+          # phiên làm việc. Chốt này phủ cả hai trang dùng khoá.
+          for f in assets/js/redeem.js assets/js/admin-leads.js; do
+            if grep -nE 'localStorage[[:space:]]*\.' "$f" ; then
+              echo "LỖI: $f ghi khoá nhân viên vào localStorage. Chỉ dùng sessionStorage."
+              exit 1
+            fi
+          done
+
           # Đối chứng dương: mẫu trên PHẢI bắt được một lời gọi thật.
           # Nếu bước này không bắt được, chốt chặn đang vô dụng và phải sửa.
           probe="$(mktemp)"
@@ -158,7 +169,7 @@ jobs:
       - name: Guard — HTML không dùng inline script/style/handler (CSP nghiêm)
         run: |
           set -euo pipefail
-          for f in index.html success.html redeem.html; do
+          for f in index.html success.html redeem.html admin-leads.html; do
             grep -q '<html lang="vi"' "$f" || { echo "LỖI: $f thiếu lang=\"vi\""; exit 1; }
             grep -q 'name="viewport"' "$f" || { echo "LỖI: $f thiếu viewport"; exit 1; }
             if grep -nE '\son(click|submit|change|input|load|error)=' "$f"; then
@@ -237,8 +248,8 @@ jobs:
       - name: Lint (ruff)
         run: |
           set -euo pipefail
-          ruff check app tests migrations
-          ruff format --check app tests migrations
+          ruff check app tests tests_e2e migrations
+          ruff format --check app tests tests_e2e migrations
 
       - name: Wait for PostgreSQL
         run: |

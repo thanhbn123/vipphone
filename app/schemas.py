@@ -18,6 +18,15 @@ from .phone import is_valid_vn_mobile, normalize_phone
 #: Giá trị tracking cho phép — TRÙNG KHỚP với `assets/js/tracking.js`.
 TRACKING_VALUE_RE = re.compile(r"^[A-Za-z0-9._~-]{1,64}$")
 
+#: Slug của `model_code` trong danh mục iPhone.
+#: Bắt đầu bằng chữ thường hoặc số, sau đó chỉ chữ thường/số/gạch ngang, tối đa 64.
+MODEL_CODE_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+
+#: Năm hợp lý của một dòng iPhone. iPhone đời đầu là 2007 — sớm hơn là dữ liệu rác.
+IPHONE_MIN_YEAR = 2007
+#: Trần trên để chặn giá trị vô lý (ví dụ 99999). Không phải dự đoán sản phẩm.
+IPHONE_MAX_YEAR = 2100
+
 TrackingValue = Annotated[str, Field(max_length=64)]
 
 
@@ -163,3 +172,139 @@ class AuditEventOut(BaseModel):
     event_type: str
     actor: str
     created_at: datetime
+
+
+# --------------------------------------------------------------------------
+# KHU VỰC QUẢN TRỊ (G05/G06) — MỌI route dùng các lược đồ này PHẢI có xác thực.
+# --------------------------------------------------------------------------
+
+
+class AdminLeadOut(BaseModel):
+    """Bản ghi ĐẦY ĐỦ của một lead.
+
+    Khác `GiftLookupResponse` (dành cho quầy, che SĐT): đây là khu vực quản trị
+    có xác thực riêng, nên trả đủ trường để đối soát và xuất báo cáo. Ranh giới
+    nằm ở XÁC THỰC, không nằm ở việc che bớt trường.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    lead_id: uuid.UUID
+    gift_code: str
+    gift_status: str
+    full_name: str
+    phone: str
+    iphone_model: str
+    iphone_year: int
+    case_color: str
+    company_name: str | None = None
+    bni_chapter: str | None = None
+    referrer_name: str | None = None
+    source: str | None = None
+    campaign: str | None = None
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_campaign: str | None = None
+    utm_content: str | None = None
+    ref: str | None = None
+    consent: bool
+    created_at: datetime
+    updated_at: datetime
+    redeemed_at: datetime | None = None
+    redeemed_by: str | None = None
+
+
+class AdminLeadPageOut(BaseModel):
+    """Một trang kết quả + TỔNG SỐ, để UI phân trang mà không phải đoán."""
+
+    items: list[AdminLeadOut]
+    total: int
+    page: int
+    page_size: int
+
+
+def _validate_model_code(value: str) -> str:
+    """Slug của `model_code`: chữ thường, số, gạch ngang; 1..64 ký tự."""
+    cleaned = value.strip().lower()
+    if not MODEL_CODE_RE.match(cleaned):
+        raise ValueError(
+            "model_code chỉ được gồm chữ thường a-z, chữ số 0-9 và dấu gạch ngang, "
+            "bắt đầu bằng chữ hoặc số, tối đa 64 ký tự (ví dụ: iphone-17-pro)"
+        )
+    return cleaned
+
+
+class IphoneModelCreateRequest(BaseModel):
+    """Thêm model vào DANH MỤC — không tự bịa model nào ngoài dữ liệu admin nhập.
+
+    Không có giá trị nào sinh ra model: mọi trường do admin nhập. Hệ thống KHÔNG
+    suy đoán model kế tiếp từ model đang có, cũng không seed sẵn.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    model_code: str = Field(min_length=1, max_length=64)
+    display_name: str = Field(min_length=1, max_length=120)
+    year: int = Field(ge=IPHONE_MIN_YEAR, le=IPHONE_MAX_YEAR)
+    active: bool = True
+    sort_order: int = Field(default=0, ge=-10_000, le=10_000)
+
+    @field_validator("model_code")
+    @classmethod
+    def _check_model_code(cls, value: str) -> str:
+        return _validate_model_code(value)
+
+    @field_validator("display_name")
+    @classmethod
+    def _check_display_name(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("display_name không được để trống")
+        if any(ord(ch) < 32 for ch in cleaned):
+            raise ValueError("display_name chứa ký tự điều khiển không hợp lệ")
+        return cleaned
+
+
+class IphoneModelPatchRequest(BaseModel):
+    """Sửa model đang có. KHÔNG cho sửa `model_code` và `year`.
+
+    `model_code` là khoá tra cứu mà landing và lead đang dùng; đổi nó là làm gãy
+    dữ liệu cũ. `year` gắn với model chứ không phải thuộc tính sửa nhanh. Cần
+    khác thì tạo model mới.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    display_name: str | None = Field(default=None, min_length=1, max_length=120)
+    active: bool | None = None
+    sort_order: int | None = Field(default=None, ge=-10_000, le=10_000)
+
+    @field_validator("display_name")
+    @classmethod
+    def _check_display_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("display_name không được để trống")
+        if any(ord(ch) < 32 for ch in cleaned):
+            raise ValueError("display_name chứa ký tự điều khiển không hợp lệ")
+        return cleaned
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self) -> IphoneModelPatchRequest:
+        if self.display_name is None and self.active is None and self.sort_order is None:
+            raise ValueError("Cần gửi ít nhất một trường để sửa.")
+        return self
+
+
+class AdminIphoneModelOut(BaseModel):
+    """Model trả về cho khu vực quản trị (khác bản công khai: có `active`, `sort_order`)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    year: int
+    model_code: str
+    display_name: str
+    active: bool
+    sort_order: int

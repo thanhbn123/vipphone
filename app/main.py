@@ -19,7 +19,7 @@ from . import __version__
 from .config import Settings, get_settings
 from .errors import ApiError
 from .giftcodes import is_well_formed_gift_code, normalize_gift_code
-from .routers import catalog, gifts, health, leads
+from .routers import admin, catalog, gifts, health, leads
 from .security import apply_security_headers
 
 logger = logging.getLogger("vipphone")
@@ -28,6 +28,11 @@ STATIC_PAGES = {
     "/index.html": "index.html",
     "/success.html": "success.html",
     "/redeem.html": "redeem.html",
+    #: Vỏ trang quản trị. Bản thân trang KHÔNG chứa dữ liệu — mọi dữ liệu nằm
+    #: sau `/api/admin/*` và đều bắt buộc `require_staff`. Trình duyệt không gửi
+    #: được header xác thực khi mở một trang HTML, nên chặn ở tầng trang là chặn
+    #: nhầm chỗ: nó chỉ làm hỏng trang mà không bảo vệ thêm dữ liệu nào.
+    "/admin-leads.html": "admin-leads.html",
 }
 
 
@@ -111,6 +116,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(catalog.router)
     app.include_router(leads.router)
     app.include_router(gifts.router)
+    app.include_router(admin.router)
 
     # -------------------------------------------------------------- tĩnh
     static_root: Path = app_settings.static_dir

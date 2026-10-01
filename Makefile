@@ -40,12 +40,12 @@ revision: ## Tạo migration mới: make revision m="mô tả"
 	.venv/bin/alembic revision --autogenerate -m "$(m)"
 
 lint: ## Chạy ruff
-	.venv/bin/ruff check app tests migrations
-	.venv/bin/ruff format --check app tests migrations
+	.venv/bin/ruff check app tests tests_e2e migrations
+	.venv/bin/ruff format --check app tests tests_e2e migrations
 
 lint-fix: ## Tự sửa lỗi ruff
-	.venv/bin/ruff check --fix app tests migrations
-	.venv/bin/ruff format app tests migrations
+	.venv/bin/ruff check --fix app tests tests_e2e migrations
+	.venv/bin/ruff format app tests tests_e2e migrations
 
 test: ## Chạy toàn bộ test backend
 	.venv/bin/pytest -q
@@ -56,8 +56,8 @@ test-unit: ## Chỉ unit test (không cần database)
 test-integration: ## Chỉ integration test (cần PostgreSQL)
 	.venv/bin/pytest -q -m integration
 
-test-e2e: ## Test E2E trình duyệt thật
-	.venv/bin/pytest -q tests_e2e
+test-e2e: ## Test E2E trình duyệt thật (cần Chromium của Playwright)
+	$(PYTHON) -m pytest -q tests_e2e
 
 secret-scan: ## Quét secret toàn bộ lịch sử git
 	gitleaks git --no-banner --redact --exit-code 1

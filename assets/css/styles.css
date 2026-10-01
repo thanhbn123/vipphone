@@ -24,3 +24,33 @@ input.has-error,select.has-error{border-color:#b91c1c;background:#fff5f5}
 .banner-info{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
 .qr-image{width:220px;height:220px;max-width:100%;height:auto;display:block;margin:0 auto;border-radius:8px;background:#fff}
 .primary-btn:disabled{opacity:.6;cursor:not-allowed}
+/* ===== G04/G05/G06: quét QR, bảng quản trị, phân trang, chi tiết ===== */
+/*
+ * `[hidden]` phải THẮNG mọi quy tắc `display` của dự án.
+ *
+ * Vì sao cần dòng này (lỗi THẬT đã xảy ra, bắt được bằng test E2E G04):
+ * thuộc tính HTML `hidden` chỉ được trình duyệt áp bằng quy tắc
+ * `[hidden]{display:none}` của stylesheet gốc, và quy tắc của TÁC GIẢ luôn thắng
+ * stylesheet gốc. `.secondary-btn{display:inline-block}` và
+ * `.field-hint{display:block}` vì thế ĐÈ lên `hidden` — nút quét QR "đã ẩn" theo
+ * HTML nhưng vẫn HIỆN trên màn hình. Đúng loại lỗi im lặng: đọc mã thì thấy
+ * `hidden`, grep thì thấy `hidden`, chỉ trình duyệt thật mới nói ra sự thật.
+ */
+[hidden]{display:none!important}
+.scan-block{margin-top:16px}
+.scan-panel{margin-top:12px;display:flex;flex-direction:column;gap:10px}
+.scan-video{width:100%;max-width:360px;aspect-ratio:1/1;background:#111827;border-radius:14px;object-fit:cover}
+.admin-actions{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 4px}
+.admin-actions .primary-btn,.admin-actions .secondary-btn{width:auto;flex:1 1 160px}
+.table-wrap{width:100%;overflow-x:auto;margin:6px 0 12px}
+.data-table{width:100%;border-collapse:collapse;font-size:.88rem;min-width:720px}
+.data-table caption{text-align:left;padding:0 0 8px}
+.data-table th,.data-table td{text-align:left;padding:9px 10px;border-bottom:1px solid #e5e7eb;vertical-align:top}
+.data-table th{background:#f9fafb;font-weight:800;white-space:nowrap}
+.data-table tbody tr:hover{background:#fafafa}
+.pager{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 12px}
+.pager .secondary-btn{width:auto}
+.pager-info{font-size:.88rem;color:#4b5563;font-weight:700}
+.small-btn{padding:7px 12px;font-size:.82rem}
+.detail-panel{margin-top:8px}
+.detail-panel .detail-list{max-width:720px}
