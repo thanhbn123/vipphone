@@ -14,14 +14,16 @@ concurrency:
 
 env:
   GITLEAKS_VERSION: "8.30.1"
+  PYTHON_VERSION: "3.12"
+  #: Database dùng cho integration test (service container bên dưới).
+  TEST_DATABASE_URL: "postgresql+psycopg://vipphone:vipphone@localhost:5432/vipphone_test"
 
 jobs:
   # ---------------------------------------------------------------------
-  # Secret scan — dùng gitleaks thật, quét TOÀN BỘ lịch sử git.
+  # Secret scan — gitleaks thật, quét TOÀN BỘ lịch sử git.
   #
-  # Bản baseline cũ dùng `grep -RInE 'ghp_...' .` — mẫu regex nằm ngay
-  # trong file workflow nên nó khớp chính nó, làm CI đỏ 2/2 run.
-  # Xem docs/MASTER_STATUS.md §1.1.
+  # Bản baseline cũ dùng `grep -RInE '<mẫu>' .` với mẫu nằm ngay trong file
+  # workflow nên nó khớp chính nó, làm CI đỏ 2/2 run. Xem MASTER_STATUS §1.1.
   # ---------------------------------------------------------------------
   secret-scan:
     name: Secret scan (gitleaks)
@@ -44,11 +46,9 @@ jobs:
         run: ./gitleaks git --no-banner --redact --exit-code 1
 
   # ---------------------------------------------------------------------
-  # Kiểm tra tĩnh frontend (chưa cần backend).
-  # G10 sẽ bổ sung: lint Python, unit test, integration test PostgreSQL,
-  # migration check.
+  # Kiểm tra tĩnh frontend + chốt chặn chống thoái hoá.
   # ---------------------------------------------------------------------
-  validate:
+  validate-static:
     name: Validate static frontend
     runs-on: ubuntu-latest
     steps:
@@ -61,11 +61,16 @@ jobs:
           for f in \
             index.html success.html redeem.html \
             assets/css/styles.css \
-            assets/js/tracking.js assets/js/util.js assets/js/qr.js \
-            assets/js/app.js assets/js/success.js assets/js/redeem.js \
+            assets/js/config.js assets/js/tracking.js assets/js/util.js \
+            assets/js/qr.js assets/js/app.js assets/js/success.js \
+            assets/js/redeem.js \
             data/iphone-models.json \
+            app/main.py app/config.py app/models.py \
+            alembic.ini Makefile pytest.ini .env.example \
+            migrations/versions/0001_initial.py \
             docs/MASTER_STATUS.md docs/architecture.md docs/lead-schema.md \
             docs/adr/0001-stack-selection.md \
+            requirements.txt requirements-dev.txt \
             README.md
           do
             test -f "$f" || { echo "THIẾU FILE: $f"; exit 1; }
@@ -94,16 +99,57 @@ jobs:
             echo "LỖI: assets/js/qr-lite.js (QR giả) đã quay lại. Xem docs/MASTER_STATUS.md §1.6."
             exit 1
           fi
-          grep -q 'NOT_IMPLEMENTED' assets/js/qr.js || {
-            echo "LỖI: assets/js/qr.js phải khai báo trạng thái QR là NOT_IMPLEMENTED."
-            exit 1
-          }
           if grep -rn 'drawQrLike' --include='*.js' --include='*.html' . ; then
             echo "LỖI: còn tham chiếu tới drawQrLike (QR giả)."
             exit 1
           fi
 
-      - name: Guard — HTML phải có lang, viewport, không dùng inline event handler
+      - name: Guard — QR phải lấy từ server
+        run: |
+          set -euo pipefail
+          grep -q '/qr.png' assets/js/qr.js || {
+            echo "LỖI: assets/js/qr.js phải lấy ảnh QR từ /api/gifts/{code}/qr.png."
+            exit 1
+          }
+          if grep -q 'NOT_IMPLEMENTED' assets/js/qr.js; then
+            echo "LỖI: QR vẫn đang ở trạng thái NOT_IMPLEMENTED."
+            exit 1
+          fi
+
+      - name: Guard — frontend KHÔNG được quay lại lưu lead ở localStorage
+        run: |
+          set -euo pipefail
+
+          # Khoá lưu lead của bản client-only cũ: không được xuất hiện lại ở đâu.
+          if grep -rn 'vipphone_leads_v1' --include='*.js' --include='*.html' . ; then
+            echo "LỖI: frontend lại lưu lead vào localStorage. Server là nguồn chân lý duy nhất."
+            exit 1
+          fi
+
+          # app.js không được GỌI localStorage.
+          #
+          # Ghi chú: mẫu phải bám vào LỜI GỌI (`localStorage.`), không phải chữ
+          # "localStorage" trần — vì trong app.js có CÂU VĂN giải thích rằng nó
+          # không dùng localStorage. Mẫu trần sẽ khớp chính câu giải thích đó,
+          # tức là bước kiểm chứng lại tự khớp chính nó (xem MASTER_STATUS §17).
+          if grep -nE 'localStorage[[:space:]]*\.' assets/js/app.js ; then
+            echo "LỖI: assets/js/app.js không được gọi localStorage."
+            exit 1
+          fi
+
+          # Đối chứng dương: mẫu trên PHẢI bắt được một lời gọi thật.
+          # Nếu bước này không bắt được, chốt chặn đang vô dụng và phải sửa.
+          probe="$(mktemp)"
+          printf '%s\n' 'localStorage.setItem("x", "y");' > "$probe"
+          if ! grep -qE 'localStorage[[:space:]]*\.' "$probe"; then
+            echo "LỖI: chốt chặn localStorage không hoạt động (đối chứng dương thất bại)."
+            rm -f "$probe"
+            exit 1
+          fi
+          rm -f "$probe"
+          echo "Chốt chặn localStorage: đạt, và đã kiểm bằng đối chứng dương."
+
+      - name: Guard — HTML không dùng inline script/style/handler (CSP nghiêm)
         run: |
           set -euo pipefail
           for f in index.html success.html redeem.html; do
@@ -113,23 +159,104 @@ jobs:
               echo "LỖI: $f dùng inline event handler — chuyển sang addEventListener."
               exit 1
             fi
+            if grep -nE '<script[^>]*>[^<]' "$f"; then
+              echo "LỖI: $f có script nội tuyến; CSP nghiêm (script-src 'self') sẽ chặn."
+              exit 1
+            fi
+            if grep -nE 'style="' "$f"; then
+              echo "LỖI: $f có style nội tuyến; CSP nghiêm (style-src 'self') sẽ chặn."
+              exit 1
+            fi
           done
 
       - name: Guard — không có secret dạng phổ biến trong file nguồn
         run: |
           set -euo pipefail
-          # Mẫu được ghép từ nhiều mảnh để CHÍNH FILE NÀY không chứa chuỗi hoàn chỉnh.
-          #
-          # Ghi chú: mẫu baseline cho token GitHub App chỉ là tiền tố trần, không có
-          # lượng từ độ dài — nên nó khớp cả tài liệu mô tả và cả chính nó. Ở đây
-          # thêm ràng buộc độ dài cho đúng hình dạng token thật (tiền tố + >=20 ký tự).
-          # Bớt dương tính giả, KHÔNG giảm khả năng phát hiện token thật.
+          # Mẫu ghép từ nhiều mảnh để CHÍNH FILE NÀY không chứa chuỗi hoàn chỉnh.
           PAT1='ghp''_[A-Za-z0-9]{20,}'
           PAT2='github''_pat_[A-Za-z0-9_]{20,}'
           PAT3='sk''-[A-Za-z0-9]{20,}'
           if grep -RInE "${PAT1}|${PAT2}|${PAT3}" \
-               --exclude-dir=.git --exclude-dir=node_modules . ; then
+               --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.venv . ; then
             echo "LỖI: phát hiện chuỗi giống secret."
             exit 1
           fi
           echo "Không phát hiện secret dạng phổ biến."
+
+  # ---------------------------------------------------------------------
+  # Backend: lint + migration + unit test + integration test trên PostgreSQL 16.
+  #
+  # CỐ Ý dùng PostgreSQL THẬT, không dùng SQLite: chính sách chống trùng dựa
+  # trên UNIQUE INDEX MỘT PHẦN, và redeem dựa trên khoá hàng — SQLite không có
+  # những thứ đó, nên test sẽ nói dối về hành vi thật.
+  # ---------------------------------------------------------------------
+  backend:
+    name: Backend (lint, migration, tests)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: vipphone
+          POSTGRES_PASSWORD: vipphone
+          POSTGRES_DB: vipphone_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vipphone"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: |
+          set -euo pipefail
+          ruff check app tests migrations
+          ruff format --check app tests migrations
+
+      - name: Wait for PostgreSQL
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            if pg_isready -h localhost -p 5432 -U vipphone; then exit 0; fi
+            sleep 2
+          done
+          echo "PostgreSQL không sẵn sàng"; exit 1
+
+      - name: Migration applies cleanly on a fresh database
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          alembic upgrade head
+          alembic current
+          alembic check
+
+      - name: Unit tests
+        run: python -m pytest -q -m "not integration" --durations=5
+
+      - name: Integration tests (PostgreSQL)
+        run: python -m pytest -q -m integration --durations=10
+
+      - name: Full test suite
+        run: python -m pytest -q --durations=10

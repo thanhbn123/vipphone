@@ -1,14 +1,15 @@
 /*!
- * VIP PHONE — trang thành công: hiển thị gift code và liên kết nhận quà
+ * VIP PHONE — trang thành công: hiển thị gift code và QR chuẩn.
  *
- * ⚠️  BẢN DEMO CLIENT-ONLY — đọc `localStorage` của chính trình duyệt này.
- * Trang này KHÔNG xác nhận rằng lead đã được lưu ở đâu đó ngoài máy khách.
+ * Kết quả lead được server trả về và giữ tạm trong `sessionStorage` để hiển
+ * thị lại. KHÔNG lưu số điện thoại ở đây.
+ *
+ * Nguồn chân lý là server: mã QR được tải từ `/api/gifts/{code}/qr.png`.
  */
 "use strict";
 
 (function () {
-  var LEADS_KEY = "vipphone_leads_v1";
-  var LAST_GIFT_KEY = "vipphone_last_gift_code";
+  var RESULT_KEY = "vipphone_last_gift_v1";
 
   var util = window.VPUtil;
   var track = window.VPTrack.track;
@@ -17,82 +18,72 @@
   var codeBox = document.getElementById("giftCode");
   var qrBox = document.getElementById("qr");
 
-  function readLeads() {
+  function readResult() {
     try {
-      var raw = localStorage.getItem(LEADS_KEY);
-      var parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (err) {
-      return [];
-    }
-  }
-
-  function readLastGiftCode() {
-    try {
-      return localStorage.getItem(LAST_GIFT_KEY);
+      var raw = sessionStorage.getItem(RESULT_KEY);
+      return raw ? JSON.parse(raw) : null;
     } catch (err) {
       return null;
     }
   }
 
-  function buildRedeemUrl(giftCode) {
-    var url = new URL("redeem.html", window.location.href);
-    url.searchParams.set("code", giftCode);
-    return url.toString();
-  }
-
   function renderMissing() {
     codeBox.textContent = "---";
     detailsBox.textContent = "";
+
     var p = document.createElement("p");
     p.className = "status warn";
+    p.setAttribute("role", "status");
     p.textContent =
-      "Không tìm thấy thông tin đăng ký trên trình duyệt này. Nếu bạn vừa đăng ký ở thiết bị khác, vui lòng đăng ký lại hoặc liên hệ VIP PHONE.";
+      "Không tìm thấy thông tin đăng ký trong phiên làm việc này. " +
+      "Nếu bạn vừa đăng ký thành công, hãy liên hệ VIP PHONE để được hỗ trợ.";
     detailsBox.appendChild(p);
+
     if (qrBox) {
       qrBox.textContent = "";
       qrBox.hidden = true;
     }
   }
 
-  function renderLead(lead) {
-    codeBox.textContent = lead.gift_code;
+  function renderResult(result) {
+    codeBox.textContent = result.gift_code;
 
-    detailsBox.innerHTML = [
-      '<strong class="gift-name">' + util.escapeHtml(lead.full_name) + "</strong>",
-      '<span class="gift-meta">',
-      util.escapeHtml(lead.iphone_model) + " · " + util.escapeHtml(lead.case_color),
-      "</span>",
-      '<span class="gift-meta">Số điện thoại: ' +
-        util.escapeHtml(util.formatPhone(lead.phone)) +
-        "</span>"
-    ].join("");
+    detailsBox.textContent = "";
 
-    var redeemUrl = buildRedeemUrl(lead.gift_code);
-    window.VPQr.renderQrUnavailable(qrBox, redeemUrl);
+    var name = document.createElement("strong");
+    name.className = "gift-name";
+    name.textContent = result.full_name || "";
+    detailsBox.appendChild(name);
 
-    track("vipphone_gift_code_viewed", { gift_code: lead.gift_code });
+    var meta = document.createElement("span");
+    meta.className = "gift-meta";
+    meta.textContent = [result.iphone_model, result.case_color]
+      .filter(Boolean)
+      .join(" · ");
+    detailsBox.appendChild(meta);
+
+    if (result.duplicate === true) {
+      var note = document.createElement("p");
+      note.className = "status warn";
+      note.setAttribute("role", "status");
+      note.textContent =
+        "Bạn đã đăng ký trước đó cho dòng máy này, nên hệ thống giữ nguyên mã quà cũ.";
+      detailsBox.appendChild(note);
+    }
+
+    window.VPQr.renderQr(qrBox, result.gift_code);
+    track("vipphone_gift_code_viewed", { gift_code: result.gift_code });
   }
 
   function init() {
-    var giftCode = readLastGiftCode();
+    var result = readResult();
 
-    if (!giftCode || !util.isWellFormedGiftCode(giftCode)) {
+    if (!result || !result.gift_code || !util.isWellFormedGiftCode(result.gift_code)) {
       renderMissing();
       return;
     }
 
-    var normalized = util.normalizeGiftCode(giftCode);
-    var lead = readLeads().find(function (item) {
-      return util.normalizeGiftCode(item.gift_code) === normalized;
-    });
-
-    if (!lead) {
-      renderMissing();
-      return;
-    }
-
-    renderLead(lead);
+    renderResult(result);
   }
 
   init();

@@ -1,0 +1,34 @@
+# Cấu hình ruff cho VIP PHONE.
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+    "C4",  # flake8-comprehensions
+    "RUF",
+]
+ignore = [
+    "E501",  # độ dài dòng do formatter quản lý
+]
+
+[lint.per-file-ignores]
+# Test cố ý bắt Exception rộng để kiểm tra ràng buộc DB (nhiều loại lỗi khác nhau).
+"tests/*" = ["B017", "SIM117"]
+# Migration dùng `op.` theo API của Alembic.
+"migrations/versions/*" = ["E501"]
+# FastAPI: `Depends(...)` trong tham số hàm là mẫu CHÍNH THỨC của framework.
+"app/routers/*" = ["B008"]
+
+[lint.isort]
+known-first-party = ["app", "tests"]
+
+[format]
+quote-style = "double"
+indent-style = "space"

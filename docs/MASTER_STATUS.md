@@ -1,215 +1,38 @@
 # VIP PHONE — MASTER STATUS
 
-> Đây là **nguồn trạng thái chính** của dự án VIP PHONE.
+> **Nguồn trạng thái chính của dự án VIP PHONE.**
 > Mọi gate phải cập nhật file này trước khi mở gate kế tiếp.
-> Luật: **không ghi PASS / DONE / READY nếu không có evidence đo được.**
+>
+> **Luật:** không ghi PASS / DONE / READY nếu không có evidence đo được.
 > Chưa chạy thì ghi `NOT RUN`. Chưa deploy thì ghi `NOT DEPLOYED`.
+> Kết luận dạng "0 lỗi" phải ghi kèm **công cụ đo**, **phạm vi đo** và **cái nằm ngoài phạm vi**.
 
-- Cập nhật lần cuối: **2026-10-01 18:30 +07** (2026-10-01T11:30Z)
+- Cập nhật lần cuối: **2026-10-01, 19:05 +07**
 - Người cập nhật: DEEPSEEK HARNESS — VIP PHONE PROJECT CONTROLLER
 - Repo: <https://github.com/thanhbn123/vipphone>
 
 ---
 
-## 1. BASELINE (Phase 0 — đo ngày 2026-10-01)
+## 1. TRẠNG THÁI GATE
 
-| Hạng mục | Giá trị đo được | Cách đo |
-|---|---|---|
-| Repo | `thanhbn123/vipphone` | `gh repo view` |
-| Visibility | **PUBLIC** | `gh repo view --json visibility` |
-| Default branch | `main` | `gh repo view --json defaultBranchRef` |
-| Tổng số commit | **1** | `git log --all --oneline \| wc -l` |
-| Tổng số file tracked | **14** | `git ls-files \| wc -l` |
-| MAIN SHA | `7d6162cf31eb96ea27879be3a4671812a9cd7e01` | `git rev-parse origin/main` |
-| DEVELOP SHA | `7d6162cf31eb96ea27879be3a4671812a9cd7e01` | `git rev-parse origin/develop` |
-| merge-base main↔develop | `7d6162cf31eb96ea27879be3a4671812a9cd7e01` | `git merge-base` |
-| Drift main↔develop | **KHÔNG** (hai nhánh trùng SHA) | so SHA |
-| OPEN ISSUES | **0** (lúc đo) | `gh issue list --state all` |
-| OPEN PRS | **0** | `gh pr list --state all` |
-| Branch protection `main` | **KHÔNG có** (HTTP 404) | `gh api .../branches/main/protection` |
-| Workflow files | `1` — `.github/workflows/ci.yml` | `git ls-files .github` |
-
-### 1.1 Trạng thái CI tại baseline — **ĐỎ**
-
-| Run ID | Branch | Event | Tạo lúc | Kết quả | Thời lượng |
+| Gate | Nội dung | Trạng thái | PR | CI | Merge SHA vào develop |
 |---|---|---|---|---|---|
-| `36851365921` | `main` | push | 2026-10-01T10:47:56Z | **failure** | 7s |
-| `36851427093` | `develop` | push | 2026-10-01T10:48:31Z | **failure** | 8s |
+| Phase 0 | Discovery / Baseline | **DONE** | — | — | — |
+| G01 | Baseline hardening + sửa CI đỏ | **DONE** | [#2](https://github.com/thanhbn123/vipphone/pull/2) | **PASS** | `7dabe0ade68797a6eead65dd315924f52748987a` |
+| G02 | Real backend (API + DB + migration + QR chuẩn + catalog) | **IN PROGRESS** | — | NOT RUN | — |
+| G03 | Redeem engine (atomic, chống double-spend) + audit | NOT STARTED | — | NOT RUN | — |
+| G04 | Staff redeem UI + xác thực nhân viên | NOT STARTED | — | NOT RUN | — |
+| G05 | Admin leads | NOT STARTED | — | NOT RUN | — |
+| G06 | iPhone catalog | MỘT PHẦN (đã có ở G02: DB + seed + API) | — | — | — |
+| G07 | Campaign / source tracking | MỘT PHẦN (đã có ở G02: nhận & lưu ở server) | — | — | — |
+| G08 | Security pass | MỘT PHẦN (đã có ở G02: header, rate limit, auth boundary) | — | — | — |
+| G09 | Tests đầy đủ | MỘT PHẦN (143 test backend; E2E trong repo chưa có) | — | — | — |
+| G10 | CI đầy đủ | MỘT PHẦN (lint, migration, unit, integration PG, secret scan) | — | — | — |
+| G11 | Staging readiness | MỘT PHẦN (`.env.example`, `/api/ready` đã có; `docs/deployment.md` chưa) | — | — | — |
+| G12 | Owner acceptance pack | NOT STARTED | — | NOT RUN | — |
 
-**Nguyên nhân gốc (đo được, không suy đoán):** bước `Check no obvious secrets` chạy một
-lệnh `! grep -RInE` quét toàn repo với mẫu regex nhận diện các **tiền tố token phổ biến**:
-token GitHub PAT (`ghp_`), token GitHub App, khoá API (`sk-`), và khoá riêng tư PEM.
-Hai tiền tố đầu đi kèm lượng từ `[A-Za-z0-9]{20,}`; riêng tiền tố token GitHub App là
-**tiền tố trần, không có lượng từ độ dài** — đây là một khuyết điểm của mẫu baseline.
-
-> Phần mô tả trên **cố ý không chép nguyên văn mẫu regex**. Chép nguyên văn sẽ làm chính
-> tài liệu này khớp với bước kiểm tra — tái diễn đúng lỗi đang được ghi lại. Xem §1.1.1.
-
-Chính **dòng lệnh đó nằm trong** `.github/workflows/ci.yml`, nên mẫu regex khớp với
-chính nó. Log thật của run `36851427093`:
-
-```
-./.github/workflows/ci.yml:24:          ! grep -RInE '...' .
-##[error]Process completed with exit code 1.
-```
-
-`grep` tìm thấy "secret" (là chính mẫu của nó) → exit 0 → `!` đảo thành exit 1 → CI đỏ.
-Đây **không phải** secret thật; đây là **bước kiểm tra tự khớp chính nó**.
-
-### 1.1.1 Bài học áp dụng ngay trong tài liệu này
-
-Khi viết lại §1.1 lần đầu, bản nháp **chép nguyên văn mẫu regex cũ** — và bước kiểm tra
-mới (G01) lập tức báo đỏ trên chính `docs/MASTER_STATUS.md`:
-
-```
-./docs/MASTER_STATUS.md:42:! grep -RInE 'ghp_...' . --exclude-dir=.git
-```
-
-Đúng cùng một dạng lỗi, chỉ đổi chỗ. Đã xử lý bằng **hai việc**, không phải bằng nới lỏng
-bước kiểm tra:
-
-1. **Sửa tài liệu** — không chép nguyên văn mẫu regex vào văn bản mô tả.
-2. **Sửa khuyết điểm thật của mẫu** — tiền tố token GitHub App nay có ràng buộc độ dài
-   (`[A-Za-z0-9_]{20,}`) cho đúng hình dạng token thật. Việc này **bớt dương tính giả,
-   không giảm khả năng phát hiện token thật**. Tiền tố trần là lỗi của bản baseline: nó
-   khớp cả câu văn mô tả nó.
-
-**Thay công cụ chính:** bỏ secret grep tự chế, dùng **gitleaks 8.30.1** quét toàn bộ lịch
-sử git (`gitleaks git --no-banner --redact --exit-code 1`). Gitleaks nhận diện theo quy tắc
-có cấu trúc nên không tự khớp cấu hình của nó. Vẫn giữ thêm lớp grep nhẹ, nhưng mẫu được
-**ghép từ nhiều mảnh chuỗi** trong file workflow để file đó không chứa chuỗi hoàn chỉnh.
-
-### 1.2 Cây thư mục (baseline)
-
-```
-.github/workflows/ci.yml
-.gitignore
-README.md
-assets/css/styles.css
-assets/js/app.js
-assets/js/qr-lite.js
-assets/js/redeem.js
-assets/js/success.js
-data/iphone-models.json
-docs/architecture.md
-docs/lead-schema.md
-index.html
-redeem.html
-success.html
-```
-
-### 1.3 Tech stack baseline
-
-| Lớp | Hiện trạng |
-|---|---|
-| Frontend | HTML5 tĩnh + CSS thủ công + JavaScript ES2020 thuần (IIFE/global, không module) |
-| Build tool | **KHÔNG có** (không `package.json`, không bundler) |
-| Backend | **KHÔNG có** |
-| Database | **KHÔNG có** |
-| Lưu trữ dữ liệu | `localStorage` trình duyệt |
-| Cấu hình | `data/iphone-models.json` (fetch tĩnh) |
-| Test | **KHÔNG có** (0 test) |
-| CI | 3 bước: kiểm tra file tồn tại, lint JSON, secret grep tự chế |
-
-### 1.4 Kiến trúc hiện tại
-
-**Client-only demo.** Không có tầng server. Toàn bộ "nghiệp vụ" chạy trong trình duyệt khách.
-
-```
-index.html ──form──> app.js ──> localStorage["vipphone_leads_v1"]
-                                   │
-                                   ├─> success.html ──success.js──> đọc localStorage, vẽ QR GIẢ
-                                   │
-                                   └─> redeem.html ──redeem.js──> đọc/ghi localStorage
-```
-
-### 1.5 Lưu trữ dữ liệu hiện tại
-
-| Key | Nội dung | Nơi ghi |
-|---|---|---|
-| `vipphone_leads_v1` | Mảng JSON toàn bộ lead | `app.js`, `redeem.js` |
-| `vipphone_last_gift_code` | Gift code vừa tạo | `app.js`, đọc bởi `success.js` |
-
-**Giới hạn đo được:** lead chỉ nằm trên đúng trình duyệt đã đăng ký. Nhân viên ở máy khác **không thấy** lead. Xoá dữ liệu trình duyệt = mất lead. Không có nguồn chân lý.
-
-### 1.6 QR hiện tại — **NOT_PRODUCTION**
-
-`assets/js/qr-lite.js` → `drawQrLike(container, text, size)`
-
-- Vẽ 29×29 ô, 3 finder pattern ở góc.
-- Bit sinh từ FNV-1a hash + XOR-shift PRNG, **không phải** mã QR theo chuẩn ISO/IEC 18004.
-- **Không đầu đọc QR nào quét được.** Hình vẽ trông giống QR thật → rủi ro đánh lừa nhân viên.
-- **Kết luận: `QR = NOT_PRODUCTION`.** Không được dùng trong vận hành thật.
-
-### 1.7 Luồng lead hiện tại
-
-`index.html` form → `app.js`:
-
-1. `normalizePhone()` — bỏ khoảng trắng, bỏ ký tự không phải số (giữ `+`).
-2. `validVNPhone()` — regex `/^(0|\+84)(3|5|7|8|9)\d{8}$/`.
-3. Chống trùng: tìm trong localStorage theo `phone` + `iphone_model` + `gift_status !== "CANCELLED"`.
-4. `randomGiftCode()` — `crypto.getRandomValues` 6 byte, alphabet 32 ký tự (bỏ `I`,`O`,`0`,`1`) → `VIP-26-XXXXXX`.
-5. Ghi localStorage, `track()`, chuyển `success.html`.
-
-**Điểm yếu:** năm `26` hard-code trong `randomGiftCode()`; kiểm tra trùng nằm ở client nên vô hiệu khi đổi trình duyệt; không có idempotency.
-
-### 1.8 Luồng redeem hiện tại
-
-`redeem.html` → `redeem.js`:
-
-1. Đọc `?code=` hoặc ô nhập.
-2. `findIndex` trong localStorage.
-3. Nếu `REDEEMED` → cảnh báo. Nếu không → hiện chi tiết + nút xác nhận.
-4. Ghi `gift_status = "REDEEMED"`, `redeemed_at`, `redeemed_by = "LOCAL_STAFF"`.
-
-**Điểm yếu:** quyết định trạng thái cuối nằm ở client; hai nhân viên trên hai máy có thể phát quà hai lần; không atomic; không audit.
-
-### 1.9 Tracking hiện tại
-
-`window.dataLayer` (kiểu GTM), **không** có GTM/GA4/consent thật.
-
-| Event | Nơi phát | Trạng thái |
-|---|---|---|
-| `vipphone_landing_view` | inline `index.html` | có |
-| `vipphone_form_start` | `app.js` | có |
-| `vipphone_lead_submit` | `app.js` | có |
-| `vipphone_gift_code_created` | `app.js` | có |
-| `vipphone_gift_redeemed` | `redeem.js` | có |
-
-**Điểm yếu:** chỉ bắt UTM **tại thời điểm submit**; điều hướng nội bộ làm mất tham số; `success.html` và `redeem.html` không khởi tạo `dataLayer` trước khi script chạy.
-
-### 1.10 Test coverage hiện tại
-
-**0 test.** Không unit test, không integration test, không E2E, không test migration.
-Bước CI hiện có chỉ kiểm: file tồn tại, JSON hợp lệ, secret grep.
-
-### 1.11 Lỗ hổng bảo mật hiện tại
-
-| # | Lỗ hổng | Mức | Ghi chú |
-|---|---|---|---|
-| S1 | Không có server → không thể validate server-side | CAO | Toàn bộ validation ở client, sửa được bằng DevTools |
-| S2 | PII (họ tên, SĐT, công ty) lưu ở localStorage không mã hoá | CAO | Bất kỳ script cùng origin đều đọc được |
-| S3 | Không có xác thực nhân viên — `redeem.html` mở công khai | CAO | Bất kỳ ai cũng xác nhận phát quà |
-| S4 | Không có rate limit / chống spam | CAO | Form có thể bị bơm lead hàng loạt |
-| S5 | Không có audit trail | CAO | Không truy vết được ai phát quà, khi nào |
-| S6 | Redeem không atomic → double-spend | CAO | Hai máy cùng phát quà cho một mã |
-| S7 | Không có security headers (CSP, X-Frame-Options, …) | TRUNG | Không có server để đặt header |
-| S8 | Không có CSRF boundary | TRUNG | Hiện chưa có session/cookie |
-| S9 | Gift code 6 ký tự alphabet 32 = 32^6 ≈ 1.07e9 | TRUNG | Đủ cho quy mô nhỏ nhưng nên tăng entropy |
-| S10 | Không có secret scanning thật (chỉ grep tự chế, lại đang ĐỎ) | TRUNG | Sửa ở G01 bằng gitleaks |
-| S11 | Không có `ref`/`src` validation, không whitelist nguồn | THẤP | Có thể nhét rác vào cột `source` |
-| S12 | `redeem_by = "LOCAL_STAFF"` hard-code | THẤP | Không định danh được nhân viên |
-| S13 | Không có `Referrer-Policy`, không có consent log | THẤP | — |
-| S14 | Không có kiểm tra dependency (chưa có dependency) | THẤP | Sẽ có sau G02 |
-
-### 1.12 Rủi ro baseline
-
-| Rủi ro | Ảnh hưởng | Giảm thiểu |
-|---|---|---|
-| QR giả trông như QR thật | Nhân viên/khách tưởng quét được → hỏng trải nghiệm tại điểm phát quà | G01: ngừng vẽ hình giả; G02: QR chuẩn |
-| CI đỏ thường trực | Thói quen bỏ qua CI → mất tác dụng quality gate | G01: sửa bằng công cụ thật |
-| Không có nguồn chân lý lead | Mất lead, không đo được funnel | G02: PostgreSQL + API |
-| Không có staging | Không nghiệm thu được thật | G11: `BLOCKED_EXTERNAL_INFRA` nếu chưa có hạ tầng |
+**Baseline gốc của dự án:** `7d6162cf31eb96ea27879be3a4671812a9cd7e01` (1 commit, 14 file, CI đỏ 2/2 run).
+Chi tiết baseline đầy đủ nằm ở lịch sử git (`git show 7d6162c`) và ở PR #2.
 
 ---
 
@@ -217,72 +40,313 @@ Bước CI hiện có chỉ kiểm: file tồn tại, JSON hợp lệ, secret gr
 
 | ADR | Quyết định | Trạng thái |
 |---|---|---|
-| [ADR-0001](adr/0001-stack-selection.md) | Python + FastAPI + SQLAlchemy 2.0 + Alembic + PostgreSQL | Accepted |
+| [ADR-0001](adr/0001-stack-selection.md) | Python 3.12 + FastAPI + SQLAlchemy 2.0 + Alembic + PostgreSQL 16 | **Accepted** |
 
 ---
 
-## 3. TRẠNG THÁI GATE
+## 3. KIẾN TRÚC HIỆN TẠI (sau G02)
 
-| Gate | Nội dung | Trạng thái | PR | CI | Ghi chú |
-|---|---|---|---|---|---|
-| Phase 0 | Discovery / Baseline | **DONE** | — | — | File này |
-| G01 | Baseline hardening + sửa CI đỏ | IN PROGRESS | — | NOT RUN | Issue #1 |
-| G02 | Real backend (API + DB + migration) | NOT STARTED | — | NOT RUN | — |
-| G03 | Redeem engine + audit log | NOT STARTED | — | NOT RUN | — |
-| G04 | Staff redeem UI + auth boundary | NOT STARTED | — | NOT RUN | — |
-| G05 | Admin leads | NOT STARTED | — | NOT RUN | — |
-| G06 | iPhone catalog | NOT STARTED | — | NOT RUN | — |
-| G07 | Campaign / source tracking | NOT STARTED | — | NOT RUN | — |
-| G08 | Security pass | NOT STARTED | — | NOT RUN | — |
-| G09 | Tests | NOT STARTED | — | NOT RUN | — |
-| G10 | CI | NOT STARTED | — | NOT RUN | — |
-| G11 | Staging readiness | NOT STARTED | — | NOT RUN | — |
-| G12 | Owner acceptance pack | NOT STARTED | — | NOT RUN | — |
+```
+Trình duyệt (HTML/CSS/JS thuần, KHÔNG build step)
+   │
+   ├── GET  /api/catalog/iphone-models   → danh mục iPhone
+   ├── POST /api/leads                   → tạo lead + cấp gift code
+   ├── GET  /api/gifts/{code}            → tra cứu cho nhân viên (cần xác thực)
+   ├── GET  /api/gifts/{code}/qr.png     → ảnh QR chuẩn (công khai, không PII)
+   ├── GET  /api/health | /api/ready     → liveness / readiness
+   │
+   └── FastAPI  ──►  PostgreSQL 16 (Alembic migration)
+```
+
+- **Một tiến trình** phục vụ cả API lẫn file tĩnh → deploy/rollback đơn giản.
+- Frontend **không có build step**, không framework.
+- **Server là nguồn chân lý duy nhất cho lead.** `localStorage` không còn được dùng để lưu lead;
+  CI có chốt chặn chống thoái hoá (grep `vipphone_leads_v1`).
 
 ---
 
-## 4. TRẠNG THÁI HIỆN TẠI (tóm tắt một dòng mỗi mục)
+## 4. DATABASE
+
+Migration head: **`0001_initial`** (`migrations/versions/0001_initial.py`).
+
+| Bảng | Vai trò |
+|---|---|
+| `leads` | Lead + gift code + trạng thái phát quà |
+| `audit_events` | Audit trail |
+| `iphone_models` | Danh mục iPhone |
+
+### 4.1 Index trên `leads` — đo bằng `pg_indexes`
+
+| Index | Cột | Loại |
+|---|---|---|
+| `uq_leads_lead_id` | `lead_id` | UNIQUE |
+| `uq_leads_gift_code` | `gift_code` | UNIQUE |
+| `uq_leads_active_duplicate` | `(phone, iphone_model)` | **UNIQUE MỘT PHẦN**, `WHERE gift_status <> 'CANCELLED'` |
+| `ix_leads_phone` | `phone` | thường |
+| `ix_leads_created_at` | `created_at` | thường |
+| `ix_leads_gift_status` | `gift_status` | thường |
+| `ix_leads_dup` | `(phone, iphone_model, gift_status)` | thường |
+
+Kiểm tra ràng buộc (`pg_constraint`):
+
+- `ck_leads_gift_status` — `NEW / CONFIRMED / READY / REDEEMED / CANCELLED`
+- `ck_leads_consent_true` — `consent IS TRUE`
+- `ck_leads_phone_canonical` — `phone ~ '^0[35789][0-9]{8}$'`
+
+**Schema chỉ do Alembic tạo.** Ứng dụng **không** gọi `create_all()`.
+
+---
+
+## 5. API
+
+| Method | Path | Xác thực | Trạng thái |
+|---|---|---|---|
+| GET | `/api/health` | công khai | **CÓ** — không truy vấn DB |
+| GET | `/api/ready` | công khai | **CÓ** — kiểm DB + migration head + nói rõ phần chưa cấu hình |
+| POST | `/api/leads` | công khai (+ rate limit, + Turnstile nếu cấu hình) | **CÓ** |
+| GET | `/api/catalog/iphone-models` | công khai | **CÓ** |
+| GET | `/api/gifts/{gift_code}` | **nhân viên** | **CÓ** |
+| GET | `/api/gifts/{gift_code}/qr.png` | công khai | **CÓ** |
+| POST | `/api/gifts/{gift_code}/redeem` | **nhân viên** | **CHƯA CÓ** → G03 |
+| GET | `/api/admin/leads` | **nhân viên** | **CHƯA CÓ** → G05 |
+
+`POST /api/leads` trả về:
+
+```json
+{ "lead_id": "...", "gift_code": "VIP-26-XXXXXX", "gift_status": "NEW", "duplicate": false }
+```
+
+Lỗi có cấu trúc thống nhất:
+
+```json
+{ "error": { "code": "VALIDATION_FAILED", "message": "...", "fields": { "phone": "..." } } }
+```
+
+---
+
+## 6. CHÍNH SÁCH CHỐNG TRÙNG
+
+**Luật:** cùng `phone` (ĐÃ CHUẨN HOÁ) + cùng `iphone_model` + `gift_status <> 'CANCELLED'`
+→ **trả lại gift hiện có**, KHÔNG tạo gift mới.
+
+Ép ở **HAI tầng**:
+
+1. **Tầng ứng dụng** (`app/services/leads.py`) — tra trước khi tạo.
+2. **Tầng database** — `uq_leads_active_duplicate`, UNIQUE INDEX MỘT PHẦN. Hai request
+   đồng thời cũng không tạo nổi hai gift; request thua cuộc bắt `IntegrityError`,
+   tra lại và trả gift đang có.
+
+Có test: gửi lại y hệt, gửi `+84…` so với `09…`, khác dòng máy, khác số, và
+gift đã `CANCELLED` thì được cấp gift mới.
+
+---
+
+## 7. GIFT CODE
+
+- Định dạng `VIP-YY-XXXXXX`.
+- `YY` lấy từ `GIFT_CODE_YEAR_PREFIX`, **để trống thì suy từ năm hiện tại (UTC)** — không hard-code.
+- Thân mã: CSPRNG (`secrets.choice`), alphabet 32 ký tự `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`
+  (bỏ `I`, `O`, `0`, `1` để không đọc nhầm).
+- Entropy: `32^6 ≈ 1,07 * 10^9` tổ hợp. Tăng được qua `GIFT_CODE_LENGTH`.
+- **Không tuần tự, không suy từ `id`.**
+- Tra cứu **không phân biệt hoa/thường**, tự bỏ khoảng trắng.
+- Ràng buộc `UNIQUE` ở DB; đụng độ thì **thử lại** (tối đa `GIFT_CODE_MAX_ATTEMPTS`), không báo lỗi cho khách.
+
+---
+
+## 8. QR
 
 | Mục | Trạng thái |
 |---|---|
-| LANDING | Có, client-only, chưa hardening |
-| LEAD API | **KHÔNG CÓ** |
-| DUPLICATE POLICY | Có ở client (localStorage), không hiệu lực |
-| GIFT CODE | Sinh ở client, năm hard-code |
-| QR | **NOT_PRODUCTION** (QR giả) |
-| REDEEM | Client-side, không atomic |
-| AUDIT | **KHÔNG CÓ** |
-| ADMIN | **KHÔNG CÓ** |
-| IPHONE CATALOG | JSON tĩnh, `2025`/`2026` rỗng |
-| TRACKING | dataLayer 5 event, chưa nối đích |
-| SECURITY | 14 lỗ hổng đã liệt kê ở §1.11 |
-| TESTS | **0 test** |
-| CI | **ĐỎ** (2/2 run failure) |
+| Sinh QR | **Server**, thư viện `qrcode`, chuẩn **ISO/IEC 18004** |
+| Endpoint | `GET /api/gifts/{code}/qr.png` |
+| Nội dung | `<PUBLIC_BASE_URL>/redeem?code=<gift_code>` — **chỉ URL công khai** |
+| PII trong QR | **KHÔNG** — có test giải mã QR thật để chứng minh |
+| Domain | Lấy từ `PUBLIC_BASE_URL`, **không hard-code** trong mã nguồn |
+| `qr-lite.js` (QR giả) | **ĐÃ GỠ**; CI chặn nếu quay lại |
+
+**`QR = PASS`** — căn cứ: test `test_qr_decodes_to_public_redeem_url` và
+`test_qr_contains_no_pii` giải mã ảnh PNG thật bằng **zxing-cpp** và so với URL mong đợi;
+test `test_qr_decoder_can_tell_payloads_apart` là **đối chứng dương** chứng minh bộ giải mã
+phân biệt được hai nội dung khác nhau (nếu không, phép đo vô nghĩa).
+
+---
+
+## 9. REDEEM
+
+| Mục | Trạng thái |
+|---|---|
+| Tra cứu gift cho nhân viên | **CÓ** (G02), trả trường tối thiểu, SĐT che bớt |
+| Xác nhận phát quà (ghi trạng thái) | **CHƯA CÓ** → G03 |
+| Giao dịch nguyên tử / chống double-spend | **CHƯA CÓ** → G03 |
+| Audit `GIFT_REDEEMED` | **CHƯA CÓ** → G03 |
+
+Trang `redeem.html` **nói thẳng** khi chức năng xác nhận chưa khả dụng — không giả vờ thành công.
+
+---
+
+## 10. AUDIT LOG
+
+Bảng `audit_events`: `event_id`, `event_type`, `lead_id`, `gift_code`, `actor`, `metadata` (JSONB), `created_at`.
+
+Đã ghi: `LEAD_CREATED`, `GIFT_CREATED`. Sẽ thêm: `GIFT_STATUS_CHANGED`, `GIFT_REDEEMED` (G03).
+
+`metadata` đi qua **DANH SÁCH TRẮNG khoá** (`app/audit.py`): khoá lạ bị **loại bỏ và ghi log**,
+không được lưu. Có danh sách ĐEN riêng cho `phone`, `full_name`, `company_name`, `token`, `secret`…
+`actor` của khách là `public:<ip>`; của nhân viên là `staff:<12 ký tự đầu SHA-256 của khoá>`
+— định danh được **mà không lộ khoá**.
+
+---
+
+## 11. DANH MỤC IPHONE
+
+- Bảng `iphone_models`: `year`, `model_code` (unique), `display_name`, `active`, `sort_order`.
+- Seed trong migration: **28 model** đúng bằng `data/iphone-models.json`. Năm 2025 và 2026
+  rỗng trong file gốc nên **không seed** — không tự bịa model.
+- Landing đọc từ `/api/catalog/iphone-models`; **không hard-code model trong HTML**.
+- Thêm model mới = INSERT vào bảng (hoặc qua admin ở G05), **không phải sửa HTML**. Có test.
+- Model không có trong danh mục, hoặc `active = false`, bị API **từ chối** (`MODEL_NOT_IN_CATALOG`).
+
+---
+
+## 12. TRACKING
+
+`src`, `ref`, `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `campaign`.
+
+- Frontend: whitelist 7 tham số, chỉ nhận ký tự an toàn, lưu `sessionStorage` → điều hướng không mất nguồn.
+- Server: kiểm lại bằng biểu thức `^[A-Za-z0-9._~-]{1,64}$` (**trùng khớp** với frontend). Giá trị
+  có khoảng trắng, dấu `<`, dấu nháy, hay dài quá 64 ký tự bị **từ chối 422**.
+- **Không đưa PII vào query string.**
+
+5 dataLayer event bắt buộc: `vipphone_landing_view`, `vipphone_form_start`, `vipphone_lead_submit`,
+`vipphone_gift_code_created`, `vipphone_gift_redeemed`.
+
+> **Trạng thái thật:** mới có `window.dataLayer`. **CHƯA** nối GTM/GA4/Meta Pixel thật, **CHƯA** có
+> consent banner riêng cho tracking. `TRACKING = DATA_LAYER_ONLY`.
+
+---
+
+## 13. BẢO MẬT
+
+### 13.1 Đã xử lý ở G01/G02
+
+| # | Việc | Trạng thái |
+|---|---|---|
+| S1 | Validation server-side, không tin client | **XONG** — Pydantic + `extra="forbid"`, từ chối `iphone_year`/`gift_status`/`lead_id` do client gửi |
+| S3 | Ranh giới xác thực nhân viên | **CÓ** — `X-Staff-Key` / `Bearer`, so sánh `compare_digest`. **Fail CLOSED**: chưa cấu hình → **503** |
+| S4 | Rate limit | **CÓ** — cửa sổ trượt theo IP, có test 429 + `Retry-After` |
+| S5 | Audit trail | **MỘT PHẦN** — lead/gift có; redeem ở G03 |
+| S7 | Security header | **CÓ** — CSP nghiêm, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP; HSTS chỉ khi HTTPS |
+| S8 | CSRF | Không dùng cookie/session; xác thực qua header nên **không bị CSRF cổ điển**. Ghi rõ để không tưởng là đã làm |
+| S10 | Secret scanning | **CÓ** — gitleaks 8.30.1, quét toàn bộ lịch sử git |
+| S11 | Whitelist giá trị tracking | **CÓ** |
+| S12 | `redeemed_by` hard-code | **XONG** — actor suy từ khoá nhân viên, không hard-code |
+| — | PII minimization | Che SĐT (`0912***678`), không trả UTM/công ty/BNI cho nhân viên, không lưu SĐT vào `sessionStorage` |
+| — | SQL injection | Tham số hoá toàn bộ qua SQLAlchemy; có test chèn `'); DROP TABLE leads;--` và xác nhận lưu nguyên văn, bảng còn nguyên |
+| — | XSS | Escape mọi nội dung người dùng; CSP `script-src 'self'`; **không** inline script/style trong HTML (CI chặn) |
+
+### 13.2 CÒN MỞ (ghi đúng, không tô hồng)
+
+| # | Việc | Gate |
+|---|---|---|
+| — | Turnstile chỉ có **adapter**, chưa bật ở đâu (chưa có secret thật) | G08 / cần Owner |
+| — | Rate limit **trong bộ nhớ tiến trình** → nhiều instance thì mỗi instance đếm riêng. Ghi rõ, **không** giả vờ đủ cho production nhiều instance | G08 |
+| — | Chưa có `pip-audit` / dependency scan trong CI | G08 |
+| — | Chưa có admin leads (S2: dữ liệu đầy đủ chỉ nên xem ở khu vực có xác thực riêng) | G05 |
+| — | Chưa có test IDOR cho route admin (route admin chưa tồn tại) | G05/G08 |
+| — | Chưa rà soát PII lọt vào log production | G08 |
+
+---
+
+## 14. TESTS
+
+**143 test, tất cả PASS** — đo bằng `python -m pytest -q` trên **PostgreSQL 16 thật**.
+Phạm vi: `tests/` (unit + integration). **Chưa có** bộ E2E nằm trong repo.
+
+| File | Nội dung |
+|---|---|
+| `tests/test_phone.py` | 30 ca chuẩn hoá SĐT, kể cả idempotent và "mọi cách viết ra một giá trị" |
+| `tests/test_giftcodes.py` | định dạng, entropy, không tuần tự, tra cứu hoa/thường |
+| `tests/test_health_and_headers.py` | `/api/health`, `/api/ready`, security header, CSP, shortlink |
+| `tests/test_leads_api.py` | lead hợp lệ, SĐT sai, thiếu consent, trùng lặp, gift code duy nhất, đụng độ + thử lại, UTM, model, SQLi, rate limit |
+| `tests/test_gifts_api.py` | xác thực, che PII, mã sai, **QR giải mã thật**, danh mục |
+| `tests/test_migrations.py` | upgrade/downgrade trên **database tạm riêng**, seed, UNIQUE một phần, CHECK, `alembic check` |
+
+Đối chiếu với 14 kịch bản bắt buộc của G09:
+
+| # | Kịch bản | Trạng thái |
+|---|---|---|
+| 1 | valid lead | **PASS** |
+| 2 | invalid phone | **PASS** |
+| 3 | missing consent | **PASS** |
+| 4 | duplicate submission | **PASS** |
+| 5 | gift code uniqueness | **PASS** |
+| 6 | gift lookup | **PASS** |
+| 7 | redeem success | **CHƯA** → G03 |
+| 8 | redeem second time | **CHƯA** → G03 |
+| 9 | concurrent redeem | **CHƯA** → G03 |
+| 10 | invalid gift code | **PASS** |
+| 11 | UTM capture | **PASS** |
+| 12 | model validation | **PASS** |
+| 13 | database migration | **PASS** |
+| 14 | health endpoint | **PASS** |
+
+---
+
+## 15. CI
+
+Workflow: `.github/workflows/ci.yml`. 3 job:
+
+| Job | Nội dung |
+|---|---|
+| `Secret scan (gitleaks)` | gitleaks 8.30.1, `fetch-depth: 0`, quét toàn bộ lịch sử |
+| `Validate static frontend` | file bắt buộc, JSON hợp lệ, `node --check`, chốt chặn QR giả / QR phải từ server / không quay lại `localStorage` / HTML không inline |
+| `Backend (lint, migration, tests)` | PostgreSQL 16 service container, ruff, `alembic upgrade head` + `alembic check`, unit test, integration test, full suite |
+
+Trạng thái CI của G02: **cập nhật ngay sau khi PR được tạo** (xem PR tương ứng).
+
+Chốt an toàn: `tests/conftest.py` **từ chối chạy** nếu `TEST_DATABASE_URL` không trỏ tới database
+có tên kết thúc bằng `_test` — tránh xoá nhầm database thật.
+
+---
+
+## 16. STAGING / PRODUCTION
+
+| Mục | Trạng thái |
+|---|---|
+| `.env.example` | **CÓ** — không chứa secret thật |
+| `/api/health` | **CÓ** |
+| `/api/ready` | **CÓ** — nói thẳng phần chưa cấu hình |
+| `docs/deployment.md` | **CHƯA CÓ** → G11 |
+| Hạ tầng staging | **CHƯA CÓ** → `BLOCKED_EXTERNAL_INFRA` cho tới khi Owner cung cấp |
 | STAGING | **NOT DEPLOYED** |
 | PRODUCTION | **NOT DEPLOYED** |
 
 ---
 
-## 5. CÁCH ĐO LẠI (evidence commands)
+## 17. BÀI HỌC ĐO LƯỜNG (ghi lại để không lặp)
 
-```bash
-# Baseline
-gh repo view thanhbn123/vipphone --json defaultBranchRef,visibility
-git rev-parse origin/main origin/develop
-git merge-base origin/main origin/develop
-gh issue list --repo thanhbn123/vipphone --state all
-gh pr list   --repo thanhbn123/vipphone --state all
-gh run list  --repo thanhbn123/vipphone --limit 20
-gh api repos/thanhbn123/vipphone/branches/main/protection
+Trong phiên này, **năm lần** thứ dùng để kiểm chứng tự nó không trung thực. Ghi lại vì đây
+đúng là loại lỗi khó thấy nhất — nó không báo lỗi, nó chỉ báo sai.
 
-# Chất lượng
-make lint && make test        # sau G10
-gitleaks git --no-banner --redact
-```
+| # | Chuyện gì | Xử lý |
+|---|---|---|
+| 1 | Bước secret scan baseline `grep` khớp **chính nó** → CI đỏ 2/2 run | Thay bằng gitleaks; siết mẫu grep; ghép mẫu từ nhiều mảnh chuỗi |
+| 2 | Viết lại §1.1, bản nháp **chép nguyên văn** mẫu regex → chốt chặn mới báo đỏ trên chính tài liệu | Sửa tài liệu, **không** nới chốt chặn |
+| 3 | Test E2E báo `gift_code_created` không phát ra — thật ra là **lỗi phép đo**: `dataLayer` thuộc từng trang, đọc sau khi điều hướng thì mất event của trang trước | Ghi bền event vào `sessionStorage` rồi đo lại. **Không** sửa code cho vừa test |
+| 4 | Bộ giải mã QR **OpenCV** giải mã được hầu hết gift code nhưng **thất bại** với `VIP-26-AAAAAA` và `VIP-26-BBBBBB`; zxing-cpp giải mã bình thường | Đổi sang zxing-cpp. Nếu không phát hiện, test QR sẽ **pass giả** ở hầu hết trường hợp và **fail giả** ở một số trường hợp — cả hai đều làm hỏng niềm tin vào kết quả |
+| 5 | 6 test trong `test_leads_api.py` báo hỏng, nhưng chạy riêng thì **pass hết** | Nguyên nhân: một test trước đó **tắt một model trong danh mục**, fixture dọn dẹp không dựng lại danh mục → các test sau hỏng vì lý do không liên quan tới chúng. Sửa fixture để dựng lại **cả** danh mục, dùng chung hàm seed với migration |
+| 6 | **7 test migration pass ở máy nhưng FAIL trên CI**: `password authentication failed for user "vipphone"` | `str(URL)` của SQLAlchemy **che password thành `***`**. Máy local đăng nhập kiểu `trust` nên URL **không có password** → không thấy gì; CI dùng service container **có password** → engine kết nối bằng `***`. Sửa thành `render_as_string(hide_password=False)`. **Đã tái hiện lỗi tại máy** bằng cách bật `scram-sha-256` cho PostgreSQL cục bộ rồi chạy lại: **7 failed** với mã cũ, **7 passed** với bản vá. Đây là lý do **phải có CI chạy trên PostgreSQL thật có password** — chạy máy không bắt được |
+| 7 | gitleaks báo 1 leak: `test-staff-key-0123456789abcdef` trong `tests/conftest.py` | Không phải secret thật, nhưng **trông giống** credential nên làm nhiễu đúng công cụ dùng để bắt secret thật. Đổi thành giá trị độ phức tạp thấp. Chuỗi cũ vẫn nằm trong **lịch sử commit chưa merge**, nên xử lý bằng cách **viết lại commit** chứ **không** thêm allowlist — thêm allowlist là làm yếu công cụ kiểm chứng |
+
+**Nguyên tắc rút ra:** khi một chốt chặn báo động, câu hỏi đầu tiên phải là
+*"chốt chặn sai hay dữ liệu sai?"* — và câu trả lời phải bằng **một phép đo**,
+không bằng cảm giác. Bốn lần đầu là **công cụ sai**; lần 5 và 6 là **dữ liệu/thiết lập sai**;
+lần 7 là **giá trị thử nghiệm gây nhiễu**. Sửa đúng chỗ, không sửa cho vừa mắt.
 
 ---
 
-## 6. LUẬT KHÔNG ĐƯỢC VI PHẠM
+## 18. LUẬT KHÔNG ĐƯỢC VI PHẠM
 
 - **KHÔNG** sửa trực tiếp `main`.
 - **KHÔNG** sửa trực tiếp production/VPS.
@@ -293,7 +357,26 @@ gitleaks git --no-banner --redact
 - **KHÔNG** sửa code đang LOCKED nếu không có CR mới.
 - **PRODUCTION DEPLOY = FORBIDDEN** trong phiên này.
 
-### 6.1 Luật drift trước mọi merge
+### 18.1 Luật drift trước mọi merge
 
 Đo **expected develop SHA** · **actual develop SHA** · **PR HEAD** · **merge-base**.
 Nếu `develop` lệch khỏi giá trị mong đợi → **STOP MERGE**, reconcile trước. Không merge mù.
+
+---
+
+## 19. CÁCH ĐO LẠI (evidence commands)
+
+```bash
+# Baseline / GitHub
+gh repo view thanhbn123/vipphone --json defaultBranchRef,visibility
+git rev-parse origin/main origin/develop && git merge-base origin/main origin/develop
+gh issue list --repo thanhbn123/vipphone --state all
+gh pr list    --repo thanhbn123/vipphone --state all
+gh run list   --repo thanhbn123/vipphone --limit 20
+
+# Chất lượng
+make lint                     # ruff check + format --check
+make test                     # pytest trên PostgreSQL thật
+make migrate-check            # alembic upgrade head + alembic check
+make secret-scan              # gitleaks toàn bộ lịch sử
+```

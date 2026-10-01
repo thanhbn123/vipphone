@@ -1,124 +1,210 @@
 # VIP PHONE
 
-Landing nhận ốp điện thoại miễn phí cho cộng đồng **VIP ORDER × BNI** — kèm luồng
-phát quà, tra cứu gift code và (đang xây) backend + admin.
+Landing nhận ốp điện thoại miễn phí cho cộng đồng **VIP ORDER × BNI** — kèm backend
+thu lead, cấp gift code, tra cứu và phát quà có audit.
 
 > **Trạng thái thật của repo nằm ở [`docs/MASTER_STATUS.md`](docs/MASTER_STATUS.md).**
-> Đây là nguồn trạng thái chính. README chỉ tóm tắt; khi hai chỗ lệch nhau, tin `MASTER_STATUS.md`.
+> Đó là nguồn trạng thái chính. README chỉ tóm tắt; khi hai chỗ lệch nhau, tin `MASTER_STATUS.md`.
 
 ---
 
-## 1. Hiện trạng (đo ngày 2026-10-01)
+## 1. Hiện trạng
 
 | Lớp | Trạng thái |
 |---|---|
-| Frontend | **Có** — HTML/CSS/JS thuần, không build step |
-| Backend | **CHƯA CÓ** |
-| Database | **CHƯA CÓ** |
-| Lưu trữ | `localStorage` của trình duyệt khách (chỉ để demo) |
-| QR | **NOT_PRODUCTION** — chưa sinh mã QR chuẩn (xem §4) |
-| Xác thực nhân viên | **CHƯA CÓ** — `STAFF AUTH = OPEN` |
-| Test | **0 test** |
+| Frontend | **CÓ** — HTML/CSS/JS thuần, không build step |
+| Backend | **CÓ** — FastAPI (Python 3.12) |
+| Database | **CÓ** — PostgreSQL 16 + Alembic migration (`0001_initial`) |
+| Lưu trữ lead | **PostgreSQL** — server là nguồn chân lý duy nhất |
+| QR | **PASS** — QR chuẩn ISO/IEC 18004 sinh ở server, đã kiểm bằng cách giải mã thật |
+| Xác thực nhân viên | **CÓ** (khoá API). Chưa cấu hình thì **fail closed → 503** |
+| Xác nhận phát quà | **CHƯA CÓ** → gate G03 |
+| Admin leads | **CHƯA CÓ** → gate G05 |
+| Test | **143 test PASS** trên PostgreSQL thật |
+| GTM/GA4/Meta Pixel | **CHƯA NỐI** — mới có `window.dataLayer` |
 | Staging | **NOT DEPLOYED** |
 | Production | **NOT DEPLOYED** |
 
-Kiến trúc đích và quyết định stack: [`docs/adr/0001-stack-selection.md`](docs/adr/0001-stack-selection.md)
-(**Python + FastAPI + SQLAlchemy 2.0 + Alembic + PostgreSQL 16**).
+Kiến trúc đích và quyết định stack: [`docs/adr/0001-stack-selection.md`](docs/adr/0001-stack-selection.md).
 
 ---
 
-## 2. Có gì trong repo
+## 2. Cấu trúc repo
 
 ```
-index.html                      landing thu lead
-success.html                    hiển thị gift code sau khi đăng ký
-redeem.html                     giao diện nhân viên xác nhận phát quà
-assets/css/styles.css           giao diện
-assets/js/tracking.js           dataLayer + thu thập src/ref/utm (whitelist)
-assets/js/util.js               escape HTML, chuẩn hoá SĐT, gift code
-assets/js/qr.js                 render QR — hiện là NOT_IMPLEMENTED (xem §4)
-assets/js/app.js                landing: validation, chống trùng, sinh gift code
-assets/js/success.js            trang thành công
-assets/js/redeem.js             nhân viên: tra cứu + xác nhận phát quà
-data/iphone-models.json         danh mục iPhone theo năm
-docs/MASTER_STATUS.md           NGUỒN TRẠNG THÁI CHÍNH
-docs/adr/0001-stack-selection.md quyết định stack backend
-docs/architecture.md            kiến trúc
-docs/lead-schema.md             schema lead
-.github/workflows/ci.yml        CI: gitleaks + kiểm tra tĩnh
+# Frontend (không build step)
+index.html success.html redeem.html
+assets/css/styles.css
+assets/js/config.js        cấu hình (apiBase)
+assets/js/tracking.js      dataLayer + thu thập src/ref/utm (whitelist)
+assets/js/util.js          escape HTML, chuẩn hoá SĐT, gift code
+assets/js/qr.js            render QR chuẩn lấy từ server
+assets/js/app.js           landing: gọi POST /api/leads
+assets/js/success.js       trang thành công
+assets/js/redeem.js        nhân viên: tra cứu + xác nhận phát quà (xác nhận → G03)
+
+# Backend
+app/main.py                app factory + static + router
+app/config.py              cấu hình từ biến môi trường (pydantic-settings)
+app/db.py                  engine, session, Base
+app/models.py              SQLAlchemy models
+app/schemas.py             Pydantic DTO (validate phía server)
+app/phone.py               chuẩn hoá SĐT Việt Nam
+app/giftcodes.py           sinh / chuẩn hoá gift code
+app/security.py            security header, rate limit, xác thực nhân viên, Turnstile
+app/audit.py               audit trail (metadata qua danh sách trắng)
+app/services/              nghiệp vụ lead + gift
+app/routers/               health, catalog, leads, gifts
+migrations/                Alembic
+tests/                     pytest (unit + integration PostgreSQL)
+tests_e2e/                 Playwright (chưa có nội dung — gate G09)
+
+# Vận hành
+.github/workflows/ci.yml   CI: gitleaks + kiểm tra tĩnh + backend trên PostgreSQL
+.env.example               mẫu biến môi trường — KHÔNG chứa secret thật
+Makefile alembic.ini pytest.ini ruff.toml requirements*.txt
+docs/                      MASTER_STATUS, ADR, architecture, lead-schema
+data/iphone-models.json    danh mục gốc (DB là nguồn chân lý; file này để tham chiếu)
 ```
 
 ---
 
 ## 3. Chạy local
 
-Không mở `index.html` trực tiếp bằng `file://` — trình duyệt sẽ chặn `fetch()`
-khiến danh mục iPhone không tải được.
+### 3.1 Cần có
+
+- Python **3.12**
+- PostgreSQL **16**
+
+### 3.2 Dựng môi trường
 
 ```bash
-python3 -m http.server 8080
-# mở http://localhost:8080
+make venv             # tạo .venv bằng python3.12
+make install-dev      # cài dependency + Playwright chromium
+
+cp .env.example .env  # rồi sửa DATABASE_URL cho đúng máy bạn
+```
+
+### 3.3 Tạo database và chạy migration
+
+```bash
+createdb vipphone
+# DATABASE_URL=postgresql+psycopg://<user>:<password>@localhost:5432/vipphone
+
+make migrate          # alembic upgrade head  → tạo bảng + seed 28 model iPhone
+```
+
+**Schema chỉ do migration tạo.** Ứng dụng không tự tạo bảng.
+
+### 3.4 Chạy server
+
+```bash
+make run              # uvicorn trên http://localhost:8000
+```
+
+Mở <http://localhost:8000>. Tài liệu API tự sinh ở `/docs` (tắt khi `APP_ENV=production`).
+
+### 3.5 Bật khu vực nhân viên
+
+`STAFF_API_KEYS` để trống nghĩa là khu vực nhân viên **đóng** (API trả 503 — fail closed,
+không mở toang). Muốn dùng:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"   # sinh khoá
+# đặt vào STAFF_API_KEYS trong .env
+```
+
+Rồi mở <http://localhost:8000/redeem.html>, dán khoá vào ô "Khoá truy cập nhân viên".
+
+---
+
+## 4. Test
+
+```bash
+make test              # toàn bộ pytest — CẦN PostgreSQL thật
+make test-unit         # chỉ unit test, không cần database
+make lint              # ruff check + format --check
+make migrate-check     # alembic upgrade head + alembic check
+make secret-scan       # gitleaks trên toàn bộ lịch sử git
+make check             # gộp: lint + test + secret-scan
+```
+
+`TEST_DATABASE_URL` phải trỏ tới database có tên **kết thúc bằng `_test`**.
+`tests/conftest.py` **từ chối chạy** nếu không đúng — để không xoá nhầm database thật.
+
+Test dùng **PostgreSQL thật**, không dùng SQLite: chính sách chống trùng dựa trên
+UNIQUE INDEX MỘT PHẦN, và redeem dựa trên khoá hàng — SQLite không có, test sẽ nói dối.
+
+---
+
+## 5. API
+
+| Method | Path | Xác thực |
+|---|---|---|
+| GET | `/api/health` | công khai |
+| GET | `/api/ready` | công khai |
+| GET | `/api/catalog/iphone-models` | công khai |
+| POST | `/api/leads` | công khai (rate limit; Turnstile nếu cấu hình) |
+| GET | `/api/gifts/{gift_code}` | nhân viên |
+| GET | `/api/gifts/{gift_code}/qr.png` | công khai |
+| POST | `/api/gifts/{gift_code}/redeem` | **chưa có → G03** |
+| GET | `/api/admin/leads` | **chưa có → G05** |
+
+```bash
+curl -s localhost:8000/api/health
+curl -s localhost:8000/api/ready
+curl -s localhost:8000/api/catalog/iphone-models | head
+
+curl -s -X POST localhost:8000/api/leads -H 'Content-Type: application/json' -d '{
+  "full_name": "Nguyễn Văn A",
+  "phone": "+84 912 345 678",
+  "iphone_model": "iphone-16-pro-max",
+  "case_color": "Đen",
+  "source": "bni",
+  "consent": true
+}'
 ```
 
 ---
 
-## 4. ⚠️ QR hiện tại KHÔNG phải mã QR thật
+## 6. ⚠️ Giới hạn đã biết — đọc trước khi tin
 
-Bản starter cũ có `assets/js/qr-lite.js` vẽ một hình **trông giống** mã QR nhưng
-bit sinh từ hash + PRNG, **không theo chuẩn ISO/IEC 18004**. Không đầu đọc QR nào
-quét được hình đó. Một hình giả trông như thật là cái bẫy ngay tại quầy phát quà.
+Đây là bản đang phát triển, **chưa deploy ở đâu**. Cụ thể:
 
-File đó **đã bị gỡ**. `assets/js/qr.js` hiện chủ động **không vẽ hình giống QR**,
-mà hiển thị:
+- **Chưa có xác nhận phát quà.** `POST /api/gifts/{code}/redeem` thuộc gate G03. Trang
+  `redeem.html` nói thẳng điều này thay vì giả vờ thành công.
+- **Chưa có admin leads** (G05).
+- **Chưa nối GTM/GA4/Meta Pixel.** Mới có `window.dataLayer`.
+- **Rate limit nằm trong bộ nhớ tiến trình** → chạy nhiều instance thì mỗi instance đếm riêng.
+  Muốn chính xác khi scale ngang phải dùng Redis.
+- **Turnstile mới có adapter**, chưa cấu hình secret thật ở đâu.
+- **Chưa có bộ test E2E trong repo** (`tests_e2e/` còn rỗng) — gate G09.
+- **Chưa có `docs/deployment.md`** và **chưa có hạ tầng staging** — gate G11.
 
-- dòng chữ *"Mã QR chưa khả dụng"*,
-- URL nhận quà dạng văn bản,
-- nút sao chép liên kết.
-
-QR chuẩn (thư viện `qrcode`, sinh ở server, chỉ chứa URL công khai + gift code —
-**không chứa PII**) được thêm ở gate **G02**. CI có chốt chặn để QR giả không
-quay lại.
-
----
-
-## 5. ⚠️ Giới hạn của bản demo hiện tại
-
-Đây là bản demo client-only. Cụ thể:
-
-- Lead chỉ nằm trên **đúng trình duyệt** đã đăng ký. Nhân viên ở máy khác **không thấy**.
-- Xoá dữ liệu trình duyệt = **mất lead**. Không có nguồn chân lý.
-- Chống trùng chỉ chạy ở client → đổi trình duyệt là vô hiệu.
-- Validation chỉ ở client → sửa được bằng DevTools.
-- `redeem.html` mở công khai, **không có xác thực nhân viên**.
-- Không rate limit, không audit trail, không chống double-spend.
-- Không có security header (chưa có server để đặt).
-
-Danh sách lỗ hổng đầy đủ: [`docs/MASTER_STATUS.md`](docs/MASTER_STATUS.md) §1.11.
+Danh sách đầy đủ: [`docs/MASTER_STATUS.md`](docs/MASTER_STATUS.md) §13.2.
 
 ---
 
-## 6. Roadmap gate
+## 7. Roadmap gate
 
-| Gate | Nội dung |
-|---|---|
-| G01 | Baseline hardening + sửa CI đỏ |
-| G02 | Backend thật: API + PostgreSQL + migration |
-| G03 | Redeem engine (atomic, chống double-spend) + audit log |
-| G04 | Staff redeem UI + xác thực nhân viên |
-| G05 | Admin leads (tìm kiếm, lọc, phân trang, export CSV) |
-| G06 | Danh mục iPhone trong database |
-| G07 | Campaign / source / UTM tracking |
-| G08 | Security pass |
-| G09 | Test (14 kịch bản bắt buộc + E2E) |
-| G10 | CI đầy đủ (lint, unit, integration PostgreSQL, migration check, secret scan) |
-| G11 | Staging readiness (`.env.example`, `/api/ready`, `docs/deployment.md`) |
-| G12 | Owner acceptance pack |
-
-Tiến độ thật: xem bảng "TRẠNG THÁI GATE" trong [`docs/MASTER_STATUS.md`](docs/MASTER_STATUS.md) §3.
+| Gate | Nội dung | Trạng thái |
+|---|---|---|
+| G01 | Baseline hardening + sửa CI đỏ | **DONE** |
+| G02 | Backend thật: API + PostgreSQL + migration + QR chuẩn + catalog | đang làm |
+| G03 | Redeem engine (atomic, chống double-spend) + audit | chờ |
+| G04 | Staff redeem UI + xác thực nhân viên | chờ |
+| G05 | Admin leads (tìm kiếm, lọc, phân trang, export CSV) | chờ |
+| G06 | Danh mục iPhone (DB + seed + API: xong ở G02) | một phần |
+| G07 | Campaign / source / UTM tracking | một phần |
+| G08 | Security pass đầy đủ | một phần |
+| G09 | Test đầy đủ + E2E | một phần |
+| G10 | CI đầy đủ | một phần |
+| G11 | Staging readiness | một phần |
+| G12 | Owner acceptance pack | chờ |
 
 ---
 
-## 7. Luật vận hành repo
+## 8. Luật vận hành repo
 
 - **KHÔNG** commit thẳng lên `main`.
 - **KHÔNG** force push `main` / `develop`.
@@ -126,18 +212,3 @@ Tiến độ thật: xem bảng "TRẠNG THÁI GATE" trong [`docs/MASTER_STATUS.
 - **KHÔNG** commit secret hay credential. Dùng `.env` (đã ignore) và `.env.example`.
 - **KHÔNG** deploy production khi chưa có lệnh release của Owner.
 - Mọi thay đổi đi theo: issue → branch → code → test → PR → CI xanh → merge `develop`.
-
----
-
-## 8. Kiểm tra chất lượng tại máy
-
-```bash
-# Secret scan (cùng phiên bản CI dùng)
-gitleaks git --no-banner --redact
-
-# Cú pháp JavaScript
-for f in assets/js/*.js; do node --check "$f"; done
-
-# JSON hợp lệ
-python3 -m json.tool data/iphone-models.json > /dev/null
-```
