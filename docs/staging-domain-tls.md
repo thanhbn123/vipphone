@@ -1,16 +1,52 @@
-# Tên miền + TLS cho staging — cấu hình CHÍNH XÁC cần Owner cấp
+# Tên miền + TLS cho staging — `qua.viporder.vn`
 
-> Trạng thái đo ngày **2026-10-02**: **CHƯA CÓ** tên miền nào của vipphone trỏ về staging.
+> ## ✅ TÊN MIỀN ĐÃ CÓ — CHỈ CÒN DÁN KHỐI CADDY
 >
-> | Tên miền thử | Kết quả đo |
+> | Mục | Trạng thái đo 2026-10-02 |
 > |---|---|
-> | `staging.vipphone.vn` | **không có bản ghi A** |
-> | `vipphone.vn` | **không có bản ghi A** |
-> | `vipphone.viporder.vn` | **không có bản ghi A** |
-> | `staging.vipphone.com` | `13.248.169.48` — **KHÔNG phải** host staging |
-> | `cpn.viporder.vn` | `160.22.170.20` — nhưng là domain của **dự án khác** |
+> | `qua.viporder.vn` → `160.22.170.20` | ✅ **DNS ĐÚNG** (đo `dig`, TTL 300) |
+> | Ứng dụng sẵn sàng | ✅ `PUBLIC_BASE_URL=https://qua.viporder.vn` · `ALLOWED_HOSTS=qua.viporder.vn,160.22.170.20` |
+> | QR | ✅ **giải mã ra `https://qua.viporder.vn/redeem?code=…`** (zxing-cpp) |
+> | TLS | ⏳ **chờ dán khối Caddy** — `deploy` không có sudo, Caddyfile là bind-mount **read-only** |
 >
-> ⇒ **`DOMAIN = OWNER_ACTION_REQUIRED`** · **`TLS = BLOCKED_OWNER_DOMAIN`**
+> **`DOMAIN = PASS`** · **`TLS = OWNER_PASTE_REQUIRED`**
+
+## 0. VIỆC CẦN LÀM — dán đúng 4 dòng này
+
+SSH vào máy staging rồi chạy:
+
+```bash
+sudo nano /srv/vip-staging-proxy/Caddyfile
+```
+
+Thêm **nguyên khối** này vào **cuối** file (giữ nguyên phần `cpn.viporder.vn` đang có):
+
+```caddy
+qua.viporder.vn {
+    reverse_proxy 127.0.0.1:18080
+}
+```
+
+Lưu lại, rồi nạp lại Caddy:
+
+```bash
+docker exec vip-staging-caddy caddy reload --config /etc/caddy/Caddyfile
+```
+
+Caddy **tự xin và tự gia hạn TLS** (Let's Encrypt) vì tên miền đã trỏ đúng. Không cần
+làm gì thêm cho chứng chỉ.
+
+**Tôi đã kiểm trước và xác nhận an toàn:** khối hiện có `cpn.viporder.vn → 127.0.0.1:8000`
+giữ nguyên, còn vipphone nghe **18080** nên **không đụng nhau**. Việc thêm khối là **chỉ thêm**,
+không sửa gì của dự án kia.
+
+### Kiểm sau khi dán (1 lệnh)
+
+```bash
+curl -sS -o /dev/null -w '%{http_code}\n' https://qua.viporder.vn/api/health   # mong 200
+```
+
+Rồi **nhắn tôi một câu** — tôi chạy lại toàn bộ nghiệm thu qua HTTPS và trả kết quả cuối.
 
 ## 1. Việc Owner cần làm (một lần)
 
