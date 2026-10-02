@@ -32,20 +32,37 @@ CHECKS=(
   "Validate static frontend"
 )
 
-build_args() {
+build_json() {
+  # Dùng JSON BODY, không dùng -f/-F.
+  #
+  # VÌ SAO: endpoint branch protection của GitHub có schema `anyOf`, và khi gửi
+  # bằng tham số rời thì nó đòi `restrictions` phải có mặt tường minh —
+  #   `"restrictions" wasn't supplied. (HTTP 422)`
+  # Gửi JSON đầy đủ (kể cả `"restrictions": null`) là dạng chạy được.
+  #
+  # Hai lỗi ĐÃ DÍNH khi chạy thật, ghi lại để không ai lặp:
+  #   1. `-f 'required_status_checks[strict]=true'` -> gửi CHUỖI "true" ->
+  #      422 `For 'properties/strict', "true" is not a boolean`. Phải dùng `-F`.
+  #   2. Kể cả khi đã dùng `-F`, vẫn 422 vì thiếu `restrictions`.
   local branch="$1"
-  ARGS=(api -X PUT "repos/$REPO/branches/$branch/protection"
-        -H "Accept: application/vnd.github+json"
-        -f "required_status_checks[strict]=true")
-  for c in "${CHECKS[@]}"; do
-    ARGS+=(-f "required_status_checks[contexts][]=$c")
-  done
-  ARGS+=(
-    -F "enforce_admins=false"                        # đổi thành true nếu muốn chặt nhất
-    -F "required_pull_request_reviews[required_approving_review_count]=0"
-    -F "allow_force_pushes=false"
-    -F "allow_deletions=false"
-  )
+  local contexts
+  contexts=$(printf '%s\n' "${CHECKS[@]}" | jq -R . | jq -s .)
+  jq -n \
+    --argjson contexts "$contexts" \
+    '{
+       required_status_checks: { strict: true, contexts: $contexts },
+       enforce_admins: false,
+       required_pull_request_reviews: { required_approving_review_count: 0 },
+       restrictions: null,
+       allow_force_pushes: false,
+       allow_deletions: false
+     }'
+}
+
+apply_branch() {
+  local branch="$1"
+  build_json "$branch" | gh api -X PUT "repos/$REPO/branches/$branch/protection" \
+    -H "Accept: application/vnd.github+json" --input - >/dev/null
 }
 
 echo "=== Trạng thái HIỆN TẠI ==="
@@ -67,15 +84,9 @@ if [ "$APPLY" -eq 0 ]; then
   for b in main develop; do
     echo "# ----- $b -----"
     echo "gh api -X PUT repos/$REPO/branches/$b/protection \\"
-    echo "  -H 'Accept: application/vnd.github+json' \\"
-    echo "  -f 'required_status_checks[strict]=true' \\"
-    for c in "${CHECKS[@]}"; do
-      echo "  -f 'required_status_checks[contexts][]=$c' \\"
-    done
-    echo "  -F 'enforce_admins=false' \\"
-    echo "  -F 'required_pull_request_reviews[required_approving_review_count]=0' \\"
-    echo "  -F 'allow_force_pushes=false' \\"
-    echo "  -F 'allow_deletions=false'"
+    echo "  -H 'Accept: application/vnd.github+json' --input - <<'JSON'"
+    build_json "$b" | sed 's/^/  /'
+    echo "JSON"
     echo
   done
   exit 0
@@ -83,9 +94,8 @@ fi
 
 echo "=== ÁP DỤNG THẬT ==="
 for b in main develop; do
-  build_args "$b"
   echo "  -> $b"
-  gh "${ARGS[@]}" >/dev/null
+  apply_branch "$b"
 done
 
 echo
