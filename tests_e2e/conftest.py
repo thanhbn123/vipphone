@@ -199,9 +199,18 @@ def console_errors() -> list[str]:
     return []
 
 
+#: CI là runner DÙNG CHUNG nên lúc tải nặng, một lần điều hướng có thể vượt 30
+#: giây mặc định của Playwright (đã xảy ra: Firefox `Page.goto: Timeout 30000ms`).
+#: Nới lên 60 giây KHÔNG làm yếu phép kiểm nào — test vẫn phải đạt đúng điều kiện
+#: của nó, chỉ là không đỏ oan vì máy chậm.
+NAV_TIMEOUT_MS = 60_000
+
+
 @pytest.fixture
 def page(browser, console_errors):
     context = browser.new_context()
+    context.set_default_navigation_timeout(NAV_TIMEOUT_MS)
+    context.set_default_timeout(NAV_TIMEOUT_MS)
     page = context.new_page()
 
     # CSP vi phạm và lỗi JS hiện ra ở console. Đây là phép đo THẬT cho yêu cầu
