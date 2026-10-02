@@ -10,7 +10,7 @@ import logging
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -169,8 +169,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return RedirectResponse(url=f"/redeem?code={code}", status_code=302)
 
     @app.get("/favicon.ico", include_in_schema=False)
-    def favicon() -> JSONResponse:
-        return JSONResponse(status_code=204, content=None)
+    def favicon() -> Response:
+        # HTTP 204 BẮT BUỘC không có body.
+        #
+        # Bản cũ dùng `JSONResponse(status_code=204, content=None)` — nó VẪN sinh
+        # body `null` và đặt Content-Length. Client vẫn nhận 204 (header đã gửi
+        # xong trước khi lỗi), nhưng uvicorn ném ở tầng send:
+        #   RuntimeError: Response content longer than Content-Length
+        # Đo trên staging: 25 request favicon -> ĐÚNG 25 exception trong log.
+        # Lỗi VÔ HÌNH với client, và VÔ HÌNH với TestClient vì TestClient không đi
+        # qua tầng HTTP của uvicorn.
+        return Response(status_code=204)
 
     logger.info(
         "VIP PHONE khởi động: env=%s, docs=%s, staff_auth=%s",
