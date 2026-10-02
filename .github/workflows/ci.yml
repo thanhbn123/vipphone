@@ -84,7 +84,8 @@ jobs:
             docs/decisions/PII_RETENTION_OPTIONS.md \
             .env.staging.example scripts/enable_branch_protection.sh \
             scripts/staging_preflight.sh scripts/staging_preflight.py \
-            scripts/load_smoke.py docs/backup-restore.md \
+            scripts/load_smoke.py scripts/cleanup_test_data.py scripts/staging_acceptance.sh \
+            docs/backup-restore.md docs/STAGING_ACCEPTANCE.md \
             requirements.txt requirements-dev.txt \
             README.md
           do

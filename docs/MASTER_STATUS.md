@@ -1177,3 +1177,77 @@ về chính hệ thống**, và tài liệu sai thì không ai đi kiểm.
 | `PII_RETENTION` | **OWNER_DECISION_REQUIRED** |
 | `BRANCH_PROTECTION` | **OWNER_ACTION_REQUIRED** (đo: `main` và `develop` đều `404`) |
 | `PRODUCTION` | **NOT DEPLOYED** — `main` không đổi |
+
+---
+
+## 30. SR-6 — BẬT BRANCH PROTECTION + NGHIỆM THU STAGING (chặn ở quyền truy cập)
+
+### 30.1 D-003 BRANCH PROTECTION — ĐÃ BẬT
+
+Owner cho phép trong phiên này. Đo lại **qua API** (không tin UI):
+
+```
+main    : strict=true checks=7 force_push=false deletions=false
+develop : strict=true checks=7 force_push=false deletions=true→false
+```
+
+**Hai lỗi THẬT trong script, chỉ lộ ra vì ĐÃ CHẠY chứ không chỉ viết ra:**
+
+1. `-f 'required_status_checks[strict]=true'` gửi **CHUỖI** `"true"` ⇒ GitHub trả 422
+   `For 'properties/strict', "true" is not a boolean`. Phải dùng **`-F`** (chữ HOA).
+2. Kể cả đã dùng `-F`, vẫn 422: `"restrictions" wasn't supplied`. Endpoint này có schema
+   `anyOf` nên phải gửi **JSON BODY** đầy đủ (kể cả `"restrictions": null`).
+
+> Nếu phiên trước chỉ **đưa lệnh cho Owner** mà không chạy, Owner sẽ gặp **đúng hai lỗi này**.
+> Đây là lý do luật "phải chạy, không chỉ viết" tồn tại.
+
+### 30.2 Hạ tầng staging — CÓ, nhưng KHÔNG VÀO ĐƯỢC
+
+| Mục | Đo được |
+|---|---|
+| Host | `160.22.170.20` (Owner cấp trong phiên) |
+| Khác production | **CÓ** — production là `160.22.171.228` (`viporder-vps`) |
+| Cổng mở | 22, 80, 443 |
+| Host key | `SHA256:ou0RcaFd…` — **khớp** mục vault 30/09 |
+| **SSH credential** | **KHÔNG CÓ** — 4 khoá × 4 user đều bị từ chối |
+
+Máy này là **Mac mini**; khoá `vip_viettelpost_staging_admin/_deploy` được tạo trên **MacBook**.
+Host đang phục vụ staging của **dự án khác** (`vip-viettelpost`) nên phải tách container/port/DB/vhost.
+
+### 30.3 NGHIỆM THU — 25 PASS (24 LOCAL) · 11 BLOCKED · 1 NOT TESTED
+
+Chi tiết đầy đủ: **[`docs/STAGING_ACCEPTANCE.md`](STAGING_ACCEPTANCE.md)**.
+
+**`STAGING_ACCEPTANCE = BLOCKED`.** Mọi `PASS` là **LOCAL** (Mac mini, tiến trình thật +
+PostgreSQL 16 thật). **`LOCAL PASS` KHÔNG THAY THẾ `STAGING PASS`.**
+
+Điểm đáng chú ý đã đo được ở LOCAL:
+- **Concurrent redeem:** 8 yêu cầu ĐỒNG THỜI trên 1 gift → **đúng 1 lần phát thật**, 7 `already_redeemed`
+- **Rollback drill:** `074c644` → `8833ac1` → **rollback** → `8833ac1`, health OK cả 4 lượt
+- **Backup/restore:** 0.05 s / 0.04 s, số dòng khớp, **md5 nội dung khớp**
+- **Audit:** `GIFT_REDEEMED` đúng 1 cho gift test; **0 bản ghi chứa GIÁ TRỊ PII**
+- **Log:** 0 secret, 0 `DATABASE_URL`, 0 Traceback, 0 lỗi 5xx
+
+### 30.4 BỐN LỖI PHÉP ĐO trong chính phiên này
+
+| # | Triệu chứng | Nguyên nhân thật |
+|---|---|---|
+| 1 | **16 mục FAIL** cùng lúc | Cổng bị **`python -m http.server` của phiên khác** giữ; uvicorn không bind được. Đã thêm **chốt danh tính** (`"service":"vipphone"`), nếu không thì DỪNG |
+| 2 | `MIGRATION ở HEAD` FAIL (`current=INFO`) | `alembic` in dòng `INFO …`; regex bắt chữ **`INFO`** làm revision |
+| 3 | Audit "có PII" 4 bản ghi | Tìm chuỗi `phone` — và **`"iphone-16"` chứa `phone`**. Dương tính giả; kiểm bằng GIÁ TRỊ PII → **0** |
+| 4 | `exit=0` dù script TỪ CHỐI | `echo "exit=$?"` sau **pipe** đo mã thoát của `tail`, không phải của script |
+
+**Họ chung:** *phép đo trả lời một câu hỏi khác với câu mình tưởng đang hỏi.* Ca 1 và 3 tạo ra
+**báo cáo sai hoàn toàn** mà trông vẫn hợp lý.
+
+### 30.5 `scripts/cleanup_test_data.py` — chính sách dữ liệu test
+
+Marker `source=staging-test` / `utm_campaign=staging-acceptance`; SĐT test tiền tố `0900000`
+(**chỉ để nhận diện, KHÔNG dùng làm điều kiện xoá**). Mặc định **chỉ đếm**; **từ chối**
+`APP_ENV=production` và DB tên `*prod*`. Đã chứng minh: xoá đúng **5** lead test,
+**lead khách THẬT còn nguyên**.
+
+### 30.6 Việc còn lại đúng MỘT thứ
+
+**Quyền SSH vào `160.22.170.20` (user `deploy`).** Có nó thì 11 mục `BLOCKED` chạy được ngay —
+`scripts/staging_acceptance.sh` đã sẵn sàng và đã chạy đúng ở LOCAL.
