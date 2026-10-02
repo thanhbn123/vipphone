@@ -3,8 +3,9 @@
 - Ngày đo: **2026-10-01** (giờ máy +07)
 - Người đo: DEEPSEEK HARNESS — VIP PHONE PROJECT CONTROLLER
 - Repo: <https://github.com/thanhbn123/vipphone>
-- `develop`: `1d1e2a581ca8b0c83fc5cfb5f915c1f05aebae1c` (sau phiên STAGING READINESS — CI **7/7 check PASS**)
-- `main`: `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **KHÔNG ĐỔI suốt phiên**
+- `develop`: `8a417fd0c00de62809eef91d79e0c242593cb33a` — **đã triển khai lên STAGING THẬT**
+- `main`: `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **KHÔNG ĐỔI**
+- **STAGING: ĐÃ TRIỂN KHAI** tại `http://160.22.170.20:18080` (SHA trên)
 - **STAGING: NOT DEPLOYED** · **PRODUCTION: NOT DEPLOYED**
 
 > **Cách đọc bảng này.** Mục ghi `PASS` **chỉ khi** có lệnh đã chạy hoặc số đo đứng sau.
@@ -182,3 +183,78 @@ Phần còn lại **đều là chặn bên ngoài**, không phải việc code.
 | "đã kiểm quét QR" | **giả lập** `BarcodeDetector`; **không engine nào** trong ma trận có API thật |
 | "đã kiểm tải" | **`LOCAL LOAD SMOKE`** — cùng máy với server, **không** phải benchmark |
 | "sao lưu đã chạy" | **`LOCAL BACKUP/RESTORE TEST`** — chưa có lịch tự động, chưa có staging |
+
+---
+
+# GÓI NGHIỆM THU OWNER — bản chốt
+
+## 1. WHAT IS VERIFIED (đã đo, có bằng chứng)
+
+| # | Hạng mục | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 | GitHub baseline | PASS | `develop` `8a417fd0`, `main` `7d6162cf` không đổi |
+| 2 | CI | PASS | **7 check** xanh; `develop` chạy sau mỗi merge |
+| 3 | Migrations | PASS | `current` = `heads` = `0001_initial`; `alembic check` sạch |
+| 4 | Staging deployment | PASS | SHA `8a417fd0` từ Git, cây sạch; container `vipphone-staging-app`, RestartCount **0** |
+| 5 | Health / Readiness | PASS | **200** qua mạng thật từ máy khác |
+| 6 | Landing | PASS | 200, HTML, 3 asset 200, catalog **28** model |
+| 7 | Mobile | PASS | **0 px tràn ngang** tại **320 / 375 / 390 / 430 px** |
+| 8 | Lead creation | PASS | 201, ghi DB thật, marker test |
+| 9 | Duplicate handling | PASS | gửi lại → **cùng** gift code, không tạo dòng thứ hai |
+| 10 | Gift code | PASS | `VIP-26-XXXXXX`, UNIQUE, đụng độ thì thử lại |
+| 11 | QR | PASS | giải mã bằng **zxing-cpp** (độc lập) → đúng domain staging, **không PII** |
+| 12 | Staff auth | PASS | không khoá **401** · sai **401** · đúng **200** |
+| 13 | Admin | PASS | list / filter / CSV 200; CSV có **BOM UTF-8**, header đúng |
+| 14 | Redeem | PASS | 200, `REDEEMED`, audit ghi 1 lần |
+| 15 | Concurrent redeem | PASS | **8 đồng thời → ĐÚNG 1 lần phát thật**, 7 `already_redeemed` |
+| 16 | Audit | PASS | 4 loại event; **0 bản ghi chứa GIÁ TRỊ PII** |
+| 17 | Chromium | PASS | landing + 28 model + form |
+| 18 | Firefox | PASS | như trên |
+| 19 | WebKit | PASS | như trên (**KHÔNG phải Safari** — xem §2) |
+| 20 | Load smoke | PASS | **3802 req / 14.9 s** · **0 lỗi thật** · p50 **21.3 ms** · p95 **34.2 ms** · p99 **110 ms** · CPU **0.16%** · RAM app 79 MiB · DB conn 6→10 · **restart 0** |
+| 21 | Backup | PASS | 0.17 s · 15 172 byte |
+| 22 | Restore | PASS | 0.13 s vào DB **TẠM**; số dòng khớp; **md5 nội dung khớp**; 4 bảng |
+| 23 | Rollback | PASS | `1d651f46` ⇄ `04c15828`, health/ready/landing **200 cả hai lượt**, **image SHA đổi thật** |
+| 24 | Logs | PASS | 0 secret · 0 `DATABASE_URL` · **0 Traceback** · 0 lỗi 5xx |
+| 25 | Test data cleanup | PASS | chỉ xoá dòng có marker; từ chối production; khách thật còn nguyên |
+| 26 | Security scans | PASS | gitleaks **no leaks**; pip-audit `--strict` **0 lỗ hổng** |
+| 27 | Branch protection | PASS | `main` và `develop`: 7 check, `strict`, cấm force push, cấm xoá |
+
+## 2. WHAT IS NOT VERIFIED
+
+| Hạng mục | Trạng thái | Lý do |
+|---|---|---|
+| **Turnstile thật** | **BLOCKED_EXTERNAL_CREDENTIAL** | Chưa có khoá site + secret. Test hiện có dùng **verifier giả** — chứng minh *đường đi*, **không** chứng minh *tích hợp Cloudflare*. Bot protection đang **TẮT** |
+| **Domain + TLS** | **BLOCKED_OWNER_ACTION** | Staging là `http://160.22.170.20:18080`. `deploy` **không có sudo** nên không sửa được reverse proxy dùng chung. **Chưa có HTTPS** |
+| **`SAFARI REAL`** | **NOT TESTED** | Playwright WebKit **không phải** Safari thật (khác bản dựng, khác tích hợp) |
+| Quét QR bằng camera | **NOT TESTED** | **Không engine nào** trong ma trận có `BarcodeDetector` (đo: chromium/firefox/webkit = False). Nhánh "có hỗ trợ quét" chỉ được kiểm bằng **giả lập** |
+| Staging preflight **trên host** | **NOT RUN** | Script đã có và đã chạy ở LOCAL (18 mục, 6 đối chứng âm); **chưa** chạy trong môi trường staging |
+| Reverse proxy / TLS termination | **NOT_CONFIGURED** | Không có domain |
+| Đo trên Linux **tại máy này** | N/A | Máy đo là **macOS**; CI chạy Linux (ubuntu-24.04) và **staging chạy Linux** (Ubuntu 26.04) |
+
+## 3. WHAT OWNER MUST DECIDE
+
+| # | Quyết định | Trạng thái |
+|---|---|---|
+| D-002 | **Khoá Turnstile** (site + secret) | `BLOCKED_EXTERNAL_CREDENTIAL` |
+| D-004 | **Chính sách lưu trữ PII** — 3 phương án ở `docs/decisions/PII_RETENTION_OPTIONS.md` | `OWNER_DECISION_REQUIRED` |
+| D-005 | **RPO/RTO + lịch sao lưu** — số đo thật ở `docs/backup-restore.md` §4 | `OWNER_DECISION_REQUIRED` |
+| — | **Domain + TLS cho staging** (và/hoặc cấp quyền cấu hình reverse proxy) | `OWNER_ACTION_REQUIRED` |
+
+## 4. WHAT WILL HAPPEN AFTER OWNER APPROVAL
+
+1. Cấu hình domain + TLS cho staging; chạy lại `scripts/staging_preflight.sh` trong môi trường thật
+2. Bật Turnstile thật khi có khoá; kiểm **valid / invalid / missing token** trên staging (không mock)
+3. Diễn tập phát hành: merge `develop` → `main` **chỉ khi Owner ra lệnh release**
+4. Triển khai production theo `docs/deployment.md` §12 (9 bước, **sao lưu trước khi đổi schema**)
+5. Kiểm tay 1 lead thật trên production (bước 8 — test tự động **không** thay được)
+6. Ghi biên bản phát hành kèm SHA
+
+**Chưa có lệnh release nào ⇒ `main` không đổi và production không được triển khai.**
+
+## 5. Phạm vi — đọc cho đúng
+
+- Mọi số đo **trên staging** là tại `160.22.170.20`, một VPS **dùng chung** với staging của dự án khác (`vip-vtelpost`); đã tách network/DB/container/cổng.
+- Staging chạy **HTTP, không TLS**. Một số cảnh báo trình duyệt (ví dụ `Cross-Origin-Opener-Policy ... untrustworthy origin`) là **hệ quả của HTTP**, không phải lỗi ứng dụng.
+- Load smoke **nhỏ và ngắn** — **không** suy ra được năng lực chịu tải production.
+- **Hai lỗi thật do staging tìm ra** (STG-1 thiếu `httpx`, STG-2 favicon 204 kèm body) — cả hai **đã sửa**, đều có **đối chứng âm**. Điều này cho thấy CI một mình **không đủ**; staging là gate có giá trị riêng.
