@@ -56,3 +56,6 @@ input.has-error,select.has-error{border-color:#b91c1c;background:#fff5f5}
 .detail-panel .detail-list{max-width:720px}
 .turnstile-wrap{margin:16px 0;padding:14px;border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb}
 .turnstile-wrap[hidden]{display:none!important}
+.address-block{border:1px solid #e5e7eb;border-radius:14px;padding:16px 16px 4px;margin:0 0 15px}
+.address-block legend{padding:0 6px;font-size:.9rem;font-weight:800;color:#111827}
+.helper-inline{font-weight:500;color:#6b7280;font-size:.82rem}

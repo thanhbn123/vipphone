@@ -51,6 +51,13 @@ class LeadCreateRequest(BaseModel):
     iphone_model: str = Field(min_length=1, max_length=64)
     case_color: str = Field(min_length=1, max_length=40)
 
+    #: Gmail — KHÔNG bắt buộc (xem docs/pii-data-map.md).
+    email: str | None = Field(default=None, max_length=254)
+    #: Địa chỉ giao hàng, tách sẵn 4 phần cho API vận chuyển.
+    address_street: str | None = Field(default=None, max_length=200)
+    address_ward: str | None = Field(default=None, max_length=120)
+    address_district: str | None = Field(default=None, max_length=120)
+    address_province: str | None = Field(default=None, max_length=120)
     company_name: str | None = Field(default=None, max_length=120)
     bni_chapter: str | None = Field(default=None, max_length=80)
     referrer_name: str | None = Field(default=None, max_length=80)
@@ -70,6 +77,42 @@ class LeadCreateRequest(BaseModel):
 
     #: Token Cloudflare Turnstile. Chỉ bắt buộc khi máy chủ đã cấu hình secret.
     turnstile_token: str | None = Field(default=None, max_length=4096)
+
+    @field_validator(
+        "email",
+        "address_street",
+        "address_ward",
+        "address_district",
+        "address_province",
+        mode="before",
+    )
+    @classmethod
+    def _blank_becomes_none(cls, value: object) -> object:
+        """Ô để trống ⇒ lưu NULL, KHÔNG lưu chuỗi rỗng.
+
+        Vì sao quan trọng: `''` và `NULL` khác nhau khi truy vấn. Lưu `''` thì
+        `WHERE address_street IS NULL` (lọc "chưa có địa chỉ" để biết đơn nào lên
+        được) sẽ **bỏ sót** đúng những dòng cần tìm.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, value: str | None) -> str | None:
+        """Gmail không bắt buộc, nhưng ĐIỀN thì phải đúng dạng.
+
+        Cố ý không dùng `EmailStr`: nó cần gói `email-validator`, và thêm một phụ
+        thuộc CHẠY THẬT chỉ để kiểm một trường không bắt buộc là cái giá không đáng
+        — nhất là sau STG-1 (một phụ thuộc runtime khai thiếu làm sập cả ứng dụng).
+        """
+        if value is None or not value.strip():
+            return None
+        candidate = value.strip()
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[A-Za-z]{2,}", candidate):
+            raise ValueError("Gmail chưa đúng dạng (ví dụ: ten@gmail.com)")
+        return candidate.lower()
 
     @field_validator("phone")
     @classmethod
@@ -197,6 +240,11 @@ class AdminLeadOut(BaseModel):
     iphone_model: str
     iphone_year: int
     case_color: str
+    email: str | None = None
+    address_street: str | None = None
+    address_ward: str | None = None
+    address_district: str | None = None
+    address_province: str | None = None
     company_name: str | None = None
     bni_chapter: str | None = None
     referrer_name: str | None = None

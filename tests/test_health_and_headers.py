@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 
 
@@ -30,7 +32,7 @@ def test_ready_reports_database_and_configuration(client, staff_headers):
 
     checks = body["checks"]
     assert checks["database"] == "ok"
-    assert checks["migration_head"] == "0002_iphone_2025_2026"
+    assert checks["migration_head"] == _migration_head()
     assert checks["staff_auth"] == "configured"
     # Chưa cấu hình Turnstile thì phải NÓI THẲNG ra, không im lặng.
     assert checks["turnstile"] == "NOT_CONFIGURED"
@@ -116,3 +118,20 @@ def test_gift_shortlink_rejects_malformed_code(client):
     response = client.get("/gift/khong-phai-ma", follow_redirects=False)
     assert response.status_code == 302
     assert response.headers["location"] == "/redeem"
+
+
+def _migration_head() -> str:
+    """Head THẬT của chuỗi migration — tự suy ra, KHÔNG hardcode.
+
+    VÌ SAO: đã ba lần thêm migration mới là ba lần phải đi sửa những dòng assert
+    ghi cứng `0001_initial` / `0002_...`. Test ghi cứng head thì mỗi migration mới
+    đều làm đỏ test vì lý do KHÔNG liên quan tới điều nó định kiểm. Suy ra từ
+    `migrations/versions/` thì không bao giờ lệch nữa.
+    """
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    cfg = Config(str(root / "alembic.ini"))
+    cfg.set_main_option("script_location", str(root / "migrations"))
+    return ScriptDirectory.from_config(cfg).get_current_head()
