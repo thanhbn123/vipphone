@@ -60,3 +60,21 @@ input.has-error,select.has-error{border-color:#b91c1c;background:#fff5f5}
 .address-block{border:1px solid #e5e7eb;border-radius:14px;padding:16px 16px 4px;margin:0 0 15px}
 .address-block legend{padding:0 6px;font-size:.9rem;font-weight:800;color:#111827}
 .helper-inline{font-weight:500;color:#6b7280;font-size:.82rem}
+
+/* ==========================================================================
+   TÔNG ĐỎ – TRẮNG BNI, đậm hơn (UI-7)
+   Bổ sung ở CUỐI file để ĐÈ lên các quy tắc cũ (thứ tự nguồn quyết định),
+   nhờ vậy không phải sửa các dòng CSS đã được test ở trên.
+   ========================================================================== */
+.card{border-top:4px solid var(--bni-red)}
+.eyebrow{color:var(--bni-red)}
+.gift-note{background:#fdecee;color:var(--bni-red-dark)}
+.hero{border-radius:22px;background:linear-gradient(180deg,#fff 0%,#fff5f6 100%)}
+.secondary-btn{color:var(--bni-red);border-color:#f3c3c8}
+.detail-list li{border-bottom-color:#f7d7db}
+.site-footer{border-top:3px solid var(--bni-red)}
+.form-note{color:var(--bni-red-dark)}
+.address-block{border-color:#f3c3c8}
+.address-block legend{color:var(--bni-red)}
+.gift-code-wrap{background:#fdecee}
+.gift-code-wrap strong{color:var(--bni-red-dark)}
