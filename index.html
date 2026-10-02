@@ -56,6 +56,12 @@
           </label>
         </div>
 
+        <label for="email">
+          Gmail <span class="helper-inline">(không bắt buộc — để nhận thông báo đơn hàng)</span>
+          <input id="email" name="email" type="email" inputmode="email"
+                 autocomplete="email" maxlength="254" placeholder="ten@gmail.com">
+        </label>
+
         <div class="grid two">
           <label for="iphone_model">
             Dòng iPhone <span aria-hidden="true">*</span>
@@ -88,6 +94,34 @@
             <input id="bni_chapter" name="bni_chapter" type="text" maxlength="80">
           </label>
         </div>
+
+        <fieldset class="address-block">
+          <legend>
+            Địa chỉ nhận hàng <span class="helper-inline">(không bắt buộc — tách sẵn để lên đơn vận chuyển được ngay)</span>
+          </legend>
+          <label for="address_street">
+            Số nhà, đường
+            <input id="address_street" name="address_street" type="text"
+                   autocomplete="address-line1" maxlength="200">
+          </label>
+          <div class="grid two">
+            <label for="address_ward">
+              Phường / Xã
+              <input id="address_ward" name="address_ward" type="text"
+                     autocomplete="address-line2" maxlength="120">
+            </label>
+            <label for="address_district">
+              Quận / Huyện
+              <input id="address_district" name="address_district" type="text"
+                     autocomplete="address-level2" maxlength="120">
+            </label>
+          </div>
+          <label for="address_province">
+            Tỉnh / Thành phố
+            <input id="address_province" name="address_province" type="text"
+                   autocomplete="address-level1" maxlength="120">
+          </label>
+        </fieldset>
 
         <div class="grid two">
           <label for="referrer_name">

@@ -6,6 +6,7 @@ phá dữ liệu của các test khác.
 
 from __future__ import annotations
 
+import pathlib
 import uuid
 
 import pytest
@@ -76,6 +77,11 @@ def test_upgrade_creates_expected_schema(temp_database: str):
         "iphone_model",
         "iphone_year",
         "case_color",
+        "email",
+        "address_street",
+        "address_ward",
+        "address_district",
+        "address_province",
         "company_name",
         "bni_chapter",
         "referrer_name",
@@ -118,7 +124,7 @@ def test_migration_head_is_recorded(temp_database: str):
     with engine.connect() as conn:
         head = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
     engine.dispose()
-    assert head == "0002_iphone_2025_2026"
+    assert head == _migration_head()
 
 
 def test_seed_inserts_exactly_the_verified_models(temp_database: str):
@@ -241,3 +247,20 @@ def test_no_pending_migration_diff(temp_database: str):
     except Exception as exc:
         # Alembic cũ có thể ném lỗi khác; báo rõ thay vì cho qua im lặng.
         pytest.fail(f"alembic check không chạy được: {type(exc).__name__}: {exc}")
+
+
+def _migration_head() -> str:
+    """Head THẬT của chuỗi migration — tự suy ra, KHÔNG hardcode.
+
+    VÌ SAO: đã ba lần thêm migration mới là ba lần phải đi sửa những dòng assert
+    ghi cứng `0001_initial` / `0002_...`. Test ghi cứng head thì mỗi migration mới
+    đều làm đỏ test vì lý do KHÔNG liên quan tới điều nó định kiểm. Suy ra từ
+    `migrations/versions/` thì không bao giờ lệch nữa.
+    """
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    cfg = Config(str(root / "alembic.ini"))
+    cfg.set_main_option("script_location", str(root / "migrations"))
+    return ScriptDirectory.from_config(cfg).get_current_head()

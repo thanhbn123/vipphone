@@ -27,6 +27,11 @@
 |---|---|---|---|---|---|---|
 | `full_name` | **DIRECT ID** | Gọi tên khách khi phát quà | **Có** | `leads.full_name` | Nhân viên (tra cứu + admin), CSV export | Xác nhận danh tính tại quầy |
 | `phone` | **DIRECT ID** | Liên hệ xác nhận quà; **khoá chống trùng** | **Có** | `leads.phone` (đã chuẩn hoá `0xxxxxxxxx`) | Nhân viên **chỉ thấy dạng che** `0912***678`; **admin thấy đủ**; CSV export đủ | Liên hệ + chống cấp trùng |
+| `email` | **DIRECT ID** | Nhận thông báo đơn hàng | **Không** — bắt buộc sẽ làm rớt khách tại quầy | `leads.email` (chuẩn hoá: bỏ khoảng trắng, hạ chữ thường) | Admin, CSV | Liên hệ + lên đơn vận chuyển |
+| `address_street` | **DIRECT ID** | Lên đơn vận chuyển | **Không** (UI-2) | `leads.address_street` | Admin, CSV | Địa chỉ giao hàng |
+| `address_ward` | **DIRECT ID** | API vận chuyển cần WARD riêng | Không | `leads.address_ward` | Admin, CSV | — |
+| `address_district` | **DIRECT ID** | API vận chuyển cần DISTRICT riêng | Không | `leads.address_district` | Admin, CSV | — |
+| `address_province` | **DIRECT ID** | API vận chuyển cần PROVINCE riêng | Không | `leads.address_province` | Admin, CSV | — |
 | `company_name` | **BUSINESS META** | Bối cảnh BNI/doanh nghiệp | Không | `leads.company_name` | Admin, CSV | Phân khúc B2B |
 | `bni_chapter` | **BUSINESS META** | Thuộc chapter nào | Không | `leads.bni_chapter` | Admin, CSV | Đo hiệu quả theo chapter |
 | `referrer_name` | **DIRECT ID** | Ghi công người giới thiệu | Không | `leads.referrer_name` | Admin, CSV | Ghi công giới thiệu |
@@ -73,7 +78,7 @@ Danh mục sản phẩm. **Không chứa PII.**
 |---|---|---|
 | `POST /api/leads` | công khai (+rate limit) | chỉ **ghi**, không đọc |
 | `GET /api/gifts/{code}/qr.png` | công khai | **ảnh QR** — chỉ chứa URL công khai, **có test chứng minh không chứa PII** |
-| `GET /api/gifts/{code}` | **nhân viên** | `full_name`, `phone_masked`, model/năm/màu, status. **KHÔNG** có UTM/công ty/BNI/người giới thiệu |
+| `GET /api/gifts/{code}` | **nhân viên** | `full_name`, `phone_masked`, model/năm/màu, status. **KHÔNG** có UTM/công ty/BNI/người giới thiệu, **KHÔNG** có Gmail/địa chỉ |
 | `GET /api/admin/leads` (+CSV, chi tiết) | **nhân viên** | **đủ trường** — ranh giới nằm ở **xác thực**, không nằm ở che bớt |
 | `GET /api/health` | công khai | không có dữ liệu |
 | `GET /api/ready` | công khai | **chỉ `status`**. Chi tiết (migration head, cấu hình) chỉ khi có khoá nhân viên |
@@ -87,7 +92,7 @@ Danh mục sản phẩm. **Không chứa PII.**
 
 | Đường ra | Chứa PII? | Kiểm soát |
 |---|---|---|
-| **CSV export** | **Có — đủ trường** | Chỉ nhân viên; chống formula injection; có BOM UTF-8; có trần số dòng và header báo khi bị cắt |
+| **CSV export** | **Có — đủ trường, GỒM email + 4 phần địa chỉ** | Chỉ nhân viên; chống formula injection; có BOM UTF-8; có trần số dòng và header báo khi bị cắt |
 | **QR** | **Không** | Có test giải mã QR thật khẳng định không có tên/SĐT/công ty |
 | **`window.dataLayer`** (trình duyệt khách) | **Không** | Chỉ event + model + `gift_code`; **không** đẩy tên/SĐT |
 | **`sessionStorage`** (máy khách) | **Có, giới hạn** | Trang thành công giữ `full_name`/model/màu để hiển thị lại; **cố ý KHÔNG lưu SĐT** |
@@ -114,6 +119,7 @@ Danh mục sản phẩm. **Không chứa PII.**
 |---|---|---|
 | G1 | **Retention chưa quyết.** Dữ liệu hiện **giữ vô thời hạn** | Càng để lâu càng khó xoá đúng. Cần Owner chọn phương án |
 | G2 | **Chưa có cơ chế xoá/ẩn danh theo yêu cầu** (quyền được xoá) | Hiện phải xoá tay bằng SQL. **Chưa có API, chưa có quy trình** |
+| G4 | **Địa chỉ + Gmail làm tăng lượng PII đáng kể** (UI-2) | Cùng một dòng lead nay có thêm 5 trường định danh. **Càng làm retention (D-004) quan trọng hơn** — quyết định càng trễ thì càng nhiều dữ liệu phải xử lý |
 | G3 | **Chưa rà soát PII lọt vào log** production | Nghi ngờ thấp (không thấy chỗ nào log tên/SĐT) nhưng **chưa đo** |
 
 **Cách xoá tay (khi được yêu cầu, ở staging):**
