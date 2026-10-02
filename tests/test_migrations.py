@@ -118,11 +118,11 @@ def test_migration_head_is_recorded(temp_database: str):
     with engine.connect() as conn:
         head = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
     engine.dispose()
-    assert head == "0001_initial"
+    assert head == "0002_iphone_2025_2026"
 
 
 def test_seed_inserts_exactly_the_verified_models(temp_database: str):
-    """Seed phải đúng 28 model đã có trong repo — KHÔNG tự bịa model mới."""
+    """Seed phải đúng 35 model — 28 cũ + 7 dòng 2025/2026 đã TRA NGUỒN, không tự bịa."""
     command.upgrade(alembic_config(temp_database), "head")
     engine = create_engine(temp_database, future=True)
     with engine.connect() as conn:
@@ -131,10 +131,10 @@ def test_seed_inserts_exactly_the_verified_models(temp_database: str):
         codes = [row[0] for row in conn.execute(text("SELECT model_code FROM iphone_models"))]
     engine.dispose()
 
-    assert count == 28
-    # 2025 và 2026 rỗng trong data/iphone-models.json nên KHÔNG được seed.
-    assert years == {2018, 2019, 2020, 2021, 2022, 2023, 2024}
-    assert len(set(codes)) == 28, "model_code phải duy nhất"
+    assert count == 35
+    # 2025/2026 nay ĐÃ có model (tra nguồn thật — xem MASTER_STATUS §32).
+    assert years == {2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026}
+    assert len(set(codes)) == 35, "model_code phải duy nhất"
 
 
 def test_partial_unique_index_enforces_duplicate_policy(temp_database: str):

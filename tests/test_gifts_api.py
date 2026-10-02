@@ -232,11 +232,11 @@ def test_catalog_lists_only_active_models(client, db):
     body = response.json()
 
     codes = {item["model_code"] for item in body}
-    assert len(body) == 27
+    assert len(body) == 34
     assert "iphone-xr" not in codes
     assert "iphone-16-pro-max" in codes
-    # Model mới nhất đứng trước (sort_order nhỏ hơn).
-    assert body[0]["model_code"].startswith("iphone-16")
+    # Model mới nhất đứng trước (sort_order nhỏ hơn). Nay mới nhất là 2026.
+    assert body[0]["year"] == 2026, body[0]
 
 
 def test_catalog_item_shape(client):
@@ -249,7 +249,7 @@ def test_new_catalog_model_available_without_html_change(client, db):
     db.add(
         IphoneModel(
             year=2025,
-            model_code="iphone-17",
+            model_code="iphone-99",
             display_name="iPhone 17",
             active=True,
             sort_order=-1,
@@ -258,7 +258,7 @@ def test_new_catalog_model_available_without_html_change(client, db):
     db.commit()
 
     body = client.get("/api/catalog/iphone-models").json()
-    assert body[0]["model_code"] == "iphone-17"
+    assert body[0]["model_code"] == "iphone-99"
 
     # Và lead dùng model mới đó phải tạo được.
     response = client.post(
@@ -266,7 +266,7 @@ def test_new_catalog_model_available_without_html_change(client, db):
         json={
             "full_name": "Khách Mới",
             "phone": "0911111111",
-            "iphone_model": "iphone-17",
+            "iphone_model": "iphone-99",
             "case_color": "Xanh",
             "consent": True,
         },
@@ -276,4 +276,4 @@ def test_new_catalog_model_available_without_html_change(client, db):
 
 def test_catalog_model_matches_seeded_database(db):
     assert db.execute(select(Lead)).first() is None
-    assert len(db.execute(select(IphoneModel)).scalars().all()) == 28
+    assert len(db.execute(select(IphoneModel)).scalars().all()) == 35

@@ -16,8 +16,8 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 NEW_MODEL = {
-    "model_code": "iphone-17-pro",
-    "display_name": "iPhone 17 Pro",
+    "model_code": "iphone-99-pro",
+    "display_name": "iPhone 99 Pro",
     "year": 2027,
     "sort_order": -5,
     "active": True,
@@ -100,12 +100,12 @@ def test_landing_shows_model_added_through_admin_api(page, live_server, staff_ke
         "#iphone_model option", "els => els.map(e => ({value: e.value, text: e.textContent}))"
     )
     values = [option["value"] for option in options]
-    assert "iphone-17-pro" in values, f"landing không thấy model mới: {values}"
+    assert "iphone-99-pro" in values, f"landing không thấy model mới: {values}"
     # sort_order = -5 ⇒ đứng đầu, sau option rỗng "Đang tải/Chọn".
-    assert values[1] == "iphone-17-pro"
+    assert values[1] == "iphone-99-pro"
 
     labels = [option["text"] for option in options]
-    assert "iPhone 17 Pro" in labels
+    assert "iPhone 99 Pro" in labels
 
     assert html_fingerprints() == before_html, "thêm model mà có file HTML bị đổi"
 
@@ -413,8 +413,8 @@ def test_admin_page_adds_a_model_and_landing_sees_it(page, live_server, staff_ke
         timeout=10_000,
     )
 
-    page.fill("#mCode", "iphone-17-pro")
-    page.fill("#mName", "iPhone 17 Pro")
+    page.fill("#mCode", "iphone-99-pro")
+    page.fill("#mName", "iPhone 99 Pro")
     page.fill("#mYear", "2027")
     page.fill("#mSort", "-5")
     page.click("#modelSubmit")
@@ -433,13 +433,13 @@ def test_admin_page_adds_a_model_and_landing_sees_it(page, live_server, staff_ke
     #
     # Đã đo, không suy đoán: tiêm độ trễ 1,5 giây ngay trước `loadModels()` thì
     # test bản cũ FAIL đúng y hệt lỗi thấy trên CI
-    # (`assert 'iphone-17-pro' in 'iphone-16\tiPhone 16…'`). Bản này chờ đúng
+    # (`assert 'iphone-99-pro' in 'iphone-16\tiPhone 16…'`). Bản này chờ đúng
     # điều kiện đang được khẳng định nên vượt qua cả khi có độ trễ.
     page.wait_for_function(
-        "() => document.getElementById('modelRows').innerText.includes('iphone-17-pro')",
+        "() => document.getElementById('modelRows').innerText.includes('iphone-99-pro')",
         timeout=10_000,
     )
-    assert "iphone-17-pro" in page.locator("#modelRows").inner_text()
+    assert "iphone-99-pro" in page.locator("#modelRows").inner_text()
 
     # Landing: mở tab mới, đọc `<option>` thật.
     landing = page.context.new_page()
@@ -450,7 +450,7 @@ def test_admin_page_adds_a_model_and_landing_sees_it(page, live_server, staff_ke
     values = landing.eval_on_selector_all("#iphone_model option", "els => els.map(e => e.value)")
     landing.close()
 
-    assert "iphone-17-pro" in values
+    assert "iphone-99-pro" in values
     assert html_fingerprints() == before_html
     assert console_errors == [], console_errors
 

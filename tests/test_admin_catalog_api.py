@@ -27,8 +27,8 @@ pytestmark = pytest.mark.integration
 STAFF_HEADERS = {"X-Staff-Key": "staff-key-for-tests-only"}
 
 NEW_MODEL = {
-    "model_code": "iphone-17-pro",
-    "display_name": "iPhone 17 Pro",
+    "model_code": "iphone-99-pro",
+    "display_name": "iPhone 99 Pro",
     "year": 2027,
     "sort_order": -5,
     "active": True,
@@ -108,9 +108,9 @@ def test_create_model_appears_in_public_catalog(client, staff_headers):
 
     catalog = client.get("/api/catalog/iphone-models").json()
     codes = [item["model_code"] for item in catalog]
-    assert "iphone-17-pro" in codes
+    assert "iphone-99-pro" in codes
     # sort_order = -5 nên đứng đầu — đúng thứ tự landing sẽ hiển thị.
-    assert codes[0] == "iphone-17-pro"
+    assert codes[0] == "iphone-99-pro"
     assert set(catalog[0]) == {"year", "model_code", "display_name"}
 
 
@@ -125,17 +125,17 @@ def test_create_model_does_not_change_any_html_file(client, staff_headers):
     assert created.status_code == 201
 
     catalog = client.get("/api/catalog/iphone-models").json()
-    assert "iphone-17-pro" in {item["model_code"] for item in catalog}
+    assert "iphone-99-pro" in {item["model_code"] for item in catalog}
 
     after = html_fingerprints()
     assert after == before, "có file HTML bị đổi trong khi thêm model"
 
 
 def test_create_model_accepts_uppercase_code_and_normalizes_it(client, staff_headers):
-    payload = {**NEW_MODEL, "model_code": "IPHONE-17-PRO"}
+    payload = {**NEW_MODEL, "model_code": "IPHONE-99-PRO"}
     response = client.post("/api/admin/iphone-models", json=payload, headers=staff_headers)
     assert response.status_code == 201
-    assert response.json()["model_code"] == "iphone-17-pro"
+    assert response.json()["model_code"] == "iphone-99-pro"
 
 
 def test_create_model_rejects_duplicate_code(client, staff_headers):
@@ -160,7 +160,7 @@ def test_create_model_rejects_code_already_seeded(client, staff_headers):
 @pytest.mark.parametrize(
     "bad_code",
     [
-        "-iphone-17",  # bắt đầu bằng gạch ngang
+        "-iphone-99",  # bắt đầu bằng gạch ngang
         "iphone 17",  # khoảng trắng
         "iphone_17",  # gạch dưới
         "iphone.17",  # dấu chấm
@@ -177,7 +177,7 @@ def test_create_model_rejects_invalid_slug(client, staff_headers, bad_code):
     assert response.status_code == 422, f"{bad_code!r} lọt qua: {response.text}"
 
 
-@pytest.mark.parametrize("good_code", ["i", "a1", "iphone-17", "a" * 64, "0-model", "iphone--ok"])
+@pytest.mark.parametrize("good_code", ["i", "a1", "iphone-99", "a" * 64, "0-model", "iphone--ok"])
 def test_create_model_accepts_valid_slug(client, staff_headers, good_code):
     payload = {**NEW_MODEL, "model_code": good_code}
     response = client.post("/api/admin/iphone-models", json=payload, headers=staff_headers)
@@ -369,30 +369,30 @@ def test_lead_can_be_created_with_a_model_added_via_admin(
     """Model thêm qua admin phải dùng được ngay ở luồng thu lead (không chỉ hiển thị)."""
     client.post(
         "/api/admin/iphone-models",
-        json={**NEW_MODEL, "model_code": "iphone-17-pro", "display_name": "iPhone 17 Pro"},
+        json={**NEW_MODEL, "model_code": "iphone-99-pro", "display_name": "iPhone 99 Pro"},
         headers=staff_headers,
     )
 
     response = client.post(
-        "/api/leads", json={**valid_lead_payload, "iphone_model": "iphone-17-pro"}
+        "/api/leads", json={**valid_lead_payload, "iphone_model": "iphone-99-pro"}
     )
     assert response.status_code == 201, response.text
 
     detail = client.get(
         f"/api/admin/leads/{response.json()['lead_id']}", headers=staff_headers
     ).json()
-    assert detail["iphone_model"] == "iPhone 17 Pro"
+    assert detail["iphone_model"] == "iPhone 99 Pro"
     assert detail["iphone_year"] == NEW_MODEL["year"]
 
 
 def test_inactive_model_cannot_be_used_for_a_lead(client, staff_headers, valid_lead_payload):
     client.post(
         "/api/admin/iphone-models",
-        json={**NEW_MODEL, "model_code": "iphone-17-pro", "active": False},
+        json={**NEW_MODEL, "model_code": "iphone-99-pro", "active": False},
         headers=staff_headers,
     )
     response = client.post(
-        "/api/leads", json={**valid_lead_payload, "iphone_model": "iphone-17-pro"}
+        "/api/leads", json={**valid_lead_payload, "iphone_model": "iphone-99-pro"}
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "MODEL_NOT_IN_CATALOG"
