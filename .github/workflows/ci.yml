@@ -300,6 +300,19 @@ jobs:
           alembic current
           alembic check
 
+      - name: Guard — cài CHỈ requirements.txt rồi import ứng dụng
+        # VÌ SAO CẦN: CI cài requirements-dev.txt (gồm cả httpx), nên một phụ thuộc
+        # CHẠY THẬT bị khai thiếu trong requirements.txt sẽ KHÔNG làm CI đỏ — nhưng
+        # làm ứng dụng crash ngay khi khởi động ở production. Đã xảy ra thật: xem STG-1
+        # (app/security.py import httpx, httpx chỉ có trong dev).
+        # Chốt này cài ĐÚNG thứ production cài, rồi import app.
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/runtime-only
+          /tmp/runtime-only/bin/pip install -q --upgrade pip
+          /tmp/runtime-only/bin/pip install -q -r requirements.txt
+          /tmp/runtime-only/bin/python -c "import app.main; print('OK: import app.main chỉ với runtime deps')"
+
       - name: Unit tests
         run: python -m pytest -q -m "not integration" --durations=5
 
