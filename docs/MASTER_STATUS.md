@@ -1376,3 +1376,42 @@ Cấu hình chính xác cần Owner cấp: [`docs/staging-domain-tls.md`](stagin
 | 3 | Bật lịch sao lưu | kỹ thuật — cần đích **khác máy** |
 | 4 | Job tự động xoá lead quá 12 tháng | kỹ thuật — chưa làm |
 | 5 | Đo RTO/RPO trên dữ liệu cỡ thật | chưa đo |
+
+---
+
+## 33. TÊN MIỀN STAGING ĐÃ CÓ — `qua.viporder.vn`
+
+| Mục | Đo được (2026-10-02) |
+|---|---|
+| DNS | **`qua.viporder.vn` → `160.22.170.20`** ✅ (TTL 300) |
+| `PUBLIC_BASE_URL` | `https://qua.viporder.vn` |
+| `ALLOWED_HOSTS` | `qua.viporder.vn,160.22.170.20` (giữ IP để không bị 400 trong lúc chuyển) |
+| **QR** | **giải mã ra `https://qua.viporder.vn/redeem?code=…`** (zxing-cpp, độc lập) |
+| TLS | ⏳ chờ dán khối Caddy |
+
+### 33.1 Vì sao TÔI không dán được — đã đo
+
+```
+sudo -n true            → "deploy is not in the sudoers file"
+/srv/vip-staging-proxy  → drwxr-xr-x root root   (không ghi được)
+Caddyfile mount         → bind /srv/vip-staging-proxy/Caddyfile → /etc/caddy/Caddyfile (RW=false)
+```
+
+Caddyfile là **bind-mount CHỈ-ĐỌC**. Tôi tạo được file mới trong `/etc/caddy/` (tầng ghi
+được của container) nhưng **không sửa được chính Caddyfile**, và không có sudo trên host.
+
+**Cố ý KHÔNG dùng admin API (127.0.0.1:2019) để nạp đè cấu hình:** đó là reverse proxy
+**dùng chung** đang phục vụ `cpn.viporder.vn` của **dự án khác**. Nạp đè là rủi ro làm sập
+dịch vụ của người khác — không đáng, khi việc cần làm chỉ là **4 dòng dán tay**.
+
+### 33.2 Khối cần dán (đã kiểm an toàn)
+
+```caddy
+qua.viporder.vn {
+    reverse_proxy 127.0.0.1:18080
+}
+```
+
+Thêm vào **cuối** `/srv/vip-staging-proxy/Caddyfile`, giữ nguyên khối `cpn.viporder.vn`
+(→ `127.0.0.1:8000`). Hai ứng dụng nghe **hai cổng khác nhau** nên không đụng nhau.
+Caddy tự xin TLS khi tên miền đã trỏ đúng.
