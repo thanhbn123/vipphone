@@ -85,6 +85,7 @@ jobs:
             .env.staging.example scripts/enable_branch_protection.sh \
             scripts/staging_preflight.sh scripts/staging_preflight.py \
             scripts/load_smoke.py scripts/cleanup_test_data.py scripts/staging_acceptance.sh \
+            scripts/staging_backup.sh docs/staging-domain-tls.md \
             docs/backup-restore.md docs/STAGING_ACCEPTANCE.md \
             requirements.txt requirements-dev.txt \
             README.md

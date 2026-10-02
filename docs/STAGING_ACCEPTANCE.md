@@ -5,6 +5,17 @@
 - `main`: `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **KHÔNG ĐỔI**
 - **PRODUCTION: NOT DEPLOYED**
 
+> ## CHỐT 2026-10-02 — D-004 và D-005 ĐÃ ĐƯỢC OWNER QUYẾT
+>
+> | Quyết định | Giá trị |
+> |---|---|
+> | PII retention (D-004) | **CLOSED** — lead tiếp thị **12 tháng** · test data xoá sau nghiệm thu · audit **≥ 12 tháng** |
+> | RPO/RTO (D-005) | **CLOSED** — **RPO 24 giờ** · **RTO 4 giờ** · sao lưu hằng ngày · 14 ngày + 4 tuần |
+>
+> **Vẫn CHẶN ở:** tên miền staging (**không có bản ghi DNS nào** — đã đo 4 tên miền),
+> TLS, và khoá Turnstile thật (**NOT SET**).
+> ⇒ **`STAGING_ACCEPTANCE` vẫn là `BLOCKED`**, chưa thể PASS: chưa có HTTPS thật để đo.
+
 > ## ĐỌC DÒNG NÀY TRƯỚC
 >
 > ## ĐÃ TRIỂN KHAI THẬT LÊN STAGING

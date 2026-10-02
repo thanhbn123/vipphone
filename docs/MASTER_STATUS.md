@@ -1325,3 +1325,54 @@ XANH sau khi vá. Kiểm lại trên staging: 25 request → **0 exception**.
 `scripts/load_smoke.py` **hardcode** dòng cảnh báo *"LOCAL LOAD SMOKE — chạy trên cùng máy với
 server"*. Khi chạy từ Mac mini vào **staging**, nó in ra một câu **SAI**, tự làm hỏng bằng chứng.
 Đã sửa để cảnh báo **theo đích thật** (loopback hay qua mạng).
+
+---
+
+## 32. CLOSEOUT — OWNER CHỐT D-004/D-005, CHẶN Ở TÊN MIỀN + TLS + TURNSTILE
+
+### 32.1 Đo lại (không tin báo cáo trước)
+
+| Mục | Đo được |
+|---|---|
+| `develop` | `2b031b8087be3120a557738b1462f7eac116a635` *(báo cáo ghi `d0d3cb43` — **cũ 3 PR**)* |
+| `main` | `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **không đổi** |
+| PR / issue mở | **0 / 0** |
+| Staging | SHA `2b031b80` · `running` · RestartCount **0** · migration `0004_case_color_optional` |
+| `PUBLIC_BASE_URL` | `http://160.22.170.20:18080` — **HTTP, chưa có HTTPS** |
+| `TURNSTILE_SITE_KEY` / `SECRET_KEY` | **NOT SET** cả hai |
+
+### 32.2 Tên miền — ĐO, KHÔNG SUY ĐOÁN
+
+| Tên miền | Kết quả |
+|---|---|
+| `staging.vipphone.vn` | **không có bản ghi A** |
+| `vipphone.vn` | **không có bản ghi A** |
+| `vipphone.viporder.vn` | **không có bản ghi A** |
+| `staging.vipphone.com` | `13.248.169.48` — **KHÔNG phải** host staging |
+| `cpn.viporder.vn` | `160.22.170.20` — domain của **dự án KHÁC**, không đụng |
+
+⇒ `DOMAIN = OWNER_ACTION_REQUIRED` · `TLS = BLOCKED_OWNER_DOMAIN`
+
+Cấu hình chính xác cần Owner cấp: [`docs/staging-domain-tls.md`](staging-domain-tls.md)
+(bản ghi A + khối Caddy, và **hai đường** mở khoá vì `deploy` **không có sudo**).
+
+### 32.3 Đã chốt xong trong lượt này
+
+| Quyết định | Trạng thái | Giá trị |
+|---|---|---|
+| **D-004 PII retention** | **CLOSED** | Lead tiếp thị **12 tháng** · test data **xoá sau nghiệm thu** · giao dịch theo quy định kế toán–thuế · audit **≥ 12 tháng** |
+| **D-005 RPO/RTO** | **CLOSED** | **RPO 24 giờ** · **RTO 4 giờ** · sao lưu **hằng ngày** · **14 ngày + 4 tuần** · kiểm phục hồi **hằng tháng** |
+
+**Đối chiếu số đo với mục tiêu — KHÔNG tô hồng:**
+- RTO 4 giờ: số đo thật **0.13 giây** nhưng trên DB **1 dòng** ⇒ **không đủ căn cứ nói đạt**
+- RPO 24 giờ: **CHƯA ĐẠT** — `scripts/staging_backup.sh` đã viết đúng chính sách nhưng **lịch chưa bật**
+
+### 32.4 Còn lại
+
+| # | Việc | Loại |
+|---|---|---|
+| 1 | Tên miền + TLS | **OWNER_ACTION_REQUIRED** |
+| 2 | Khoá Turnstile thật | **BLOCKED_EXTERNAL_CREDENTIAL** |
+| 3 | Bật lịch sao lưu | kỹ thuật — cần đích **khác máy** |
+| 4 | Job tự động xoá lead quá 12 tháng | kỹ thuật — chưa làm |
+| 5 | Đo RTO/RPO trên dữ liệu cỡ thật | chưa đo |

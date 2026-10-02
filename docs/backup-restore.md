@@ -93,15 +93,15 @@ và tính sẵn sàng.
 
 ---
 
-## 4. RPO / RTO — CHỜ OWNER QUYẾT
+## 4. RPO / RTO — ✅ OWNER ĐÃ CHỐT (2026-10-02)
 
 | Chỉ số | Nghĩa | Giá trị |
 |---|---|---|
-| **RPO** | Mất tối đa bao nhiêu dữ liệu (phút) | **OWNER_DECISION_REQUIRED** |
-| **RTO** | Phục hồi xong trong bao lâu | **OWNER_DECISION_REQUIRED** |
-| Tần suất sao lưu | — | **OWNER_DECISION_REQUIRED** |
-| Giữ bao nhiêu bản | — | **OWNER_DECISION_REQUIRED** |
-| Lưu ở đâu (khác máy?) | — | **OWNER_DECISION_REQUIRED** |
+| **RPO** | Mất tối đa bao nhiêu dữ liệu | **24 giờ** |
+| **RTO** | Phục hồi xong trong bao lâu | **4 giờ** |
+| Tần suất sao lưu | — | **hằng ngày** |
+| Giữ bao nhiêu bản | — | **14 ngày + 4 tuần**, kiểm phục hồi **hằng tháng** |
+| Lưu ở đâu (khác máy?) | — | **CHƯA QUYẾT** — `staging_backup.sh` lưu **cùng máy**; cần đích khác máy |
 
 **Vì sao không tự chọn:** RPO/RTO là **mức chấp nhận rủi ro kinh doanh**, không phải thông số
 kỹ thuật. Kỹ thuật dựng được cơ chế; chỉ Owner biết mất một ngày lead có sao không.
