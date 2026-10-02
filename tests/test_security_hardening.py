@@ -103,7 +103,7 @@ def test_ready_with_staff_key_shows_details(client, staff_headers):
 
     assert body["status"] == "ready"
     assert body["checks"]["database"] == "ok"
-    assert body["checks"]["migration_head"] == "0001_initial"
+    assert body["checks"]["migration_head"] == "0002_iphone_2025_2026"
     assert body["checks"]["staff_auth"] == "configured"
 
 

@@ -147,9 +147,10 @@ def test_landing_emits_view_event_and_loads_catalog_from_api(page, server):
     options = page.eval_on_selector_all(
         "#iphone_model option", "els => els.map(e => e.value).filter(Boolean)"
     )
-    # 28 model đúng bằng seed của migration — KHÔNG hard-code trong HTML.
-    assert len(options) == 28, options
-    assert options[0] == "iphone-16", options[0]
+    # 35 model đúng bằng seed của migration — KHÔNG hard-code trong HTML.
+    assert len(options) == 35, options
+    # Model mới nhất đứng đầu — nay là 2026 (trước đây iphone-16 / 2024).
+    assert options[0] == "iphone-18-pro", options[0]
     assert page.is_enabled("#submitBtn")
 
 

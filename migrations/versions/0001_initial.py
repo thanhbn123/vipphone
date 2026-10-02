@@ -61,6 +61,17 @@ SEED_MODELS: list[tuple[int, str]] = [
     (2024, "iPhone 16 Plus"),
     (2024, "iPhone 16 Pro"),
     (2024, "iPhone 16 Pro Max"),
+    # --- 2025: iPhone 17 (ra 9/2025) ---
+    (2025, "iPhone 17"),
+    (2025, "iPhone 17 Air"),
+    (2025, "iPhone 17 Pro"),
+    (2025, "iPhone 17 Pro Max"),
+    # --- 2026: iPhone 18 (ra 9/2026). Bản "iPhone 18" THƯỜNG CHƯA ra mắt
+    #     (Apple đẩy sang xuân 2027) nên CỐ Ý KHÔNG có trong danh mục.
+    #     "iPhone Duo" là máy gập. Xem docs/MASTER_STATUS.md §32.
+    (2026, "iPhone 18 Pro"),
+    (2026, "iPhone 18 Pro Max"),
+    (2026, "iPhone Duo"),
 ]
 
 

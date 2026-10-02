@@ -30,7 +30,7 @@ def test_ready_reports_database_and_configuration(client, staff_headers):
 
     checks = body["checks"]
     assert checks["database"] == "ok"
-    assert checks["migration_head"] == "0001_initial"
+    assert checks["migration_head"] == "0002_iphone_2025_2026"
     assert checks["staff_auth"] == "configured"
     # Chưa cấu hình Turnstile thì phải NÓI THẲNG ra, không im lặng.
     assert checks["turnstile"] == "NOT_CONFIGURED"
