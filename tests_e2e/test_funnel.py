@@ -548,21 +548,23 @@ def test_no_third_party_script_loaded_when_turnstile_is_off(funnel_page, server)
 
 
 def test_public_config_endpoint_is_public_and_leaks_no_secret(funnel_page, server):
-    """`/api/public-config` phải gọi được KHÔNG cần khoá, và không chứa secret."""
-    # Phải về ĐÚNG ORIGIN trước: từ `about:blank` thì fetch là cross-origin và
-    # trình duyệt chặn ngay ("Failed to fetch") — lỗi của phép đo, không của API.
-    funnel_page.goto(f"{server['base_url']}/", wait_until="load")
-    body = funnel_page.evaluate(
-        """async (base) => {
-            const r = await fetch(base + '/api/public-config');
-            return {status: r.status, text: await r.text()};
-        }""",
-        server["base_url"],
-    )
-    assert body["status"] == 200
-    assert "turnstile" in body["text"]
+    """`/api/public-config` phải gọi được KHÔNG cần khoá, và không chứa secret.
+
+    Dùng `page.request` — một request HTTP THẬT, **không** kèm khoá nhân viên, nên
+    vẫn chứng minh đúng điều cần: endpoint công khai.
+
+    VÌ SAO BỎ `goto(..., wait_until="load")`: bản cũ nạp cả trang rồi mới fetch.
+    Trên CI, Firefox đã **timeout 30 giây** ở đúng bước nạp trang đó, và cùng một
+    SHA cho ra **cả failure lẫn success** — tức test FLAKY, không phải sản phẩm lỗi.
+    Việc nạp trang KHÔNG liên quan tới điều đang khẳng định, nên bỏ nó là bỏ đúng
+    phần gây nhiễu. Các test khác trong bộ vẫn nạp trang thật, nên độ phủ không mất.
+    """
+    response = funnel_page.request.get(f"{server['base_url']}/api/public-config")
+    assert response.status == 200
+    text = response.text()
+    assert "turnstile" in text
     # Tên biến secret không được xuất hiện trong payload công khai.
-    assert "secret" not in body["text"].lower() or "site_key" in body["text"]
+    assert "secret" not in text.lower() or "site_key" in text
 
 
 # ------------------------------------------------- năng lực trình duyệt THẬT
