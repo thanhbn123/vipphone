@@ -1251,3 +1251,77 @@ Marker `source=staging-test` / `utm_campaign=staging-acceptance`; SĐT test ti�
 
 **Quyền SSH vào `160.22.170.20` (user `deploy`).** Có nó thì 11 mục `BLOCKED` chạy được ngay —
 `scripts/staging_acceptance.sh` đã sẵn sàng và đã chạy đúng ở LOCAL.
+
+---
+
+## 31. STG — TRIỂN KHAI THẬT LÊN STAGING VÀ HAI LỖI CHỈ STAGING MỚI TÌM RA
+
+### 31.1 Trạng thái triển khai
+
+| | |
+|---|---|
+| Host | `160.22.170.20` (`CIITNRVPlinux`) — **KHÁC** production `160.22.171.228` |
+| OS | Ubuntu 26.04 LTS · kernel 7.0.0-22 · x86_64 · 4 core · 7.2 GiB RAM · 89 GB |
+| Deploy SHA | `04c1582898edadcb09934380669aa58cb2e40cdb` (cây làm việc SẠCH) |
+| Service | docker `vipphone-staging-app`, `18080->8000`, `--restart unless-stopped`, RestartCount=0 |
+| Database | PostgreSQL 16.15, container `vipphone-staging-pg`, db `vipphone_staging` |
+| Migration | current = heads = `0001_initial`, `alembic check` sạch |
+| `deploy` sudo | **KHÔNG có** (`not in the sudoers file`) ⇒ Docker, không systemd; không sửa được Caddy dùng chung |
+
+Host này **đang phục vụ staging của dự án khác** (`vip-viettelpost`). Đã tách hoàn toàn:
+network `vipphone-staging-net`, PostgreSQL riêng, container riêng, cổng riêng — **không đụng** dự án kia.
+
+### 31.2 STG-1 — `requirements.txt` thiếu `httpx` (ứng dụng KHÔNG khởi động được)
+
+```
+File "/app/app/security.py", line 15, in <module>
+  import httpx
+ModuleNotFoundError: No module named 'httpx'   → RestartCount=4
+```
+
+`httpx` là phụ thuộc **CHẠY THẬT** (`app/security.py` import ở cấp module cho `verify_turnstile`)
+nhưng chỉ khai trong `requirements-dev.txt`. **CI cài dev requirements nên luôn xanh** —
+đường cài production chưa từng được kiểm.
+
+**Đã sửa** (PR #30) + **chốt CI mới**: tạo venv **chỉ** với `requirements.txt` rồi `import app.main`.
+Đối chứng âm: có httpx → OK; gỡ httpx → đúng `ModuleNotFoundError`.
+
+### 31.3 STG-2 — `/favicon.ico` trả 204 **kèm body**
+
+**Nguyên nhân xác định:** `JSONResponse(status_code=204, content=None)` **vẫn sinh body** `null`
++ Content-Length. HTTP 204 bắt buộc không có body ⇒ uvicorn ném
+`RuntimeError: Response content longer than Content-Length`.
+
+**Bằng chứng định lượng:** 25 request `GET /favicon.ico` → **+25 exception** trong log (4→29).
+Client **vẫn nhận 204** vì header gửi xong trước khi lỗi ⇒ **lỗi vô hình với client**.
+
+**Vì sao bộ test cũ KHÔNG THỂ bắt được:** `TestClient` gọi thẳng ASGI app, **bỏ qua tầng HTTP
+của uvicorn**. Đây cũng là lý do tôi từng kết luận sai rằng *"không tái hiện được"* — tôi đo
+bằng `TestClient`. **Bài học: công cụ đo có thể che mất lỗi mà nó không đi qua.**
+
+**Đã sửa** (PR #32) + test khởi động **uvicorn THẬT** rồi đọc log. Đối chứng âm: ĐỎ trên mã cũ,
+XANH sau khi vá. Kiểm lại trên staging: 25 request → **0 exception**.
+
+### 31.4 Đo trên STAGING (sau khi vá)
+
+| Hạng mục | Kết quả |
+|---|---|
+| Health / Readiness / Landing | **200** (qua mạng thật từ Mac mini) |
+| Lead / duplicate / QR (zxing-cpp) | PASS — QR trỏ đúng `http://160.22.170.20:18080`, không PII |
+| Staff auth / admin / redeem | PASS — không khoá 401, khoá sai 401, khoá đúng 200 |
+| **Concurrent redeem** | **8 đồng thời → ĐÚNG 1 lần phát thật**, 7 `already_redeemed` |
+| Audit | 4 loại event, **0 bản ghi chứa GIÁ TRỊ PII** |
+| **Load smoke** | **3802 request / 14.9 s (255 req/s) · 0 lỗi thật · p50 21.3 ms · p95 34.2 ms · p99 110 ms** · CPU 0.16% · RAM app 79 MiB / pg 51 MiB · DB conn 6→10 · **restart 0** · 0 lỗi 5xx |
+| **Rollback drill thật** | `1d651f46` → `04c15828`, health/ready/landing **200 cả hai**, **image SHA đổi thật** |
+| Backup / Restore | 0.17 s / 0.13 s · 15 172 byte · số dòng khớp · **md5 nội dung khớp** · 4 bảng · xoá DB tạm sau khi kiểm |
+| Mobile | **0 px tràn ngang** tại **320 / 375 / 390 / 430 px**; mọi trường có nhãn |
+| Accessibility | 1 `h1`; Tab đầu vào phần tử tương tác; nhãn đầy đủ |
+| Chromium / Firefox / WebKit | PASS (landing + 28 model + form) |
+| Log review | 0 secret · 0 `DATABASE_URL` · **0 Traceback** · 0 lỗi 5xx |
+| Test data cleanup | xoá đúng lead có marker, còn lại 0, audit giữ vết |
+
+### 31.5 Tự sửa một bằng chứng SAI của chính mình
+
+`scripts/load_smoke.py` **hardcode** dòng cảnh báo *"LOCAL LOAD SMOKE — chạy trên cùng máy với
+server"*. Khi chạy từ Mac mini vào **staging**, nó in ra một câu **SAI**, tự làm hỏng bằng chứng.
+Đã sửa để cảnh báo **theo đích thật** (loopback hay qua mạng).

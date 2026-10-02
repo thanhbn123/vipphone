@@ -278,8 +278,18 @@ def main() -> int:
             for detail in errs[:5]:
                 print(f"  {name}: {detail}")
 
-    print("\n⚠️  ĐÂY LÀ LOCAL LOAD SMOKE — KHÔNG phải benchmark năng lực production.")
-    print("    Chạy trên cùng máy với server ⇒ số đo bị nhiễu. Chưa đo trên hạ tầng thật.")
+    # Cảnh báo phải ĐÚNG với nơi chạy. Bản cũ hardcode "LOCAL ... cùng máy với server",
+    # nên khi chạy từ máy khác vào staging nó in ra một câu SAI — tự làm hỏng bằng chứng.
+    from urllib.parse import urlparse
+
+    host = urlparse(base).hostname or ""
+    is_loopback = host in {"127.0.0.1", "localhost", "::1"} or host.startswith("127.")
+    print("\n⚠️  LOAD SMOKE — KHÔNG phải benchmark năng lực production.")
+    if is_loopback:
+        print("    Đích là loopback ⇒ chạy CÙNG MÁY với server ⇒ số đo bị nhiễu.")
+    else:
+        print(f"    Đích là {host} ⇒ chạy QUA MẠNG tới máy khác.")
+        print("    Nhưng tải vẫn NHỎ và ngắn ⇒ KHÔNG suy ra được năng lực chịu tải.")
     # Lỗi thật (không tính 429 do rate limit chạy ĐÚNG) mới là đáng lo.
     return 1 if total_err - stats.rate_limited > 0 else 0
 

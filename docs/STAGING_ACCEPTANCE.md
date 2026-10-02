@@ -1,23 +1,37 @@
 # NGHIỆM THU STAGING — VIP PHONE
 
 - Ngày đo: **2026-10-02** (giờ máy +07)
-- `develop` lúc đo: `8833ac13d4cb66e2fb080620bae90ec32ed3ecec`
+- `develop` lúc đo: `04c1582898edadcb09934380669aa58cb2e40cdb`
 - `main`: `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **KHÔNG ĐỔI**
 - **PRODUCTION: NOT DEPLOYED**
 
 > ## ĐỌC DÒNG NÀY TRƯỚC
 >
-> **`STAGING_ACCEPTANCE = BLOCKED`.**
+> ## ĐÃ TRIỂN KHAI THẬT LÊN STAGING
 >
-> Hạ tầng staging **có tồn tại** (`160.22.170.20`, Owner cấp trong phiên này) nhưng
-> **máy này KHÔNG có khoá SSH để vào**. Khoá `vip_viettelpost_staging_admin` /
-> `..._deploy` được tạo trên **MacBook**; phiên này chạy trên **Mac mini** và không có chúng.
+> `STAGING_ACCEPTANCE = BLOCKED` **chỉ còn** vì `TURNSTILE_REAL` (thiếu credential) và
+> `TLS/DOMAIN` (chưa có domain cho vipphone). **Mọi mục khác đã đo TRÊN STAGING THẬT.**
 >
-> Vì vậy **mọi kết quả `PASS` dưới đây là `LOCAL`** — đo trên Mac mini bằng tiến trình
-> thật + PostgreSQL 16 thật, **KHÔNG** phải trên staging.
+> | | |
+> |---|---|
+> | Host | `160.22.170.20` (KHÁC production `160.22.171.228`) |
+> | Hostname | `CIITNRVPlinux` · Ubuntu 26.04 LTS · x86_64 · 4 core · 7.2 GiB RAM |
+> | Deploy SHA | `04c1582898edadcb09934380669aa58cb2e40cdb` |
+> | Service | docker `vipphone-staging-app` · `18080->8000` · RestartCount=**0** |
+> | Database | PostgreSQL **16.15** · `vipphone-staging-pg` · db `vipphone_staging` |
+> | Endpoint | `http://160.22.170.20:18080` (**HTTP, chưa có TLS**) |
 >
-> **`LOCAL PASS` KHÔNG THAY THẾ ĐƯỢC `STAGING PASS`.** Các mục cần hạ tầng thật được
-> đánh dấu `BLOCKED` và **không** được ghi PASS.
+> **`deploy` KHÔNG có sudo** (`deploy is not in the sudoers file`) ⇒ dùng Docker, không
+> systemd; **không** sửa được reverse proxy dùng chung của dự án khác. Vì vậy **không có
+> domain/TLS** — đây là chốt Owner, không phải việc kỹ thuật còn dở.
+
+### HAILỖI THẬT DO STAGING TÌM RA (không test nào bắt được)
+
+| | Lỗi | Trạng thái |
+|---|---|---|
+| **STG-1** | `requirements.txt` thiếu `httpx` ⇒ ứng dụng **crash-loop**, không khởi động được khi cài đúng đường production. CI luôn xanh vì CI cài *dev* requirements. | **ĐÃ SỬA** (PR #30) + chốt CI cài *chỉ* runtime deps rồi `import app.main`, kèm đối chứng âm |
+| **STG-2** | `/favicon.ico` trả 204 **kèm body** ⇒ uvicorn ném `RuntimeError: Response content longer than Content-Length` ở **MỌI** request (25 request → 25 exception) nhưng client vẫn thấy 204. `TestClient` bỏ qua tầng HTTP của uvicorn nên bộ test cũ **không thể** thấy. | **ĐÃ SỬA** (PR #32) + test khởi động **uvicorn THẬT**; đối chứng âm: ĐỎ trên mã cũ, XANH sau khi vá. Đã kiểm lại trên staging: 25 request → **0 exception** |
+
 
 ---
 
