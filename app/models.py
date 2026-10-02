@@ -116,15 +116,10 @@ class Lead(Base):
     # --- Liên hệ & địa chỉ giao hàng (UI-2) -------------------------------
     #: Gmail khách. KHÔNG bắt buộc — bắt buộc sẽ làm rớt khách tại quầy.
     email: Mapped[str | None] = mapped_column(String(254))
-    #: Địa chỉ TÁCH SẴN 4 phần, khớp thẳng API đơn vị vận chuyển
-    #: (Viettel Post cần PROVINCE / DISTRICT / WARD / ADDRESS riêng).
-    #: Cố ý KHÔNG hard-code danh mục tỉnh/phường: Việt Nam vừa sáp nhập đơn vị
-    #: hành chính nên mọi danh sách chép tay đều có nguy cơ sai; để dạng text,
-    #: sau này nối dropdown vào API của hãng vận chuyển (nguồn chuẩn của họ).
-    address_street: Mapped[str | None] = mapped_column(String(200))
-    address_ward: Mapped[str | None] = mapped_column(String(120))
-    address_district: Mapped[str | None] = mapped_column(String(120))
-    address_province: Mapped[str | None] = mapped_column(String(120))
+    #: Địa chỉ nhận hàng — MỘT ô tự do (anh chốt gọn lại 1 ô).
+    #: ⚠️ API đơn vị vận chuyển cần Tỉnh/Huyện/Xã RIÊNG, nên khi nối lên đơn tự
+    #: động sẽ phải TÁCH địa chỉ. Xem `migrations/0005` và MASTER_STATUS.
+    address: Mapped[str | None] = mapped_column(String(300))
     company_name: Mapped[str | None] = mapped_column(String(120))
     bni_chapter: Mapped[str | None] = mapped_column(String(80))
     referrer_name: Mapped[str | None] = mapped_column(String(80))
