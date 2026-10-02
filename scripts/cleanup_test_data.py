@@ -29,6 +29,8 @@ import sys
 TEST_MARKERS = (
     ("source", "staging-test"),
     ("utm_campaign", "staging-acceptance"),
+    #: Smoke tải gắn marker riêng để phân biệt với nghiệm thu chức năng.
+    ("utm_campaign", "staging-load-smoke"),
 )
 
 #: Tiền tố số điện thoại dành riêng cho test (đúng định dạng VN, dễ nhận ra).

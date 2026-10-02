@@ -179,6 +179,13 @@ def main() -> int:
                 "iphone_model": random.choice(model_codes),
                 "case_color": random.choice(COLORS),
                 "consent": True,
+                # MARKER BẮT BUỘC: mọi dữ liệu test trên staging phải có marker, nếu
+                # không thì `cleanup_test_data.py` CỐ Ý không xoá (nó chỉ xoá dòng có
+                # marker) và dữ liệu test nằm lại vĩnh viễn trong DB thật.
+                # Bản đầu của script này THIẾU marker ⇒ đã để lại 10 lead rác trên
+                # staging. Sửa ở đây, và cả ở payload vòng lặp bên dưới.
+                "source": "staging-test",
+                "utm_campaign": "staging-load-smoke",
             },
         )
         if status in (200, 201):
@@ -205,6 +212,9 @@ def main() -> int:
                     "iphone_model": random.choice(model_codes),
                     "case_color": random.choice(COLORS),
                     "consent": True,
+                    # Marker test — xem chú thích ở payload phía trên.
+                    "source": "staging-test",
+                    "utm_campaign": "staging-load-smoke",
                 },
             ),
             0.0,
