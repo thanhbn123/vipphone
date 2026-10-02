@@ -1,9 +1,25 @@
 # NGHIỆM THU STAGING — VIP PHONE
 
 - Ngày đo: **2026-10-02** (giờ máy +07)
-- `develop` lúc đo: `04c1582898edadcb09934380669aa58cb2e40cdb`
+- `develop` lúc đo: `39332d1f686c263ce449de77ce6ecfb1700dbab7`
 - `main`: `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **KHÔNG ĐỔI**
 - **PRODUCTION: NOT DEPLOYED**
+
+> ## 🎉 HTTPS ĐÃ CHẠY — 2026-10-02
+>
+> | Mục | Kết quả |
+> |---|---|
+> | `qua.viporder.vn` → `160.22.170.20` | **DNS PASS** |
+> | TLS | **PASS** — `CN=qua.viporder.vn`, Let's Encrypt, hiệu lực 02/10 → 31/12/2026 |
+> | `https://qua.viporder.vn/api/health` | **200** · `/api/ready` **200** · `/` **200** |
+> | HTTP → HTTPS | **308 redirect** |
+> | QR | giải mã ra **`https://qua.viporder.vn/redeem?code=…`** |
+> | E2E 3 engine qua HTTPS | **0 lỗi console · 0 mixed-content · 0 tràn ngang** |
+> | `cpn.viporder.vn` (dự án khác) | **không bị ảnh hưởng** |
+>
+> **`DOMAIN = PASS`** · **`TLS = PASS`**
+>
+> **Còn CHẶN duy nhất:** khoá **Turnstile thật** (`TURNSTILE_REAL = BLOCKED_EXTERNAL_CREDENTIAL`).
 
 > ## CHỐT 2026-10-02 — D-004 và D-005 ĐÃ ĐƯỢC OWNER QUYẾT
 >
