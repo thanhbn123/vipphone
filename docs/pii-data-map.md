@@ -2,8 +2,16 @@
 
 > Câu hỏi tài liệu này trả lời: **dữ liệu nào đang được thu, nằm ở đâu, ai đọc được, dùng làm gì.**
 >
-> Câu hỏi tài liệu này **KHÔNG** trả lời: *giữ bao lâu*. Đó là **quyết định của Owner** —
-> xem [`decisions/PII_RETENTION_OPTIONS.md`](decisions/PII_RETENTION_OPTIONS.md).
+> **Thời hạn lưu trữ: OWNER ĐÃ CHỐT 2026-10-02 (D-004 = CLOSED).**
+>
+> | Loại | Thời hạn |
+> |---|---|
+> | Lead tiếp thị (không giao dịch) | **12 tháng** |
+> | Dữ liệu TEST | **xoá sau nghiệm thu** |
+> | Hồ sơ khách hàng / giao dịch | theo quy định kế toán – thuế – kinh doanh (quản lý riêng) |
+> | Audit / kỹ thuật | **tối thiểu 12 tháng** |
+>
+> Ba phương án đã dùng để ra quyết định: [`decisions/PII_RETENTION_OPTIONS.md`](decisions/PII_RETENTION_OPTIONS.md).
 >
 > Đo trên `develop` = `f79834fcd36778994a62248747ff3cc114d4e88b`.
 

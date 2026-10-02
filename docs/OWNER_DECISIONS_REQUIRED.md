@@ -8,11 +8,11 @@
 
 | # | Quyết định | Trạng thái | Chặn cái gì |
 |---|---|---|---|
-| D-001 | Hạ tầng staging | **BLOCKED_EXTERNAL_INFRA** | `STAGING_DEPLOY` |
+| D-001 | Hạ tầng staging | **MÁY CHỦ: XONG** · **TÊN MIỀN: OWNER_ACTION_REQUIRED** | HTTPS staging |
 | D-002 | Credential Turnstile | **BLOCKED_EXTERNAL_CREDENTIAL** | bot protection thật |
 | D-003 | Branch protection | **OWNER_ACTION_REQUIRED** | chống push thẳng `main` |
-| D-004 | Chính sách lưu trữ PII | **OWNER_DECISION_REQUIRED** | dọn dẹp dữ liệu, quyền được xoá |
-| D-005 | RPO/RTO + lịch sao lưu | **OWNER_DECISION_REQUIRED** | khả năng chịu mất dữ liệu |
+| D-004 | Chính sách lưu trữ PII | **CLOSED** — Owner đã chốt 2026-10-02 | — |
+| D-005 | RPO/RTO + lịch sao lưu | **CLOSED** — Owner đã chốt 2026-10-02 | — |
 
 ---
 
@@ -151,7 +151,24 @@ gh api repos/thanhbn123/vipphone/branches/main/protection --jq '{
 
 ---
 
-## D-004 — CHÍNH SÁCH LƯU TRỮ PII
+## D-004 — CHÍNH SÁCH LƯU TRỮ PII — ✅ **CLOSED** (Owner chốt 2026-10-02)
+
+| Loại dữ liệu | Thời hạn |
+|---|---|
+| Lead tiếp thị (không giao dịch) | **12 tháng** |
+| Dữ liệu TEST | **xoá sau khi nghiệm thu** |
+| Hồ sơ khách hàng / giao dịch | theo quy định **kế toán – thuế – kinh doanh** (quản lý riêng) |
+| Bản ghi audit / kỹ thuật | **tối thiểu 12 tháng** |
+
+**Công cụ thi hành:** `scripts/cleanup_test_data.py` — xoá theo **marker**, từ chối
+`APP_ENV=production`, in số lượng TRƯỚC khi xoá. **Đã chạy thật trên staging.**
+
+**CỐ Ý KHÔNG làm:** không xoá hàng loạt dữ liệu hiện có chỉ để chứng minh chính sách.
+**Chưa có** job tự động xoá lead quá 12 tháng — việc còn lại.
+
+---
+
+## D-004 (bản cũ, giữ tham chiếu) — CHÍNH SÁCH LƯU TRỮ PII
 
 **Trạng thái:** **OWNER_DECISION_REQUIRED**. Hiện **chưa quyết ⇒ dữ liệu giữ vô thời hạn**.
 
@@ -187,7 +204,31 @@ kinh doanh**. Kỹ thuật chỉ dựng được cơ chế, không quyết đư�
 
 ---
 
-## D-005 — RPO / RTO VÀ LỊCH SAO LƯU
+## D-005 — RPO / RTO VÀ LỊCH SAO LƯU — ✅ **CLOSED** (Owner chốt 2026-10-02)
+
+| Chỉ số | Giá trị Owner chốt |
+|---|---|
+| **RPO** | **24 giờ** |
+| **RTO** | **4 giờ** |
+| Tần suất | **hằng ngày** (PostgreSQL) |
+| Giữ bản ngày / tuần | **14** / **4** |
+| Kiểm phục hồi | **hằng tháng** |
+
+**Công cụ:** `scripts/staging_backup.sh` — đúng chính sách, **từ chối** DB tên `*prod*`,
+ghi kèm SHA-256, tự dọn theo hạn mức.
+
+**Đối chiếu số đo với mục tiêu — NÓI THẲNG:**
+
+| Mục tiêu | Số đo thật | Kết luận |
+|---|---|---|
+| RTO 4 giờ | phục hồi **0.13 giây** trên DB **1 dòng** | **KHÔNG đủ căn cứ nói đạt** — dữ liệu thật sẽ khác, chưa ai đo |
+| RPO 24 giờ | chưa có lịch chạy tự động | **CHƯA ĐẠT** |
+
+**⚠️ Giới hạn:** script lưu **cùng máy staging** ⇒ mất máy là mất cả hai. Cần đích **khác máy**.
+
+---
+
+## D-005 (bản cũ, giữ tham chiếu) — RPO / RTO VÀ LỊCH SAO LƯU
 
 **Trạng thái:** **OWNER_DECISION_REQUIRED**. Hiện **chưa có lịch sao lưu nào**.
 
