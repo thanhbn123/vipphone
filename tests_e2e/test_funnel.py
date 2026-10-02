@@ -38,7 +38,10 @@ def fill_lead_form(
     page.fill("#full_name", name)
     page.fill("#phone", phone)
     page.select_option("#iphone_model", model)
-    page.select_option("#case_color", color)
+    # UI-4: "Màu ốp mong muốn" từ <select> đổi thành ô GHI CHÚ <input type="text">.
+    # Dùng `fill` chứ không `select_option` — select_option sẽ báo
+    # "Element is not a <select> element".
+    page.fill("#case_color", color)
     page.check("#consent")
 
 

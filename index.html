@@ -62,26 +62,19 @@
                  autocomplete="email" maxlength="254" placeholder="ten@gmail.com">
         </label>
 
-        <div class="grid two">
-          <label for="iphone_model">
-            Dòng iPhone <span aria-hidden="true">*</span>
-            <select id="iphone_model" name="iphone_model" required aria-required="true">
-              <option value="">Đang tải danh sách…</option>
-            </select>
-          </label>
-          <label for="case_color">
-            Màu ốp mong muốn <span aria-hidden="true">*</span>
-            <select id="case_color" name="case_color" required aria-required="true">
-              <option value="">Chọn màu</option>
-              <option>Đen</option>
-              <option>Trắng</option>
-              <option>Trong suốt</option>
-              <option>Xanh</option>
-              <option>Hồng</option>
-              <option>Khác</option>
-            </select>
-          </label>
-        </div>
+        <label for="iphone_model">
+          Dòng iPhone <span aria-hidden="true">*</span>
+          <select id="iphone_model" name="iphone_model" required aria-required="true">
+            <option value="">Đang tải danh sách…</option>
+          </select>
+        </label>
+
+        <label for="case_color">
+          Màu ốp mong muốn
+          <span class="helper-inline">(không bắt buộc — cứ ghi màu bạn thích)</span>
+          <input id="case_color" name="case_color" type="text" maxlength="40"
+                 placeholder="Ví dụ: Đen, Trắng, Xanh rêu, Hồng pastel…">
+        </label>
 
         <label for="bni_chapter">
           Chapter BNI

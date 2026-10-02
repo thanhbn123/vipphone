@@ -118,7 +118,6 @@
     }
 
     if (!data.iphone_model) errors.iphone_model = "Vui lòng chọn dòng iPhone.";
-    if (!data.case_color) errors.case_color = "Vui lòng chọn màu ốp.";
     if (data.bni_chapter.length > 80) errors.bni_chapter = "Chapter BNI tối đa 80 ký tự.";
     if (data.referrer_name.length > 80) errors.referrer_name = "Người giới thiệu tối đa 80 ký tự.";
     if (!data.consent) errors.consent = "Cần đồng ý để VIP PHONE liên hệ xác nhận quà.";
@@ -317,7 +316,8 @@
       full_name: data.full_name,
       phone: data.phone,
       iphone_model: data.iphone_model,
-      case_color: data.case_color,
+      // Ô ghi chú màu không bắt buộc: để trống gửi null để DB lưu NULL.
+      case_color: data.case_color || null,
       // Trường KHÔNG bắt buộc: gửi null khi bỏ trống để DB lưu NULL, không lưu chuỗi rỗng.
       email: data.email || null,
       address_street: data.address_street || null,

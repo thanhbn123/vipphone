@@ -145,3 +145,68 @@ def test_staff_lookup_does_not_return_address(client, valid_lead_payload, staff_
         "address_province",
     ):
         assert field not in body, f"tra cứu tại quầy KHÔNG được trả {field}"
+
+
+# ============================================================================
+# UI-4 — "Màu ốp mong muốn" từ Ô CHỌN thành Ô GHI CHÚ tự do, KHÔNG bắt buộc
+# ============================================================================
+def test_lead_without_case_color_is_accepted(client, valid_lead_payload, db):
+    """Không bắt buộc nữa: khách bỏ trống vẫn nhận được quà."""
+    payload = {k: v for k, v in valid_lead_payload.items() if k != "case_color"}
+    response = client.post("/api/leads", json=payload)
+    assert response.status_code == 201, response.text
+
+    lead = db.execute(select(Lead).order_by(Lead.id.desc())).scalars().first()
+    assert lead.case_color is None, "ô để trống phải lưu NULL, không lưu chuỗi rỗng"
+
+
+def test_case_color_accepts_free_text_not_just_the_old_list(client, valid_lead_payload, db):
+    """Đây là lý do phải đổi: ô chọn cũ chỉ nhận 6 giá trị cố định.
+
+    Khách ghi 'Xanh rêu' hoặc 'Hồng pastel' — thứ KHÔNG có trong danh sách cũ —
+    vẫn phải lưu được.
+    """
+    response = create(client, valid_lead_payload, case_color="Xanh rêu")
+    assert response.status_code == 201, response.text
+    lead = db.execute(select(Lead).order_by(Lead.id.desc())).scalars().first()
+    assert lead.case_color == "Xanh rêu"
+
+
+def test_overlong_case_color_is_rejected(client, valid_lead_payload):
+    assert create(client, valid_lead_payload, case_color="x" * 41).status_code == 422
+
+
+def test_lookup_and_admin_tolerate_missing_case_color(client, valid_lead_payload, staff_headers):
+    """Mọi chỗ ĐỌC `case_color` phải chịu được None, nếu không sẽ 500."""
+    payload = {k: v for k, v in valid_lead_payload.items() if k != "case_color"}
+    created = client.post("/api/leads", json=payload).json()
+
+    lookup = client.get(f"/api/gifts/{created['gift_code']}", headers=staff_headers)
+    assert lookup.status_code == 200, lookup.text
+    assert lookup.json()["case_color"] is None
+
+    detail = client.get(f"/api/admin/leads/{created['lead_id']}", headers=staff_headers)
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["case_color"] is None
+
+
+def test_redeem_works_without_case_color(client, valid_lead_payload, staff_headers):
+    """Đường PHÁT QUÀ cũng đọc case_color — phải không sập khi rỗng."""
+    payload = {k: v for k, v in valid_lead_payload.items() if k != "case_color"}
+    created = client.post("/api/leads", json=payload).json()
+
+    response = client.post(
+        f"/api/gifts/{created['gift_code']}/redeem", json={}, headers=staff_headers
+    )
+    assert response.status_code == 200, response.text
+    # LƯU Ý: response PHÁT QUÀ không có trường case_color (xem GiftRedeemResponse) —
+    # điều cần chứng minh chỉ là đường ghi này không sập khi case_color rỗng.
+    assert response.json()["gift_status"] == "REDEEMED"
+
+
+def test_csv_exports_empty_case_color_without_crashing(client, valid_lead_payload, staff_headers):
+    payload = {k: v for k, v in valid_lead_payload.items() if k != "case_color"}
+    client.post("/api/leads", json=payload)
+    response = client.get("/api/admin/leads.csv", headers=staff_headers)
+    assert response.status_code == 200
+    assert "case_color" in response.text.splitlines()[0]

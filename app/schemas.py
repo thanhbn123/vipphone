@@ -49,7 +49,8 @@ class LeadCreateRequest(BaseModel):
 
     #: `model_code` trong danh mục iPhone. Server tự tra ra tên hiển thị và năm.
     iphone_model: str = Field(min_length=1, max_length=64)
-    case_color: str = Field(min_length=1, max_length=40)
+    #: Ô GHI CHÚ màu mong muốn — KHÔNG bắt buộc (migration 0004).
+    case_color: str | None = Field(default=None, max_length=40)
 
     #: Gmail — KHÔNG bắt buộc (xem docs/pii-data-map.md).
     email: str | None = Field(default=None, max_length=254)
@@ -158,6 +159,8 @@ class LeadCreateRequest(BaseModel):
     def _reject_control_characters(self) -> LeadCreateRequest:
         for name in ("full_name", "case_color"):
             raw = getattr(self, name)
+            if raw is None:  # case_color không bắt buộc
+                continue
             if any(ord(ch) < 32 for ch in raw):
                 raise ValueError(f"{name} chứa ký tự điều khiển không hợp lệ")
         return self
@@ -186,7 +189,7 @@ class GiftLookupResponse(BaseModel):
     phone_masked: str
     iphone_model: str
     iphone_year: int
-    case_color: str
+    case_color: str | None = None
     created_at: datetime
     redeemed_at: datetime | None = None
 
@@ -239,7 +242,7 @@ class AdminLeadOut(BaseModel):
     phone: str
     iphone_model: str
     iphone_year: int
-    case_color: str
+    case_color: str | None = None
     email: str | None = None
     address_street: str | None = None
     address_ward: str | None = None
