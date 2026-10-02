@@ -109,7 +109,9 @@ class Lead(Base):
     phone: Mapped[str] = mapped_column(String(16), nullable=False)
     iphone_model: Mapped[str] = mapped_column(String(120), nullable=False)
     iphone_year: Mapped[int] = mapped_column(Integer, nullable=False)
-    case_color: Mapped[str] = mapped_column(String(40), nullable=False)
+    #: Màu ốp khách muốn. Nay là GHI CHÚ TỰ DO nên cho phép rỗng (migration 0004).
+    #: Sau này có ảnh mẫu để chọn thì giá trị chọn vẫn ghi vào CHÍNH cột này.
+    case_color: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
     # --- Liên hệ & địa chỉ giao hàng (UI-2) -------------------------------
     #: Gmail khách. KHÔNG bắt buộc — bắt buộc sẽ làm rớt khách tại quầy.
