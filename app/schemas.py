@@ -54,11 +54,8 @@ class LeadCreateRequest(BaseModel):
 
     #: Gmail — KHÔNG bắt buộc (xem docs/pii-data-map.md).
     email: str | None = Field(default=None, max_length=254)
-    #: Địa chỉ giao hàng, tách sẵn 4 phần cho API vận chuyển.
-    address_street: str | None = Field(default=None, max_length=200)
-    address_ward: str | None = Field(default=None, max_length=120)
-    address_district: str | None = Field(default=None, max_length=120)
-    address_province: str | None = Field(default=None, max_length=120)
+    #: Địa chỉ nhận hàng — MỘT ô tự do.
+    address: str | None = Field(default=None, max_length=300)
     company_name: str | None = Field(default=None, max_length=120)
     bni_chapter: str | None = Field(default=None, max_length=80)
     referrer_name: str | None = Field(default=None, max_length=80)
@@ -81,10 +78,7 @@ class LeadCreateRequest(BaseModel):
 
     @field_validator(
         "email",
-        "address_street",
-        "address_ward",
-        "address_district",
-        "address_province",
+        "address",
         mode="before",
     )
     @classmethod
@@ -92,7 +86,7 @@ class LeadCreateRequest(BaseModel):
         """Ô để trống ⇒ lưu NULL, KHÔNG lưu chuỗi rỗng.
 
         Vì sao quan trọng: `''` và `NULL` khác nhau khi truy vấn. Lưu `''` thì
-        `WHERE address_street IS NULL` (lọc "chưa có địa chỉ" để biết đơn nào lên
+        `WHERE address IS NULL` (lọc "chưa có địa chỉ" để biết đơn nào lên
         được) sẽ **bỏ sót** đúng những dòng cần tìm.
         """
         if isinstance(value, str) and not value.strip():
@@ -244,10 +238,7 @@ class AdminLeadOut(BaseModel):
     iphone_year: int
     case_color: str | None = None
     email: str | None = None
-    address_street: str | None = None
-    address_ward: str | None = None
-    address_district: str | None = None
-    address_province: str | None = None
+    address: str | None = None
     company_name: str | None = None
     bni_chapter: str | None = None
     referrer_name: str | None = None

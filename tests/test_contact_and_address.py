@@ -16,10 +16,7 @@ pytestmark = pytest.mark.integration
 
 FULL_ADDRESS = {
     "email": "Khach.Hang@Gmail.COM",
-    "address_street": "12 Nguyễn Huệ",
-    "address_ward": "Phường Bến Nghé",
-    "address_district": "Quận 1",
-    "address_province": "TP. Hồ Chí Minh",
+    "address": "12 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
 }
 
 
@@ -35,10 +32,7 @@ def test_full_contact_and_address_are_saved(client, valid_lead_payload, db):
     lead = db.execute(select(Lead).order_by(Lead.id.desc())).scalars().first()
     # Gmail được CHUẨN HOÁ: bỏ khoảng trắng và hạ chữ thường.
     assert lead.email == "khach.hang@gmail.com"
-    assert lead.address_street == "12 Nguyễn Huệ"
-    assert lead.address_ward == "Phường Bến Nghé"
-    assert lead.address_district == "Quận 1"
-    assert lead.address_province == "TP. Hồ Chí Minh"
+    assert lead.address == "12 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh"
 
 
 def test_contact_and_address_are_optional(client, valid_lead_payload, db):
@@ -47,13 +41,7 @@ def test_contact_and_address_are_optional(client, valid_lead_payload, db):
     assert response.status_code == 201, response.text
 
     lead = db.execute(select(Lead).order_by(Lead.id.desc())).scalars().first()
-    for field in (
-        "email",
-        "address_street",
-        "address_ward",
-        "address_district",
-        "address_province",
-    ):
+    for field in ("email", "address"):
         assert getattr(lead, field) is None, f"{field} phải là NULL, không phải chuỗi rỗng"
 
 
@@ -63,16 +51,12 @@ def test_blank_strings_become_null_not_empty_string(client, valid_lead_payload, 
         client,
         valid_lead_payload,
         email="   ",
-        address_street="",
-        address_ward=" ",
-        address_district="",
-        address_province="  ",
+        address="   ",
     )
     assert response.status_code == 201, response.text
     lead = db.execute(select(Lead).order_by(Lead.id.desc())).scalars().first()
     assert lead.email is None
-    assert lead.address_street is None
-    assert lead.address_province is None
+    assert lead.address is None
 
 
 @pytest.mark.parametrize("bad", ["khong-phai-email", "a@b", "a b@c.com", "@gmail.com", "a@@b.com"])
@@ -85,10 +69,7 @@ def test_invalid_email_is_rejected(client, valid_lead_payload, bad):
     ("field", "length"),
     [
         ("email", 255),
-        ("address_street", 201),
-        ("address_ward", 121),
-        ("address_district", 121),
-        ("address_province", 121),
+        ("address", 301),
     ],
 )
 def test_overlong_values_are_rejected(client, valid_lead_payload, field, length):
@@ -100,7 +81,7 @@ def test_admin_detail_returns_contact_and_address(client, valid_lead_payload, st
     created = create(client, valid_lead_payload, **FULL_ADDRESS).json()
     body = client.get(f"/api/admin/leads/{created['lead_id']}", headers=staff_headers).json()
     assert body["email"] == "khach.hang@gmail.com"
-    assert body["address_province"] == "TP. Hồ Chí Minh"
+    assert "Nguyễn Huệ" in body["address"]
 
 
 def test_csv_has_the_new_columns(client, valid_lead_payload, staff_headers):
@@ -110,13 +91,7 @@ def test_csv_has_the_new_columns(client, valid_lead_payload, staff_headers):
     response = client.get("/api/admin/leads.csv", headers=staff_headers)
     header = response.text.lstrip("\ufeff").splitlines()[0]
 
-    for column in (
-        "email",
-        "address_street",
-        "address_ward",
-        "address_district",
-        "address_province",
-    ):
+    for column in ("email", "address"):
         assert column in CSV_COLUMNS, f"CSV_COLUMNS thiếu {column}"
         assert column in header, f"header CSV thiếu {column}"
     assert "khach.hang@gmail.com" in response.text
@@ -137,13 +112,7 @@ def test_staff_lookup_does_not_return_address(client, valid_lead_payload, staff_
     created = create(client, valid_lead_payload, **FULL_ADDRESS).json()
     body = client.get(f"/api/gifts/{created['gift_code']}", headers=staff_headers).json()
 
-    for field in (
-        "email",
-        "address_street",
-        "address_ward",
-        "address_district",
-        "address_province",
-    ):
+    for field in ("email", "address"):
         assert field not in body, f"tra cứu tại quầy KHÔNG được trả {field}"
 
 

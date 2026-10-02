@@ -93,11 +93,7 @@
       iphone_model: String(fd.get("iphone_model") || ""),
       case_color: String(fd.get("case_color") || ""),
       email: String(fd.get("email") || "").trim(),
-      address_street: String(fd.get("address_street") || "").trim(),
-      address_ward: String(fd.get("address_ward") || "").trim(),
-      address_district: String(fd.get("address_district") || "").trim(),
-      address_province: String(fd.get("address_province") || "").trim(),
-      bni_chapter: String(fd.get("bni_chapter") || "").trim(),
+      address: String(fd.get("address") || "").trim(),
       referrer_name: String(fd.get("referrer_name") || "").trim(),
       source: String(fd.get("source") || ""),
       consent: fd.get("consent") === "on"
@@ -118,7 +114,6 @@
     }
 
     if (!data.iphone_model) errors.iphone_model = "Vui lòng chọn dòng iPhone.";
-    if (data.bni_chapter.length > 80) errors.bni_chapter = "Chapter BNI tối đa 80 ký tự.";
     if (data.referrer_name.length > 80) errors.referrer_name = "Người giới thiệu tối đa 80 ký tự.";
     if (!data.consent) errors.consent = "Cần đồng ý để VIP PHONE liên hệ xác nhận quà.";
 
@@ -131,11 +126,7 @@
     "iphone_model",
     "case_color",
     "email",
-    "address_street",
-    "address_ward",
-    "address_district",
-    "address_province",
-    "bni_chapter",
+    "address",
     "referrer_name",
     "source",
     "consent"
@@ -320,11 +311,7 @@
       case_color: data.case_color || null,
       // Trường KHÔNG bắt buộc: gửi null khi bỏ trống để DB lưu NULL, không lưu chuỗi rỗng.
       email: data.email || null,
-      address_street: data.address_street || null,
-      address_ward: data.address_ward || null,
-      address_district: data.address_district || null,
-      address_province: data.address_province || null,
-      bni_chapter: data.bni_chapter || null,
+      address: data.address || null,
       referrer_name: data.referrer_name || null,
       source: data.source || attribution.src || null,
       campaign: attribution.campaign || attribution.utm_campaign || null,

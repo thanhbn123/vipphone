@@ -76,38 +76,13 @@
                  placeholder="Ví dụ: Đen, Trắng, Xanh rêu, Hồng pastel…">
         </label>
 
-        <label for="bni_chapter">
-          Chapter BNI
-          <input id="bni_chapter" name="bni_chapter" type="text" maxlength="80">
+        <label for="address">
+          Địa chỉ nhận hàng
+          <span class="helper-inline">(không bắt buộc — ghi đủ số nhà, đường, phường/xã, quận/huyện, tỉnh/thành)</span>
+          <input id="address" name="address" type="text" maxlength="300"
+                 autocomplete="street-address"
+                 placeholder="Ví dụ: 12 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh">
         </label>
-
-        <fieldset class="address-block">
-          <legend>
-            Địa chỉ nhận hàng <span class="helper-inline">(không bắt buộc — tách sẵn để lên đơn vận chuyển được ngay)</span>
-          </legend>
-          <label for="address_street">
-            Số nhà, đường
-            <input id="address_street" name="address_street" type="text"
-                   autocomplete="address-line1" maxlength="200">
-          </label>
-          <div class="grid two">
-            <label for="address_ward">
-              Phường / Xã
-              <input id="address_ward" name="address_ward" type="text"
-                     autocomplete="address-line2" maxlength="120">
-            </label>
-            <label for="address_district">
-              Quận / Huyện
-              <input id="address_district" name="address_district" type="text"
-                     autocomplete="address-level2" maxlength="120">
-            </label>
-          </div>
-          <label for="address_province">
-            Tỉnh / Thành phố
-            <input id="address_province" name="address_province" type="text"
-                   autocomplete="address-level1" maxlength="120">
-          </label>
-        </fieldset>
 
         <div class="grid two">
           <label for="referrer_name">
