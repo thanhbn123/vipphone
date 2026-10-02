@@ -8,7 +8,7 @@
 
 | # | Quyết định | Trạng thái | Chặn cái gì |
 |---|---|---|---|
-| D-001 | Hạ tầng staging | **MÁY CHỦ: XONG** · **TÊN MIỀN: XONG** (`qua.viporder.vn` → `160.22.170.20`) · **TLS: chờ Owner dán khối Caddy** (4 dòng) | HTTPS staging |
+| D-001 | Hạ tầng staging | ✅ **CLOSED** — máy chủ + `qua.viporder.vn` (DNS) + **TLS Let's Encrypt** đều XONG | — |
 | D-002 | Credential Turnstile | **BLOCKED_EXTERNAL_CREDENTIAL** | bot protection thật |
 | D-003 | Branch protection | **OWNER_ACTION_REQUIRED** | chống push thẳng `main` |
 | D-004 | Chính sách lưu trữ PII | **CLOSED** — Owner đã chốt 2026-10-02 | — |
