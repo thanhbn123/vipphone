@@ -87,6 +87,16 @@
       ? "status ok" : "status warn";
 
     var parts = [];
+    if (product.images && product.images.length) {
+      parts.push('<div class="product-gallery">');
+      product.images.forEach(function (image, index) {
+        parts.push('<img src="' + util.escapeHtml(image.url) + '" alt="' +
+          util.escapeHtml(image.alt_text) + '" width="' + parseInt(image.width, 10) +
+          '" height="' + parseInt(image.height, 10) + '"' +
+          (index === 0 ? ' class="primary"' : ' loading="lazy"') + ' decoding="async">');
+      });
+      parts.push("</div>");
+    }
     if (product.brand) {
       parts.push('<p class="product-brand">Thương hiệu: ' + util.escapeHtml(product.brand) + "</p>");
     }

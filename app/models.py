@@ -903,6 +903,47 @@ class PriceHistory(Base):
     reason: Mapped[str | None] = mapped_column(String(300))
 
 
+class ProductImage(Base):
+    """Ảnh sản phẩm. Chỉ giữ `storage_key` — không URL ngoài (không hotlink)."""
+
+    __tablename__ = "product_images"
+    __table_args__ = (
+        UniqueConstraint("image_id", name="uq_product_images_image_id"),
+        UniqueConstraint("storage_key", name="uq_product_images_storage_key"),
+        CheckConstraint(
+            "content_type IN ('image/png', 'image/jpeg', 'image/webp')",
+            name="ck_product_images_content_type",
+        ),
+        CheckConstraint("byte_size > 0", name="ck_product_images_byte_size"),
+        CheckConstraint("length(trim(alt_text)) > 0", name="ck_product_images_alt_text"),
+        Index("ix_product_images_product", "product_id", "sort_order"),
+        Index(
+            "uq_product_images_one_primary",
+            "product_id",
+            unique=True,
+            postgresql_where=text("is_primary"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    image_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    product_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
+    storage_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    alt_text: Mapped[str] = mapped_column(String(200), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 __all__ = [
     "ACTIVE_GIFT_STATUSES",
     "COMPATIBILITY_TYPE_VALUES",
@@ -936,6 +977,7 @@ __all__ = [
     "PaymentStatus",
     "PriceHistory",
     "Product",
+    "ProductImage",
     "ProductVariant",
     "RecommendationCategoryPriority",
     "ShippingAddress",

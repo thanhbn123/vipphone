@@ -32,18 +32,21 @@ from ..schemas import (
     AVAILABILITY_IN_STOCK,
     AVAILABILITY_OUT_OF_STOCK,
     AdminCompatibilityOut,
+    AdminProductImageOut,
     AdminProductOut,
     AdminVariantOut,
     CategoryOut,
     CompatibilityCreateRequest,
     CompatibilityOut,
     ProductCreateRequest,
+    ProductImageOut,
     ProductOut,
     ProductPatchRequest,
     VariantCreateRequest,
     VariantOut,
     VariantPatchRequest,
 )
+from .images import images_for, public_url
 from .inventory import available_by_sku
 
 logger = logging.getLogger(__name__)
@@ -243,6 +246,7 @@ def serialize_public(db: Session, products: list[Product]) -> list[ProductOut]:
     all_variants = [v for group in variants_by_product.values() for v in group]
     compatibility_by_sku = load_compatibility(db, [v.id for v in all_variants])
     available = available_by_sku(db, [v.id for v in all_variants if v.stock_tracking])
+    images = images_for(db, product_ids)
 
     results: list[ProductOut] = []
     for product in products:
@@ -257,6 +261,16 @@ def serialize_public(db: Session, products: list[Product]) -> list[ProductOut]:
                 brand=product.brand,
                 category=CategoryOut.model_validate(category) if category else None,
                 availability=_availability(variants, available),
+                images=[
+                    ProductImageOut(
+                        url=public_url(i),
+                        alt_text=i.alt_text,
+                        is_primary=i.is_primary,
+                        width=i.width,
+                        height=i.height,
+                    )
+                    for i in images.get(product.id, [])
+                ],
                 variants=[
                     VariantOut(
                         sku=v.sku,
@@ -287,6 +301,7 @@ def serialize_admin(db: Session, products: list[Product]) -> list[AdminProductOu
     all_variants = [v for group in variants_by_product.values() for v in group]
     compatibility_by_sku = load_compatibility(db, [v.id for v in all_variants])
     available = available_by_sku(db, [v.id for v in all_variants if v.stock_tracking])
+    images = images_for(db, product_ids)
 
     results: list[AdminProductOut] = []
     for product in products:
@@ -301,6 +316,20 @@ def serialize_admin(db: Session, products: list[Product]) -> list[AdminProductOu
                 brand=product.brand,
                 category=CategoryOut.model_validate(category) if category else None,
                 availability=_availability(variants, available),
+                images=[
+                    AdminProductImageOut(
+                        url=public_url(i),
+                        alt_text=i.alt_text,
+                        is_primary=i.is_primary,
+                        width=i.width,
+                        height=i.height,
+                        image_id=i.image_id,
+                        sort_order=i.sort_order,
+                        content_type=i.content_type,
+                        byte_size=i.byte_size,
+                    )
+                    for i in images.get(product.id, [])
+                ],
                 active=product.active,
                 created_at=product.created_at,
                 updated_at=product.updated_at,

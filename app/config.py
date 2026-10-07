@@ -116,6 +116,11 @@ class Settings(BaseSettings):
 
     # ---------------------------------------------------------------- đường dẫn
     static_dir: Path = REPO_ROOT
+    #: Ảnh sản phẩm — kho lưu LOCAL (staging). Ranh giới production: thay bằng
+    #: kho đối tượng (S3-compatible) qua `app.storage.ObjectStorage`. Xem docs/product-images.md.
+    media_root: Path = REPO_ROOT / "var" / "media"
+    #: Trần dung lượng MỘT ảnh tải lên (byte).
+    max_image_bytes: int = Field(default=2_000_000, ge=10_000, le=20_000_000)
 
     @field_validator("gift_code_alphabet")
     @classmethod

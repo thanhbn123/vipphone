@@ -408,6 +408,7 @@ docker run -d --name "\$TMPNAME" \
   -e RELEASE_ID="$release_id" \
   -e GIT_SHA="$(git_sha)" \
   -p "127.0.0.1:$((port + 1)):8000" \
+  -v "$PROJECT-$ENV_NAME-media:/app/var/media" \
   --restart no \
   "\$IMG" >/dev/null
 echo "đã chạy bản mới dưới tên tạm \$TMPNAME ở cổng $((port + 1))"
@@ -437,6 +438,7 @@ docker run -d --name "$container" \
   -e RELEASE_ID="$release_id" \
   -e GIT_SHA="$(git_sha)" \
   -p "127.0.0.1:$port:8000" \
+  -v "$PROJECT-$ENV_NAME-media:/app/var/media" \
   --restart unless-stopped \
   "\$IMG" >/dev/null
 

@@ -474,6 +474,23 @@ class VariantOut(BaseModel):
     compatibility: list[CompatibilityOut] = []
 
 
+class ProductImageOut(BaseModel):
+    """Ảnh — bản công khai. `url` là đường dẫn CÙNG ORIGIN (`/media/...`)."""
+
+    url: str
+    alt_text: str
+    is_primary: bool
+    width: int
+    height: int
+
+
+class AdminProductImageOut(ProductImageOut):
+    image_id: uuid.UUID
+    sort_order: int
+    content_type: str
+    byte_size: int
+
+
 class ProductOut(BaseModel):
     product_id: uuid.UUID
     name: str
@@ -486,6 +503,8 @@ class ProductOut(BaseModel):
     #: G14 chưa có inventory engine nên TUYỆT ĐỐI không có con số nào ở đây.
     availability: str
     variants: list[VariantOut] = []
+    #: Ảnh chính đứng đầu, rồi theo `sort_order`.
+    images: list[ProductImageOut] = []
 
 
 class ProductPageOut(BaseModel):
@@ -518,6 +537,7 @@ class AdminProductOut(ProductOut):
     created_at: datetime
     updated_at: datetime
     variants: list[AdminVariantOut] = []
+    images: list[AdminProductImageOut] = []
 
 
 class AdminProductPageOut(BaseModel):
@@ -1151,3 +1171,18 @@ class PriceHistoryOut(BaseModel):
     changed_by: str
     changed_at: datetime
     reason: str | None
+
+
+class ProductImagePatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    alt_text: str | None = Field(default=None, min_length=1, max_length=200)
+    sort_order: int | None = Field(default=None, ge=0, le=1000)
+    is_primary: bool | None = None
+
+    @field_validator("alt_text")
+    @classmethod
+    def _alt(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _required_text(value, "Mô tả ảnh (alt)")

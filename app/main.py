@@ -174,6 +174,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if assets_dir.is_dir():
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
+    # Ảnh sản phẩm (kho lưu local). StaticFiles tự chặn đi ngược thư mục; tên tệp
+    # do máy chủ sinh nên không đoán/ghi đè được. Xem docs/product-images.md.
+    media_dir = Path(app_settings.media_root)
+    media_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/media", StaticFiles(directory=media_dir), name="media")
+
     data_dir = static_root / "data"
     if data_dir.is_dir():
         app.mount("/data", StaticFiles(directory=data_dir), name="data")

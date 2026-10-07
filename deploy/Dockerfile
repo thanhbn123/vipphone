@@ -24,7 +24,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Chạy bằng user không phải root. Ứng dụng không cần ghi vào đâu trong ảnh.
-RUN useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app
+RUN useradd --create-home --uid 10001 appuser && mkdir -p /app/var/media && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8000
