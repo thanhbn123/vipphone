@@ -26,6 +26,13 @@ from sqlalchemy.exc import IntegrityError
 
 from app.models import Category, DeviceCompatibility, Product, ProductVariant
 
+# V6: bộ này chạy trên PostgreSQL THẬT (fixture `db`/`client` của `conftest.py`
+# dựng schema bằng migration rồi TRUNCATE trước mỗi test). Thiếu dấu này thì bước
+# CI tên "Integration tests (PostgreSQL)" — `pytest -m integration` — KHÔNG chạy
+# một bài nào của tệp này, dù chúng đều là test tích hợp. Đo được: trước khi thêm,
+# `-m integration` chọn 0/36 bài của tệp này.
+pytestmark = pytest.mark.integration
+
 PRODUCT_PAYLOAD = {
     "name": "Ốp lưu niệm VIP",
     "slug": "op-luu-niem-vip",
