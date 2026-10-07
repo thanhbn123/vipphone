@@ -473,3 +473,34 @@ def delete_compatibility(db: Session, variant: ProductVariant, compatibility_id:
     db.delete(row)
     db.flush()
     return True
+
+
+def stamp_change_context(db: Session, *, actor: str, reason: str | None = None) -> None:
+    """Đặt người sửa + lý do cho TRIGGER lịch sử giá, CHỈ trong giao dịch hiện tại.
+
+    `set_config(..., true)` = `SET LOCAL`: hết giao dịch là mất, không rò sang
+    request khác dùng chung kết nối trong pool. Tham số được bind, không ghép chuỗi.
+    """
+    from sqlalchemy import text
+
+    db.execute(
+        text(
+            "SELECT set_config('vipphone.actor', :actor, true), "
+            "set_config('vipphone.price_reason', :reason, true)"
+        ),
+        {"actor": actor, "reason": reason or ""},
+    )
+
+
+def price_history(db: Session, variant: ProductVariant):
+    from ..models import PriceHistory
+
+    return list(
+        db.execute(
+            select(PriceHistory)
+            .where(PriceHistory.sku_id == variant.id)
+            .order_by(PriceHistory.id.asc())
+        )
+        .scalars()
+        .all()
+    )

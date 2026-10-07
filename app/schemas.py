@@ -672,6 +672,8 @@ class VariantPatchRequest(BaseModel):
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     active: bool | None = None
     stock_tracking: bool | None = None
+    #: Lý do đổi giá — ghi vào `price_history.reason`. Không bắt buộc.
+    price_change_reason: str | None = Field(default=None, max_length=300)
 
     @field_validator("currency")
     @classmethod
@@ -1138,3 +1140,14 @@ class InventoryMovementCreateRequest(BaseModel):
     @classmethod
     def _reason(cls, value: str | None) -> str | None:
         return _optional_text(value)
+
+
+class PriceHistoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    old_price: Decimal | None
+    new_price: Decimal
+    currency: str
+    changed_by: str
+    changed_at: datetime
+    reason: str | None
