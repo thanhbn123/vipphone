@@ -186,8 +186,12 @@ def link_lead_to_customer(db: Session, lead: Lead, *, is_new_lead: bool = True) 
         attach_acquisition(db, customer, lead)
         db.flush()
         return customer
-    except Exception:
-        logger.exception("G13: liên kết lead %s vào customer thất bại", lead.gift_code)
+    except Exception as exc:
+        # Không `logger.exception`: traceback mang thông điệp lỗi DB, có thể chứa
+        # dữ liệu dòng của khách. Ghi mã quà + LOẠI lỗi là đủ để lần lại.
+        logger.error(
+            "G13: liên kết lead %s vào customer thất bại: %s", lead.gift_code, type(exc).__name__
+        )
         db.rollback()
         return None
 

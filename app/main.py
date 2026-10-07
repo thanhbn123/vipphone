@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from . import __version__
+from . import __version__, logredact
 from .config import Settings, get_settings
 from .errors import ApiError
 from .giftcodes import is_well_formed_gift_code, normalize_gift_code
@@ -71,6 +71,8 @@ def configure_logging(settings: Settings) -> None:
         level=getattr(logging, settings.log_level.upper(), logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    # Access log của uvicorn: che SĐT/tham số nhạy cảm trong query (app/logredact.py).
+    logredact.install()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

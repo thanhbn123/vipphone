@@ -19,6 +19,10 @@ engine = create_engine(
     echo=settings.sql_echo,
     pool_pre_ping=True,
     future=True,
+    # KHÔNG để tham số SQL (tên, SĐT, địa chỉ...) lọt vào thông báo lỗi. Đo được:
+    # trước đây `str(IntegrityError)` chứa "[parameters: {'n': '<họ tên>', 'p':
+    # '<SĐT>'}]", và mã ghi log lỗi đó nguyên văn — tức là PII vào log.
+    hide_parameters=True,
 )
 
 SessionLocal = sessionmaker(
