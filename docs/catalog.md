@@ -236,6 +236,7 @@ giá theo kênh, thuế/phí. Ghi thành việc mở.
 | `cost_price` | **KHÔNG BAO GIỜ** | thấy |
 | `product_id` (UUID) | có | có |
 | `id` bigint nội bộ | **không** | có |
+| Nhãn `availability` | `IN_STOCK` / `OUT_OF_STOCK` (không bao giờ là số) | như công khai + thấy SKU đã tắt |
 | Xác thực | không cần khoá | **bắt buộc** `Depends(require_staff)` |
 
 Hai lược đồ Pydantic **tách hẳn** (`ProductOut` vs `AdminProductOut`), vì dùng chung một lược
@@ -335,10 +336,18 @@ Tên · giá · category · máy tương thích · trạng thái (Còn hàng / H
 ### 7.3 **Còn hàng / Hết hàng — TUYỆT ĐỐI KHÔNG bịa số lượng**
 
 G14 **chưa có inventory engine**. Vì vậy UI **không được** hiện "còn 7 chiếc", "sắp hết",
-"chỉ còn 2" — mọi con số như vậy sẽ là **bịa**. Hai nhãn duy nhất được phép:
+"chỉ còn 2" — mọi con số như vậy sẽ là **bịa**.
 
-- **Còn hàng** = SKU active **và** product active (`stock_tracking` chỉ là cờ, §3.7)
-- **Hết hàng** = SKU không active
+**Trường `availability` nằm ở CẤP SẢN PHẨM** (không phải ở từng SKU), vì đường công khai
+chỉ trả SKU `active` — nếu đặt ở SKU thì nó sẽ luôn cùng một giá trị và trở thành trường chết:
+
+| Giá trị | Điều kiện | UI |
+|---|---|---|
+| `IN_STOCK` | sản phẩm `active` **và** có **ít nhất một** SKU `active` | **Còn hàng** |
+| `OUT_OF_STOCK` | sản phẩm `active` nhưng **không** còn SKU `active` nào | **Hết hàng** |
+
+Sản phẩm `active = false` **không xuất hiện** ở đường công khai (⇒ 404 ở chi tiết), nên nó
+không có nhãn nào để hiện.
 
 Trường `stock_tracking` **không** tham gia vào việc suy ra hai nhãn này, và điều đó phải giữ
 nguyên cho tới khi có inventory engine thật. Khi nào có, sửa **tài liệu này trước**, rồi mới
