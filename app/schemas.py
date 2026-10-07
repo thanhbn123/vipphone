@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -409,3 +410,315 @@ class CustomerDetailOut(CustomerOut):
     acquisition: CustomerAcquisitionOut | None = None
     gift_history: list[CustomerGiftOut] = []
     orders: list[dict] = []
+
+
+# ============================================================================
+# G14 — DANH MỤC SẢN PHẨM. Thiết kế: `docs/catalog.md`.
+#
+# HAI LƯỢC ĐỒ TÁCH HẲN: `ProductOut` (công khai) và `AdminProductOut` (quản trị).
+# Không dùng chung một lược đồ rồi "ẩn bớt trường" — đó là cách chắc chắn nhất để
+# một ngày nào đó `cost_price` lọt ra ngoài.
+# ============================================================================
+
+#: Slug sản phẩm: chữ thường, số, gạch ngang; không gạch ở đầu/cuối.
+SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+#: Mã SKU: chữ HOA, số, gạch ngang; không gạch ở đầu/cuối.
+SKU_RE = re.compile(r"^[A-Z0-9]+(?:-[A-Z0-9]+)*$")
+
+#: Mã category: chữ HOA, số, gạch dưới.
+CATEGORY_CODE_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,39}$")
+
+#: Tiền: `Decimal`, tối đa 10 chữ số phần nguyên + ĐÚNG 2 chữ số thập phân.
+#: KHÔNG dùng `float` — xem `docs/catalog.md` §3.1.
+Money = Annotated[Decimal, Field(ge=0, max_digits=12, decimal_places=2)]
+
+#: Mặc định và giá trị cho phép của `compatibility_type`.
+COMPATIBILITY_TYPES = ("FULL", "PARTIAL", "CASE_FIT")
+
+#: Nhãn tồn kho. CHỈ hai giá trị này — G14 chưa có inventory engine nên TUYỆT ĐỐI
+#: không có số lượng. Đổi tập này thì sửa `docs/catalog.md` §7.3 trước.
+AVAILABILITY_IN_STOCK = "IN_STOCK"
+AVAILABILITY_OUT_OF_STOCK = "OUT_OF_STOCK"
+
+
+class CategoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    code: str
+    name: str
+    sort_order: int
+
+
+class CompatibilityOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    device_brand: str
+    device_model_code: str
+    compatibility_type: str
+
+
+class VariantOut(BaseModel):
+    """SKU nhìn từ phía CÔNG KHAI: KHÔNG có `cost_price`, KHÔNG có cờ nội bộ.
+
+    Đường công khai CHỈ trả SKU `active = true`, nên mọi SKU có mặt ở đây đều
+    mua được. Nhãn Còn/Hết hàng nằm ở CẤP SẢN PHẨM — xem `ProductOut.availability`.
+    """
+
+    sku: str
+    variant_name: str
+    color: str | None = None
+    sale_price: Decimal
+    compare_at_price: Decimal | None = None
+    currency: str
+    compatibility: list[CompatibilityOut] = []
+
+
+class ProductOut(BaseModel):
+    product_id: uuid.UUID
+    name: str
+    slug: str
+    description: str | None = None
+    brand: str | None = None
+    category: CategoryOut | None = None
+    #: `IN_STOCK` khi có ÍT NHẤT MỘT SKU active, ngược lại `OUT_OF_STOCK`.
+    #: Đây là trạng thái BÁN ĐƯỢC hay không — KHÔNG phải số lượng tồn kho.
+    #: G14 chưa có inventory engine nên TUYỆT ĐỐI không có con số nào ở đây.
+    availability: str
+    variants: list[VariantOut] = []
+
+
+class ProductPageOut(BaseModel):
+    items: list[ProductOut]
+    total: int
+    page: int
+    page_size: int
+
+
+class AdminVariantOut(VariantOut):
+    """Bản quản trị: THÊM cờ nội bộ và `cost_price`. Chiều kế thừa có kiểm soát."""
+
+    active: bool
+    stock_tracking: bool
+    cost_price: Decimal | None = None
+
+
+class AdminProductOut(ProductOut):
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+    variants: list[AdminVariantOut] = []
+
+
+class AdminProductPageOut(BaseModel):
+    items: list[AdminProductOut]
+    total: int
+    page: int
+    page_size: int
+
+
+def _validate_slug(value: str) -> str:
+    cleaned = value.strip().lower()
+    if not SLUG_RE.match(cleaned):
+        raise ValueError(
+            "slug chỉ được gồm chữ thường a-z, chữ số 0-9 và dấu gạch ngang giữa các từ "
+            "(ví dụ: op-iphone-16-pro-max)"
+        )
+    return cleaned
+
+
+def _validate_sku(value: str) -> str:
+    cleaned = value.strip().upper()
+    if not SKU_RE.match(cleaned):
+        raise ValueError(
+            "sku chỉ được gồm chữ HOA A-Z, chữ số 0-9 và dấu gạch ngang giữa các phần "
+            "(ví dụ: OP-16PM-DEN)"
+        )
+    return cleaned
+
+
+def _validate_category_code(value: str) -> str:
+    cleaned = value.strip().upper()
+    if not CATEGORY_CODE_RE.match(cleaned):
+        raise ValueError("category_code là chữ HOA, số và gạch dưới (ví dụ: CASE)")
+    return cleaned
+
+
+class ProductCreateRequest(BaseModel):
+    """Tạo sản phẩm. Mọi trường do admin nhập — hệ thống KHÔNG bịa sản phẩm nào."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=160)
+    slug: str = Field(min_length=1, max_length=160)
+    category_code: str = Field(min_length=1, max_length=40)
+    description: str | None = Field(default=None, max_length=4000)
+    brand: str | None = Field(default=None, max_length=80)
+    active: bool = True
+
+    @field_validator("slug")
+    @classmethod
+    def _check_slug(cls, value: str) -> str:
+        return _validate_slug(value)
+
+    @field_validator("category_code")
+    @classmethod
+    def _check_category_code(cls, value: str) -> str:
+        return _validate_category_code(value)
+
+    @field_validator("description", "brand", mode="before")
+    @classmethod
+    def _blank_becomes_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+
+class ProductPatchRequest(BaseModel):
+    """Sửa sản phẩm. KHÔNG cho sửa `slug` — slug là khoá tra cứu công khai.
+
+    Đổi slug là làm gãy mọi liên kết đã chia sẻ và mọi đơn hàng đang trỏ tới nó.
+    Cần slug khác thì tạo sản phẩm mới và tắt sản phẩm cũ.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    category_code: str | None = Field(default=None, min_length=1, max_length=40)
+    description: str | None = Field(default=None, max_length=4000)
+    brand: str | None = Field(default=None, max_length=80)
+    active: bool | None = None
+
+    @field_validator("category_code")
+    @classmethod
+    def _check_category_code(cls, value: str | None) -> str | None:
+        return None if value is None else _validate_category_code(value)
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self) -> ProductPatchRequest:
+        if (
+            self.name is None
+            and self.category_code is None
+            and self.description is None
+            and self.brand is None
+            and self.active is None
+        ):
+            raise ValueError("Cần gửi ít nhất một trường để sửa.")
+        return self
+
+
+class VariantCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    sku: str = Field(min_length=1, max_length=64)
+    variant_name: str = Field(min_length=1, max_length=120)
+    color: str | None = Field(default=None, max_length=40)
+    cost_price: Money | None = None
+    sale_price: Money
+    compare_at_price: Money | None = None
+    currency: str = Field(default="VND", min_length=3, max_length=3)
+    active: bool = True
+    stock_tracking: bool = False
+
+    @field_validator("sku")
+    @classmethod
+    def _check_sku(cls, value: str) -> str:
+        return _validate_sku(value)
+
+    @field_validator("currency")
+    @classmethod
+    def _check_currency(cls, value: str) -> str:
+        cleaned = value.strip().upper()
+        if not re.fullmatch(r"[A-Z]{3}", cleaned):
+            raise ValueError("currency là mã tiền tệ 3 chữ HOA (ví dụ: VND)")
+        return cleaned
+
+    @field_validator("color", mode="before")
+    @classmethod
+    def _blank_color(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @model_validator(mode="after")
+    def _compare_at_not_below_sale(self) -> VariantCreateRequest:
+        """Giá gạch < giá bán là NÓI DỐI khách. DB cũng chặn, nhưng chặn sớm hơn
+        thì thông báo lỗi rõ ràng hơn (422 kèm tên trường, thay vì 500 từ DB)."""
+        if self.compare_at_price is not None and self.compare_at_price < self.sale_price:
+            raise ValueError("compare_at_price (giá gạch) không được nhỏ hơn sale_price")
+        return self
+
+
+class VariantPatchRequest(BaseModel):
+    """Sửa SKU. KHÔNG cho sửa `sku` (mã hàng là khoá tra cứu) và không sửa `product_id`."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    variant_name: str | None = Field(default=None, min_length=1, max_length=120)
+    color: str | None = Field(default=None, max_length=40)
+    cost_price: Money | None = None
+    sale_price: Money | None = None
+    compare_at_price: Money | None = None
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    active: bool | None = None
+    stock_tracking: bool | None = None
+
+    @field_validator("currency")
+    @classmethod
+    def _check_currency(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip().upper()
+        if not re.fullmatch(r"[A-Z]{3}", cleaned):
+            raise ValueError("currency là mã tiền tệ 3 chữ HOA (ví dụ: VND)")
+        return cleaned
+
+    @field_validator("color", mode="before")
+    @classmethod
+    def _blank_color(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self) -> VariantPatchRequest:
+        if all(
+            getattr(self, name) is None
+            for name in (
+                "variant_name",
+                "color",
+                "cost_price",
+                "sale_price",
+                "compare_at_price",
+                "currency",
+                "active",
+                "stock_tracking",
+            )
+        ):
+            raise ValueError("Cần gửi ít nhất một trường để sửa.")
+        return self
+
+
+class CompatibilityCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    device_brand: str = Field(default="Apple", min_length=1, max_length=40)
+    #: MÃ máy (`iphone-16-pro-max`), KHÔNG phải tên hiển thị. Dùng CHUNG
+    #: `MODEL_CODE_RE` với danh mục iPhone: hai quy tắc là hai quy tắc sẽ lệch nhau.
+    device_model_code: str = Field(min_length=1, max_length=64)
+    compatibility_type: str = Field(default="FULL", min_length=1, max_length=20)
+
+    @field_validator("device_model_code")
+    @classmethod
+    def _check_device_model_code(cls, value: str) -> str:
+        return _validate_model_code(value)
+
+    @field_validator("compatibility_type")
+    @classmethod
+    def _check_compatibility_type(cls, value: str) -> str:
+        cleaned = value.strip().upper()
+        if cleaned not in COMPATIBILITY_TYPES:
+            raise ValueError(
+                "compatibility_type phải là một trong: " + ", ".join(COMPATIBILITY_TYPES)
+            )
+        return cleaned

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Chi tiết phụ kiện VIP PHONE — giá bán, dòng máy tương thích, tình trạng còn hàng.">
+  <meta name="robots" content="noindex">
+  <title>VIP PHONE — Chi tiết sản phẩm</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-vp-page="product">
+  <a class="skip-link" href="#main">Bỏ qua điều hướng, tới nội dung chính</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">VIP</span>
+      <span class="brand-name">PHONE</span>
+    </div>
+    <span class="co-brand">VIP ORDER × BNI</span>
+  </header>
+
+  <main class="container" id="main">
+    <p class="field-hint"><a href="/shop">← Về cửa hàng</a></p>
+
+    <noscript>
+      <p class="status bad" role="alert">
+        Trang này cần JavaScript để tải thông tin sản phẩm. Vui lòng bật JavaScript rồi tải lại.
+      </p>
+    </noscript>
+
+    <p class="status bad" id="productError" role="alert" hidden></p>
+
+    <article class="card" id="productDetail" aria-labelledby="productTitle" hidden>
+      <p class="eyebrow" id="productCategory"></p>
+      <h1 id="productTitle"></h1>
+      <p class="status ok" id="productAvailability"></p>
+      <div id="productBody"></div>
+    </article>
+
+    <section class="card" aria-labelledby="about-shop-title" id="aboutShop">
+      <h2 id="about-shop-title" class="h3">Về phụ kiện VIP PHONE</h2>
+      <p>
+        Giá hiển thị là giá bán đang niêm yết. Tình trạng chỉ có hai mức
+        <strong>Còn hàng</strong> và <strong>Hết hàng</strong> — hệ thống chưa có
+        sổ kho nên <strong>không hiển thị số lượng</strong>, và sẽ không hiển thị
+        cho tới khi có sổ kho thật.
+      </p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>VIP PHONE — phụ kiện cho cộng đồng VIP ORDER × BNI.</p>
+  </footer>
+
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/util.js"></script>
+  <script src="assets/js/product.js"></script>
+</body>
+</html>

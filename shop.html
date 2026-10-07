@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Cửa hàng phụ kiện VIP PHONE — ốp lưng, dán màn hình, sạc, tai nghe. Lọc theo dòng máy.">
+  <meta name="robots" content="noindex">
+  <title>VIP PHONE — Cửa hàng phụ kiện</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-vp-page="shop">
+  <a class="skip-link" href="#main">Bỏ qua điều hướng, tới nội dung chính</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">VIP</span>
+      <span class="brand-name">PHONE</span>
+    </div>
+    <span class="co-brand">VIP ORDER × BNI</span>
+  </header>
+
+  <main class="container" id="main">
+    <section class="card hero" aria-labelledby="shop-title">
+      <p class="eyebrow">PHỤ KIỆN CHÍNH HÃNG</p>
+      <h1 id="shop-title">Cửa hàng phụ kiện</h1>
+      <p class="hero-copy">
+        Chọn đúng dòng máy để xem phụ kiện vừa với máy bạn. Giá hiển thị là giá bán
+        thật đang niêm yết — không có giá "ảo" và không có số lượng tồn kho bịa ra.
+      </p>
+    </section>
+
+    <section class="card" aria-labelledby="filter-title">
+      <h2 id="filter-title" class="h3">Tìm phụ kiện</h2>
+
+      <noscript>
+        <p class="status bad" role="alert">
+          Trang này cần JavaScript để tải danh sách sản phẩm. Vui lòng bật JavaScript rồi tải lại.
+        </p>
+      </noscript>
+
+      <form id="shopFilters" novalidate>
+        <div class="grid two">
+          <label for="filterCategory">
+            Nhóm hàng
+            <select id="filterCategory" name="category">
+              <option value="">Tất cả nhóm hàng</option>
+            </select>
+          </label>
+          <label for="filterDevice">
+            Dòng máy
+            <select id="filterDevice" name="device_model">
+              <option value="">Tất cả dòng máy</option>
+            </select>
+          </label>
+        </div>
+        <label for="filterKeyword">
+          Từ khoá
+          <input id="filterKeyword" name="q" type="search" maxlength="120"
+                 placeholder="Ví dụ: ốp, sạc, OP-16">
+          <span class="field-hint">Tìm theo tên sản phẩm hoặc mã SKU.</span>
+        </label>
+        <div class="admin-actions">
+          <button type="submit" class="primary-btn" id="filterSubmit">TÌM</button>
+          <button type="button" class="secondary-btn" id="filterReset">XOÁ LỌC</button>
+        </div>
+      </form>
+
+      <p class="field-hint" id="shopCount" role="status" aria-live="polite"></p>
+      <p class="status bad" id="shopError" role="alert" hidden></p>
+    </section>
+
+    <section aria-labelledby="list-title">
+      <h2 id="list-title" class="h3">Sản phẩm</h2>
+      <div id="productList" class="product-grid"></div>
+      <nav class="pager" id="pager" aria-label="Phân trang" hidden>
+        <button type="button" class="secondary-btn" id="prevPage">← Trang trước</button>
+        <span class="pager-info" id="pageInfo"></span>
+        <button type="button" class="secondary-btn" id="nextPage">Trang sau →</button>
+      </nav>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>VIP PHONE — phụ kiện cho cộng đồng VIP ORDER × BNI.</p>
+  </footer>
+
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/util.js"></script>
+  <script src="assets/js/shop.js"></script>
+</body>
+</html>

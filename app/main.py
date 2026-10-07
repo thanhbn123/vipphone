@@ -21,7 +21,17 @@ from . import __version__
 from .config import Settings, get_settings
 from .errors import ApiError
 from .giftcodes import is_well_formed_gift_code, normalize_gift_code
-from .routers import admin, admin_customers, catalog, gifts, health, leads, public_config
+from .routers import (
+    admin,
+    admin_customers,
+    admin_products,
+    catalog,
+    gifts,
+    health,
+    leads,
+    products,
+    public_config,
+)
 from .security import apply_security_headers
 
 logger = logging.getLogger("vipphone")
@@ -35,6 +45,10 @@ STATIC_PAGES = {
     #: được header xác thực khi mở một trang HTML, nên chặn ở tầng trang là chặn
     #: nhầm chỗ: nó chỉ làm hỏng trang mà không bảo vệ thêm dữ liệu nào.
     "/admin-leads.html": "admin-leads.html",
+    #: G14 — cửa hàng. Vỏ trang KHÔNG chứa dữ liệu: mọi sản phẩm đến từ
+    #: `/api/products`. Hard-code sản phẩm vào HTML là thứ bị cấm (xem
+    #: `docs/catalog.md` §7.4).
+    "/shop": "shop.html",
 }
 
 
@@ -135,6 +149,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(gifts.router)
     app.include_router(admin.router)
     app.include_router(admin_customers.router)
+    app.include_router(products.router)
+    app.include_router(admin_products.router)
 
     # -------------------------------------------------------------- tĩnh
     static_root: Path = app_settings.static_dir
@@ -160,6 +176,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return handler
 
         app.get(route_path, include_in_schema=False)(make_handler(filename))
+
+    @app.get("/product/{slug}", include_in_schema=False)
+    def product_page(slug: str) -> FileResponse:
+        """Trang chi tiết sản phẩm.
+
+        Đường dẫn động, nhưng LUÔN trả về đúng một file tĩnh — `slug` KHÔNG bao
+        giờ được dùng để ghép đường dẫn file, nên không có đường đi ngược thư mục.
+        Slug có tồn tại hay không do `/api/products/{slug}` quyết định ở phía
+        trình duyệt; slug sai ⇒ trang hiện "không tìm thấy", KHÔNG hiện hàng giả.
+        """
+        del slug  # cố ý không dùng để dựng đường dẫn file
+        return FileResponse(static_root / "product.html")
 
     @app.get("/gift/{gift_code}", include_in_schema=False)
     def gift_shortlink(gift_code: str) -> RedirectResponse:

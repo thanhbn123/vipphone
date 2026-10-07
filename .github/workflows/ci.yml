@@ -66,19 +66,25 @@ jobs:
           set -euo pipefail
           for f in \
             index.html success.html redeem.html admin-leads.html \
+            shop.html product.html \
             assets/css/styles.css \
             assets/js/config.js assets/js/tracking.js assets/js/util.js \
             assets/js/qr.js assets/js/app.js assets/js/success.js \
             assets/js/redeem.js assets/js/qr-scan.js assets/js/admin-leads.js \
             assets/js/turnstile.js \
+            assets/js/shop.js assets/js/product.js \
             app/routers/public_config.py \
             tests/test_turnstile.py tests/test_auth_boundary.py \
             data/iphone-models.json \
             app/main.py app/config.py app/models.py \
             app/routers/admin.py app/services/admin_leads.py \
+            app/routers/products.py app/routers/admin_products.py \
+            app/services/catalog.py \
             alembic.ini Makefile pytest.ini .env.example \
             migrations/versions/0001_initial.py \
+            migrations/versions/0007_product_catalog.py \
             docs/MASTER_STATUS.md docs/architecture.md docs/lead-schema.md \
+            docs/catalog.md \
             docs/adr/0001-stack-selection.md \
             docs/staging.md docs/pii-data-map.md docs/OWNER_DECISIONS_REQUIRED.md \
             docs/decisions/PII_RETENTION_OPTIONS.md \
@@ -179,7 +185,7 @@ jobs:
       - name: Guard — HTML không dùng inline script/style/handler (CSP nghiêm)
         run: |
           set -euo pipefail
-          for f in index.html success.html redeem.html admin-leads.html; do
+          for f in index.html success.html redeem.html admin-leads.html shop.html product.html; do
             grep -q '<html lang="vi"' "$f" || { echo "LỖI: $f thiếu lang=\"vi\""; exit 1; }
             grep -q 'name="viewport"' "$f" || { echo "LỖI: $f thiếu viewport"; exit 1; }
             if grep -nE '\son(click|submit|change|input|load|error)=' "$f"; then
