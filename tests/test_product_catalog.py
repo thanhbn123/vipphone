@@ -755,14 +755,40 @@ def test_NEGATIVE_control_join_would_duplicate_but_exists_does_not(client, staff
     assert count_products(db, ProductFilters(device_model="iphone-16-pro-max")) == 1
 
 
-def test_NEGATIVE_control_compatibility_rows_really_exist(db, client, staff_headers):
-    """Đối chứng cho lọc theo thiết bị: khai báo CÓ thật trong DB, không phải rỗng."""
+def test_NEGATIVE_control_device_filter_query_path_discriminates(db, client, staff_headers):
+    """Đối chứng âm cho lọc theo thiết bị — đo QUA ĐƯỜNG TRUY VẤN THẬT.
+
+    V10 — VÌ SAO PHẢI VIẾT LẠI: bản cũ tên là `..._compatibility_rows_really_exist`
+    nhưng chỉ khẳng định có dòng trong `device_compatibility`. Nó KHÔNG đi qua
+    `product_query`, nên khi phá bỏ nhánh lọc theo thiết bị thì nó **vẫn XANH** —
+    một "đối chứng âm" không phân biệt được gì, đúng thứ mà CLAUDE.md §12.1 gọi là
+    "thứ dùng để kiểm chứng lại tự nó không trung thực".
+
+    Bản này giữ lại phần tiền đề (dòng khai báo CÓ thật, để con số 0 bên dưới không
+    phải do DB rỗng) rồi ĐO QUA `count_products` — chính hàm dựng truy vấn của
+    đường công khai:
+
+    - khớp mã đã khai ⇒ 1
+    - KHÔNG khớp mã nào ⇒ 0   ← phá nhánh `_compatible_exists` là vế này ĐỎ (ra 1)
+    - không lọc thiết bị ⇒ 1  ← chốt con số 0 ở trên là do LỌC, không do thiếu dữ liệu
+    """
     created = _create_product(client, staff_headers)
     _create_variant(client, staff_headers, created["product_id"])
     _add_compatibility(client, staff_headers, "OP-VIP-01", "iphone-16-pro-max")
 
     rows = db.execute(select(DeviceCompatibility)).scalars().all()
-    assert len(rows) == 1
+    assert len(rows) == 1, "tiền đề sai: phải có ĐÚNG một dòng khai báo tương thích"
     assert rows[0].device_model_code == "iphone-16-pro-max", (
         "khoá join phải là MÃ máy, không phải tên hiển thị"
     )
+
+    from app.services.catalog import ProductFilters, count_products
+
+    assert count_products(db, ProductFilters(device_model="iphone-16-pro-max")) == 1
+    assert (
+        count_products(db, ProductFilters(device_model="iphone-khong-co-that")) == 0
+    ), "lọc theo máy KHÔNG khớp mà vẫn ra sản phẩm — nhánh lọc đã hỏng"
+    assert count_products(db, ProductFilters()) == 1, (
+        "không lọc gì mà cũng ra 0 ⇒ con số 0 ở trên là do DB rỗng, không phải do lọc"
+    )
+
