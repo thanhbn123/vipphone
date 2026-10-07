@@ -1453,3 +1453,63 @@ dịch vụ đang chạy. Đó là lý do cách này an toàn.
 
 **Khoá Turnstile thật** — `TURNSTILE_SITE_KEY` và `TURNSTILE_SECRET_KEY` đều **NOT SET**.
 ⇒ `TURNSTILE_REAL = BLOCKED_EXTERNAL_CREDENTIAL`. Không ghi PASS cho thứ chưa đo.
+
+---
+
+## 35. SỰ CỐ STAGING 04/10 — PostgreSQL CHẾT 3 NGÀY (đã sửa gốc)
+
+### 35.1 Triệu chứng và cách phát hiện
+
+Ngày 07/10 khi deploy G13, `docker run` thất bại. Kiểm ra:
+
+```
+vipphone-staging-pg | Exited (255) | FinishedAt=2026-10-04T02:01:12Z
+ExitCode=255  OOMKilled=false
+```
+
+`/api/health` vẫn **200** suốt 3 ngày (nó chỉ kiểm tiến trình app).
+**`/api/ready` mới là cái phát hiện** — nó trả **503**. Ai chỉ nhìn `health` sẽ tưởng hệ thống khoẻ.
+
+### 35.2 Nguyên nhân gốc — đo được, không suy đoán
+
+```
+vipphone-staging-pg   -> RestartPolicy = no          ← SAI, do tôi tạo thiếu cờ
+mọi container khác    -> RestartPolicy = unless-stopped
+```
+
+Mốc thời gian khớp **chính xác**:
+
+| | |
+|---|---|
+| Máy chủ khởi động lại | `2026-10-04 09:01:02 +07` = **`02:01:12Z`** |
+| PG dừng | `FinishedAt = 2026-10-04T02:01:12Z` |
+
+**Máy chủ reboot. Mọi container có `unless-stopped` tự sống lại — trừ PostgreSQL của vipphone, vì lúc tạo tôi đã quên cờ đó.** Đây là lỗi của tôi, không phải sự cố hạ tầng.
+
+### 35.3 Sửa gốc
+
+```
+docker update --restart unless-stopped vipphone-staging-pg   # đã chạy
+```
+
+**Chưa chứng minh được nó sống qua reboot thật.** `docker stop` đánh dấu "dừng thủ công" nên `unless-stopped` **cố ý** không bật lại — phép thử đó chỉ chứng minh *chính sách đã đặt đúng*. Muốn chứng minh thật phải khởi động lại Docker daemon, mà việc đó **làm gián đoạn các dự án khác** trên máy chủ dùng chung ⇒ **cố ý không làm**.
+
+Bằng chứng gián tiếp đủ mạnh: **mọi container khác đều có `unless-stopped` và đã sống qua đúng lần reboot 04/10 đó.**
+
+### 35.4 Đổi CẤU TRÚC, không chỉ vá (luật §12.2)
+
+Đây là **lần hỏng thứ hai cùng kiểu** (lần trước: thiếu `httpx` làm app crash-loop ⇒ phải thêm chốt CI). Nên lần này thêm **phép đo độc lập** thay vì trông vào việc có người nhớ kiểm:
+
+`scripts/staging_health_guard.sh` — kiểm 4 tầng:
+1. **chính sách restart** của cả hai container (đúng nguyên nhân gốc)
+2. container đang chạy
+3. **DB đọc được** + migration head
+4. `/api/health` **và** `/api/ready` — ghi rõ `ready` mới là cái phát hiện DB chết
+
+**Đối chứng âm đã chạy:** ca đúng `exit=0`; trỏ vào URL sai → `exit=1` kèm dòng `HỎNG`. Vậy script **phân biệt được** đạt và hỏng, không phải lúc nào cũng báo đạt.
+
+### 35.5 Bài học ghi lại
+
+- **`/api/health` không phát hiện được DB chết.** Chỉ `ready` phát hiện. Đừng bao giờ chỉ nhìn `health`.
+- **Tôi đã tự che bằng chứng của chính mình:** lệnh deploy ghi `>/dev/null 2>&1` nên khi `alembic upgrade` thất bại, tôi **không thấy** — và tưởng deploy thành công trong khi container app không hề được thay. Từ nay deploy phải hiện output.
+- **Các kết quả "staging PASS" báo trong phiên 07/10 TRƯỚC khi phát hiện sự cố này cần được coi là CHƯA CHẮC CHẮN** và nên đo lại.
