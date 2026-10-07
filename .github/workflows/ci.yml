@@ -115,6 +115,12 @@ jobs:
             node --check "$f"
           done
 
+      # G14/V8: `Number("250000.10")` + `Intl.NumberFormat("vi-VN")` từng in ra
+      # `250.000,1 đ` — mất chữ số 0 cuối, tức là hiển thị SAI giá đã lưu. Chốt này
+      # require() đúng tệp đang phục vụ khách, không chép lại logic.
+      - name: Guard — tiền hiển thị phải khớp tiền đã lưu
+        run: node scripts/kiem-tien-hien-thi.js
+
       - name: Guard — không được có lại QR giả
         run: |
           set -euo pipefail

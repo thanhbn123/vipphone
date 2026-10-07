@@ -48,17 +48,9 @@
 
   /* --------------------------------------------------------------- tiện ích */
 
-  /**
-   * Định dạng tiền để HIỂN THỊ. Giá từ API là chuỗi thập phân chính xác
-   * ("250000.00"); ở đây chỉ ĐỌC ĐỂ IN RA, không tính toán trên số thực.
-   * Mọi phép tính tiền nằm ở máy chủ với `Decimal`.
-   */
-  function formatMoney(value, currency) {
-    var amount = Number(value);
-    if (!isFinite(amount)) return String(value) + " " + (currency || "");
-    var text = new Intl.NumberFormat("vi-VN").format(amount);
-    return text + " " + (currency === "VND" ? "đ" : currency || "");
-  }
+  // Tiền hiển thị đi qua `assets/js/money.js` — MỘT bản duy nhất, và bản đó định
+  // dạng từ CHUỖI thập phân, KHÔNG qua `Number`. Xem đầu tệp đó để biết vì sao.
+  var formatMoney = window.VPMoney.formatMoney;
 
   function availabilityLabel(code) {
     return code === "IN_STOCK" ? "Còn hàng" : "Hết hàng";

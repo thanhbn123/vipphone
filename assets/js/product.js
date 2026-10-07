@@ -35,13 +35,8 @@
     if (aboutBox) aboutBox.hidden = false;
   }
 
-  /** Xem chú thích ở `shop.js` — chỉ ĐỌC ĐỂ IN, không tính toán tiền ở client. */
-  function formatMoney(value, currency) {
-    var amount = Number(value);
-    if (!isFinite(amount)) return String(value) + " " + (currency || "");
-    var text = new Intl.NumberFormat("vi-VN").format(amount);
-    return text + " " + (currency === "VND" ? "đ" : currency || "");
-  }
+  /** Tiền hiển thị: dùng CHUNG `assets/js/money.js` với `/shop` — xem tệp đó. */
+  var formatMoney = window.VPMoney.formatMoney;
 
   function slugFromPath() {
     var parts = window.location.pathname.split("/").filter(function (part) {
