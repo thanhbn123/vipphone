@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>VIP PHONE — Quản trị bán hàng</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+</head>
+<body data-vp-page="admin-commerce">
+  <a class="skip-link" href="#main">Bỏ qua điều hướng, tới nội dung chính</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">VIP</span>
+      <span class="brand-name">PHONE</span>
+    </div>
+    <span class="co-brand">ADMIN BÁN HÀNG</span>
+  </header>
+
+  <main class="container" id="main">
+    <p class="banner banner-warn" role="note">
+      <strong>KHU VỰC QUẢN TRỊ.</strong> Mọi dữ liệu đi qua API có xác thực nhân viên.
+      Khoá truy cập chỉ sống trong phiên của tab này. <a href="/admin-leads.html">Lead &amp; danh mục iPhone →</a>
+    </p>
+
+    <section class="card" aria-labelledby="auth-title">
+      <h1 id="auth-title" class="h3">Khoá truy cập nhân viên</h1>
+      <label for="staffKey">Khoá truy cập
+        <input id="staffKey" type="password" autocomplete="off" spellcheck="false">
+      </label>
+      <nav class="admin-actions" aria-label="Chuyển mục">
+        <button type="button" class="secondary-btn" data-tab="orders">Đơn hàng</button>
+        <button type="button" class="secondary-btn" data-tab="inventory">Kho</button>
+        <button type="button" class="secondary-btn" data-tab="products">Giá &amp; ảnh sản phẩm</button>
+        <button type="button" class="secondary-btn" data-tab="report">Nguồn khách</button>
+      </nav>
+      <p class="status bad" id="adminError" role="alert" hidden></p>
+      <p class="field-hint" id="adminStatus" role="status" aria-live="polite"></p>
+    </section>
+
+    <!-- ============================== ĐƠN HÀNG -->
+    <section class="card" data-panel="orders" aria-labelledby="orders-title">
+      <h2 id="orders-title" class="h3">Đơn hàng</h2>
+      <form id="orderFilter" class="grid two">
+        <label>Trạng thái đơn
+          <select id="oStatus"><option value="">Tất cả</option>
+            <option>PENDING_PAYMENT</option><option>CONFIRMED</option><option>PROCESSING</option>
+            <option>SHIPPED</option><option>COMPLETED</option><option>CANCELLED</option></select>
+        </label>
+        <label>Thanh toán
+          <select id="oPayment"><option value="">Tất cả</option>
+            <option>UNPAID</option><option>PENDING</option><option>PAID</option>
+            <option>FAILED</option><option>REFUNDED</option></select>
+        </label>
+        <label>Mã đơn hoặc SĐT <input id="oQuery" maxlength="40"></label>
+        <p class="admin-actions"><button type="submit" class="primary-btn">LỌC</button></p>
+      </form>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Mã đơn</th><th>Khách</th><th>Trạng thái</th><th>Thanh toán</th><th>Tổng</th><th>Ngày</th><th></th></tr></thead>
+        <tbody id="orderRows"></tbody>
+      </table></div>
+      <div id="orderDetail" class="detail-box" hidden></div>
+    </section>
+
+    <!-- ============================== KHO -->
+    <section class="card" data-panel="inventory" aria-labelledby="inv-title" hidden>
+      <h2 id="inv-title" class="h3">Kho (SKU có theo dõi tồn)</h2>
+      <p class="admin-actions">
+        <label class="consent"><input type="checkbox" id="invLow"> Chỉ SKU sắp hết (&lt; 5)</label>
+        <button type="button" class="secondary-btn" id="invReload">Tải lại</button>
+      </p>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>SKU</th><th>Sản phẩm</th><th>Tồn</th><th>Đang giữ</th><th>Có thể bán</th><th></th></tr></thead>
+        <tbody id="invRows"></tbody>
+      </table></div>
+      <div id="invDetail" class="detail-box" hidden>
+        <h3 class="h3" id="invTitle"></h3>
+        <form id="invForm" class="grid two">
+          <label>Loại
+            <select id="invType"><option>RECEIPT</option><option>ADJUSTMENT</option>
+              <option>RETURN</option><option>OPENING</option></select>
+          </label>
+          <label>Số lượng (điều chỉnh có thể âm) <input id="invQty" type="number" required></label>
+          <label>Lý do (bắt buộc với điều chỉnh / trả hàng) <input id="invReason" maxlength="300"></label>
+          <p class="admin-actions"><button type="submit" class="primary-btn">GHI BIẾN ĐỘNG</button></p>
+        </form>
+        <div class="table-wrap"><table class="data-table">
+          <thead><tr><th>#</th><th>Loại</th><th>Δ tồn</th><th>Δ giữ</th><th>Đơn</th><th>Người làm</th><th>Lý do</th><th>Lúc</th></tr></thead>
+          <tbody id="invMoves"></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <!-- ============================== SẢN PHẨM -->
+    <section class="card" data-panel="products" aria-labelledby="prod-title" hidden>
+      <h2 id="prod-title" class="h3">Giá &amp; ảnh sản phẩm</h2>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Sản phẩm</th><th>SKU</th><th>Giá bán</th><th>Ảnh</th><th></th></tr></thead>
+        <tbody id="prodRows"></tbody>
+      </table></div>
+      <div id="prodDetail" class="detail-box" hidden>
+        <h3 class="h3" id="prodTitle"></h3>
+        <form id="priceForm" class="grid two">
+          <label>SKU <select id="priceSku"></select></label>
+          <label>Giá bán mới (VND, ví dụ 150000.00) <input id="priceNew" inputmode="decimal" required pattern="^\d{1,10}(\.\d{1,2})?$"></label>
+          <label>Lý do đổi giá <input id="priceReason" maxlength="300"></label>
+          <p class="admin-actions"><button type="submit" class="primary-btn">ĐỔI GIÁ</button></p>
+        </form>
+        <h4>Lịch sử giá</h4>
+        <div class="table-wrap"><table class="data-table">
+          <thead><tr><th>Giá cũ</th><th>Giá mới</th><th>Người đổi</th><th>Lúc</th><th>Lý do</th></tr></thead>
+          <tbody id="priceRows"></tbody>
+        </table></div>
+        <h4>Ảnh</h4>
+        <form id="imageForm" class="grid two">
+          <label>Tệp ảnh (PNG/JPEG/WEBP, ≤ 2 MB) <input id="imageFile" type="file" accept="image/png,image/jpeg,image/webp" required></label>
+          <label>Mô tả ảnh (alt) <input id="imageAlt" maxlength="200" required></label>
+          <p class="admin-actions"><button type="submit" class="primary-btn">TẢI ẢNH LÊN</button></p>
+        </form>
+        <div id="imageList" class="admin-image-list"></div>
+      </div>
+    </section>
+
+    <!-- ============================== BÁO CÁO NGUỒN -->
+    <section class="card" data-panel="report" aria-labelledby="rep-title" hidden>
+      <h2 id="rep-title" class="h3">Nguồn khách &amp; doanh thu</h2>
+      <form id="repForm" class="grid two">
+        <label>Mô hình
+          <select id="repModel">
+            <option value="order">Nguồn của ĐƠN (chiến dịch/referrer ra đơn)</option>
+            <option value="first_touch">Nguồn ĐẦU TIÊN của khách (kênh mang khách về)</option>
+          </select>
+        </label>
+        <label>Chiều nhóm
+          <select id="repDim"><option>source</option><option>campaign</option><option>ref</option>
+            <option>utm_source</option><option>utm_medium</option><option>utm_campaign</option><option>utm_content</option></select>
+        </label>
+        <p class="admin-actions"><button type="submit" class="primary-btn">XEM</button></p>
+      </form>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Giá trị</th><th>Khách</th><th>Đơn</th><th>Doanh thu</th><th>Đã thu</th></tr></thead>
+        <tbody id="repRows"></tbody>
+      </table></div>
+    </section>
+  </main>
+
+  <script src="/assets/js/config.js"></script>
+  <script src="/assets/js/money.js"></script>
+  <script src="/assets/js/admin-commerce.js"></script>
+</body>
+</html>

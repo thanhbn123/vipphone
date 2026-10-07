@@ -84,7 +84,7 @@ jobs:
             assets/js/turnstile.js \
             assets/js/shop.js assets/js/product.js assets/js/reco.js \
             assets/js/cart-store.js assets/js/cart.js assets/js/checkout.js assets/js/order-success.js \
-            cart.html checkout.html order-success.html \
+            cart.html checkout.html order-success.html admin-commerce.html assets/js/admin-commerce.js \
             app/routers/public_config.py \
             tests/test_turnstile.py tests/test_auth_boundary.py \
             data/iphone-models.json \
