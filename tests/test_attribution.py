@@ -173,3 +173,20 @@ def test_report_rejects_unknown_dimension(client, staff_headers):
         headers=staff_headers,
     )
     assert r.status_code == 422
+
+
+def test_customer_360_lists_orders_without_address(client, staff_headers):
+    lead(client, "0911111111", source="bni")
+    placed = order(client, "0911111111", {"source": "zalo"})
+    customers = client.get(
+        "/api/admin/customers", params={"phone": "0911111111"}, headers=staff_headers
+    ).json()
+    detail = client.get(
+        f"/api/admin/customers/{customers[0]['customer_id']}", headers=staff_headers
+    ).json()
+    assert [(o["order_number"], o["source"], o["grand_total"]) for o in detail["orders"]] == [
+        (placed["order_number"], "zalo", "100000.00")
+    ]
+    assert detail["acquisition"]["source"] == "bni"
+    assert detail["acquisition"]["acquired_via"] == "LEAD"
+    assert "address_line" not in str(detail["orders"])

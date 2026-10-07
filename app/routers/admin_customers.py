@@ -14,12 +14,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import Customer, CustomerAcquisition, CustomerDevice, Lead
+from ..models import Customer, CustomerAcquisition, CustomerDevice, Lead, Order
 from ..schemas import (
     CustomerAcquisitionOut,
     CustomerDetailOut,
     CustomerDeviceOut,
     CustomerGiftOut,
+    CustomerOrderOut,
     CustomerOut,
 )
 from ..security import require_staff
@@ -136,6 +137,21 @@ def get_customer(
             )
             for le in gifts
         ],
-        # G16 chưa làm. Trả [] thay vì bịa đơn hàng — xem ADR-0002 §4.
-        orders=[],
+        orders=[
+            CustomerOrderOut(
+                order_id=o.order_id,
+                order_number=o.order_number,
+                status=o.status,
+                payment_status=o.payment_status,
+                grand_total=o.grand_total,
+                currency=o.currency,
+                source=o.source,
+                created_at=o.created_at,
+            )
+            for o in db.execute(
+                select(Order)
+                .where(Order.customer_id == customer.id)
+                .order_by(Order.created_at.desc(), Order.id.desc())
+            ).scalars()
+        ],
     )

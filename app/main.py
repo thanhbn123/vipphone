@@ -51,6 +51,9 @@ STATIC_PAGES = {
     #: được header xác thực khi mở một trang HTML, nên chặn ở tầng trang là chặn
     #: nhầm chỗ: nó chỉ làm hỏng trang mà không bảo vệ thêm dữ liệu nào.
     "/admin-leads.html": "admin-leads.html",
+    #: Quản trị bán hàng — cùng nguyên tắc: vỏ trang không có dữ liệu, mọi dữ liệu
+    #: sau `/api/admin/*` + `require_staff`.
+    "/admin-commerce.html": "admin-commerce.html",
     #: G14 — cửa hàng. Vỏ trang KHÔNG chứa dữ liệu: mọi sản phẩm đến từ
     #: `/api/products`. Hard-code sản phẩm vào HTML là thứ bị cấm (xem
     #: `docs/catalog.md` §7.4).
