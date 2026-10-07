@@ -98,6 +98,7 @@ jobs:
             migrations/versions/0008_recommendation_priority.py \
             migrations/versions/0009_cart_order.py docs/commerce.md \
             migrations/versions/0010_payments.py docs/payments.md app/payments/providers.py \
+            migrations/versions/0011_inventory.py docs/inventory.md \
             docs/MASTER_STATUS.md docs/architecture.md docs/lead-schema.md \
             docs/catalog.md \
             docs/adr/0001-stack-selection.md \
