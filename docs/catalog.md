@@ -53,6 +53,26 @@ categories 1 ─── n products 1 ─── n product_variants (SKU) 1 ──�
 cấu hình seed, và trong câu lệnh kiểm tra trên staging. Một con số (`1`) không nói lên điều gì
 khi đọc log; `CHARGER` thì nói ngay. Chữ HOA để phân biệt rõ với slug sản phẩm (chữ thường).
 
+#### `categories` chỉ ĐỌC ở G14 — không có đường GHI nào
+
+Nói thẳng để không ai tưởng nhầm: G14 **không có** route `POST`/`PATCH`/`DELETE` cho category.
+Chỉ có hai đường ĐỌC (`GET /api/catalog/categories`, và category nhúng trong product). Vì vậy
+ba việc sau **hiện chỉ làm được bằng SQL trực tiếp trên DB**:
+
+| Việc | Cách làm hiện tại |
+|---|---|
+| Đổi `name` (tên hiển thị) | `UPDATE categories SET name = ... WHERE code = ...` |
+| Tắt một category (`active = false`) | `UPDATE categories SET active = false WHERE code = ...` |
+| Đổi `sort_order` | `UPDATE categories SET sort_order = ... WHERE code = ...` |
+
+Điều gì xảy ra khi tắt: `list_categories(include_inactive=False)` lọc `Category.active`, nên
+category đó **biến mất khỏi bộ lọc** ở `/shop`. **Sản phẩm thuộc category đó KHÔNG bị ẩn** —
+chúng vẫn hiện, chỉ là không lọc được theo category ấy nữa (category nhúng trong product vẫn
+trả về vì `CategoryOut` không lọc `active`). Đây là chủ ý của G14, không phải lỗi.
+
+Migration `0007` seed 10 category bằng `ON CONFLICT (code) DO NOTHING`, nên chạy lại migration
+**không ghi đè** tên/sort_order mà admin đã sửa tay (§3.10).
+
 ### 2.2 `products` — sản phẩm
 
 | Cột | Kiểu | Null | Ghi chú |
@@ -215,9 +235,33 @@ là gì: `DEMO-STAGING` trong tên + `source=staging-commerce-test`, và **xoá 
 | `sale_price >= 0` | CHECK DB + schema | giá âm là lỗi dữ liệu, không phải khuyến mãi |
 | `cost_price >= 0` khi có | CHECK DB + schema | như trên |
 | `compare_at_price >= sale_price` khi có | CHECK DB + schema | §3.3 |
+| **Bán DƯỚI giá nhập (`sale_price < cost_price`) là HỢP LỆ** | **KHÔNG chặn ở đâu cả — cố ý** | xem ngay dưới |
 | `currency` = 3 chữ HOA | schema (`^[A-Z]{3}$`) + mặc định `VND` | tránh `vnd`/`Vnd`/`VNĐ` thành ba loại tiền |
 | Tiền là `Decimal`, **không** `float` | kiểu cột DB + schema | §3.1 |
 | Public **không** trả `cost_price` | schema công khai riêng | §5.2 |
+
+### 4.1 Bán dưới giá nhập — luật thứ sáu, và vì sao KHÔNG chặn
+
+Đo được: `POST /api/admin/products/{id}/variants` với `sale_price = "100.00"` và
+`cost_price = "999.00"` ⇒ **201 Created**.
+
+**Kết luận: bán dưới giá nhập là ca HỢP LỆ.** Đây là **hành vi đúng**, không phải lỗ hổng, và
+được **giữ nguyên**. Lý do:
+
+1. **Xả hàng tồn là việc thật.** Bán lỗ có chủ đích để giải phóng vốn và mặt bằng là quyết định
+   của Owner, không phải lỗi dữ liệu. Một `CHECK (sale_price >= cost_price)` ở DB sẽ **chặn
+   luôn quyết định đó** — và chặn ở tầng thấp nhất, nơi không nói được lý do cho ai.
+2. **Không suy ra được ý định từ hai con số.** `100 < 999` giống nhau ở ca "xả hàng" và ở ca
+   "nhập sai giá". Cấm ở DB là đoán hộ; một **cảnh báo** thì để người quyết.
+3. **G14 không có audit giá** (§4, "chưa làm"), nên nếu chặn thì cũng không có dấu vết ai đã
+   định bán lỗ. Chặn mà không ghi lại còn tệ hơn cho phép mà có ghi.
+
+Ràng buộc thật sự đang có chỉ là `cost_price >= 0` và `sale_price >= 0`.
+
+**Việc mở (đề xuất, chưa làm):** cảnh báo mềm ở admin khi `sale_price < cost_price` (ví dụ cờ
+`below_cost: true` trong response quản trị) để người nhập thấy mình vừa làm gì. Chốt hành vi
+hiện tại bằng `test_selling_below_cost_price_is_allowed` — ai thêm ràng buộc cấm sẽ làm test
+**ĐỎ** và biết ngay mình đang đổi luật nghiệp vụ.
 
 **Chưa làm ở G14 (nói thẳng):** lịch sử giá (giá đổi lúc nào, ai đổi), giá theo số lượng,
 giá theo kênh, thuế/phí. Ghi thành việc mở.
@@ -262,8 +306,34 @@ chỉ khác là ai cũng đọc được. Có test auth boundary cho **từng** 
 ### 5.4 Bộ lọc công khai — áp `active` ở **cả hai tầng**
 
 `GET /api/products` chỉ trả product **và** SKU active. Bộ lọc `active` áp ở **một chỗ duy
-nhất** trong service (`public_product_query`) để danh sách và chi tiết **không thể** lệch nhau
-— nếu lọc hai nơi, bản vá thứ hai sẽ vô tác dụng dù mã trông đúng (§12.2 vault).
+nhất** trong service để danh sách và chi tiết **không thể** lệch nhau — nếu lọc hai nơi, bản
+vá thứ hai sẽ vô tác dụng dù mã trông đúng (§12.2 vault).
+
+Tên thật trong mã (`app/services/catalog.py`) — **không phải** `public_product_query`:
+
+| Thứ | Tên thật | Ở đâu |
+|---|---|---|
+| Hàm dựng truy vấn dùng chung | `product_query(filters)` | `app/services/catalog.py` |
+| Công tắc ranh giới công khai/quản trị | `ProductFilters.active_only` (`True` = công khai) | cùng tệp |
+| Lọc SKU `active` cho **cả** nhánh tên/slug/SKU | áp bên trong `product_query` | cùng tệp |
+
+`active_only` là công tắc **duy nhất**. Nó áp cho sản phẩm (`Product.active`) **và** cho SKU ở
+cả ba đường: `device_model` (`_compatible_exists`), `q` (nhánh SKU), và phần serialize
+(`load_variants(include_inactive=False)`). Nhánh `q` từng **thiếu** điều kiện SKU `active` —
+xem §5.5.
+
+### 5.5 Tìm kiếm `q` — SKU đã tắt không được kéo sản phẩm lên
+
+`GET /api/products?q=<mã SKU>` khớp tên, slug **và** mã SKU. Nhánh SKU **phải** lọc
+`ProductVariant.active` khi `active_only=True` (`app/services/catalog.py::product_query`).
+
+Vì sao vẫn là lỗi dù `variants` trả về rỗng: khách gõ đúng mã của hàng đã ngừng bán thì thấy
+**sản phẩm** hiện ra ở `/shop` — đó là xác nhận sự tồn tại của một món không còn bán, và `total`
+(dùng cho phân trang) cũng sai theo. Bản vá + test:
+`test_keyword_search_does_not_match_deactivated_sku`.
+
+Đường **quản trị** (`active_only=False`) giữ nguyên khả năng thấy SKU đã tắt — nếu không thì
+không bật lại được.
 
 Chi tiết `/api/products/{slug}`: product không active ⇒ **404** (không phải 403, không phải
 200-kèm-rỗng). 200-kèm-rỗng khiến UI tưởng đã lấy được hàng; 403 xác nhận sự tồn tại của slug
@@ -298,8 +368,12 @@ Dùng **`EXISTS` (bán kết nối)**, không dùng `JOIN`:
 WHERE EXISTS (SELECT 1 FROM product_variants v
               JOIN device_compatibility dc ON dc.sku_id = v.id
               WHERE v.product_id = products.id AND v.active
-                AND dc.device_brand = :brand AND dc.device_model_code = :code)
+                AND dc.device_model_code = :code)
 ```
+
+**Vị từ chỉ so `device_model_code`, KHÔNG so `device_brand`.** Bản tài liệu trước ghi
+`AND dc.device_brand = :brand` — đó là **tài liệu sai**, mã chưa bao giờ lọc theo brand. Xem
+§6.4 để biết vì sao và rủi ro còn lại.
 
 **Vì sao `EXISTS` chứ không `JOIN`:** một product có 3 SKU cùng tương thích với một máy thì
 `JOIN` trả **3 dòng trùng** cho cùng một product — danh sách phình ra, `total` phân trang sai,
@@ -314,6 +388,27 @@ thiết bị **ĐỎ**.
 
 Xem §3.6: `device_model_code` không FK tới `iphone_models`. Nghĩa là **có thể** khai một mã
 gõ sai và hệ thống không báo. Việc mở: cảnh báo ở admin + báo cáo mã mồ côi.
+
+### 6.4 Lọc KHÔNG theo `device_brand` — giới hạn đã biết
+
+`device_compatibility` có UNIQUE `(sku_id, device_brand, device_model_code)`, tức là **cùng một
+`device_model_code` có thể tồn tại dưới HAI brand khác nhau** và vẫn hợp lệ. Nhưng API công
+khai chỉ nhận `device_model` (MÃ máy), **không nhận brand**; vị từ vì vậy chỉ so
+`device_model_code`.
+
+Hệ quả, nói thẳng: nếu có ngày ai đó khai `device_model_code = "a54"` cho **cả** Apple lẫn
+Samsung, thì `GET /api/products?device_model=a54` trả về **cả hai**. Hôm nay chưa xảy ra vì
+`device_model_code` đang là từ vựng iPhone (`/api/catalog/iphone-models`) và brand trên thực tế
+luôn là `Apple`.
+
+Vì sao KHÔNG vá bằng cách thêm `device_brand` vào vị từ ngay: không có tham số brand nào để
+truyền vào, nên thêm brand sẽ là **đoán**. Ba đường đi hợp lệ, chọn khi cần:
+
+1. Thêm tham số `device_brand` cho API công khai (đổi hợp đồng API — cần Owner duyệt).
+2. Ràng buộc `device_model_code` là duy nhất toàn cục (đổi UNIQUE của bảng).
+3. Chỉ khai brand khi từ vựng máy thật sự mở rộng ra ngoài iPhone.
+
+Ghi thành **việc mở**, không tự đổi hành vi trong G14.
 
 ---
 
@@ -379,6 +474,9 @@ sửa UI.
 | 6 | FK cứng `device_model_code → iphone_models.model_code` | Cố ý không làm — xem §3.6, kèm rủi ro đã ghi |
 | 7 | Cảnh báo `device_model_code` gõ sai | Việc mở — xem §6.3 |
 | 8 | Gộp/đổi SKU đã bán | Không thể hoàn tác — cần luật nghiệp vụ của Owner |
+| 9 | **Route quản trị cho `categories`** (`POST`/`PATCH`, đổi tên, đặt `active`) | Bảng chỉ có 10 dòng từ vựng; thêm route là thêm bề mặt auth + validate cho lợi ích nhỏ. Hiện sửa bằng SQL — xem §2.1. Đây là **chủ ý**, không phải sót |
+| 10 | **Lọc theo `device_brand`** ở API công khai | Không có tham số brand để truyền vào ⇒ thêm brand sẽ là đoán. Giới hạn + ba đường đi: §6.4 |
+| 11 | **Cảnh báo mềm "bán dưới giá nhập"** ở admin | Hành vi hiện tại (cho phép) đã đúng và đã chốt bằng test; cảnh báo chỉ là tiện ích — xem §4.1 |
 
 ---
 
@@ -401,13 +499,24 @@ Trong `tests/test_product_catalog.py`:
 13. category `RESTRICT`: không xoá được category còn sản phẩm
 14. UI `/shop` + `/product/{slug}` trả 200, có `lang="vi"` + viewport, **không** inline
     script/style/handler
+15. **tiền HIỂN THỊ khớp tiền đã lưu** — `assets/js/money.js` định dạng từ CHUỖI thập phân,
+    đúng 2 chữ số thập phân (`"250000.10"` ⇒ `250.000,10 đ`). Chốt ở ba tầng:
+    `tests/test_money_display.py` (chạy `node scripts/kiem-tien-hien-thi.js` trên ĐÚNG tệp
+    đang phục vụ khách + 3 chốt tĩnh), job CI `Validate static frontend`, và E2E đọc
+    `.product-price` / `.sku-price` bằng trình duyệt thật
+16. **tìm kiếm `q` KHÔNG khớp SKU đã tắt** — `test_keyword_search_does_not_match_deactivated_sku`
+    (§5.5), kèm vế chốt đường quản trị vẫn thấy SKU đã tắt
+17. **bán dưới giá nhập vẫn tạo được** — `test_selling_below_cost_price_is_allowed` (§4.1)
 
-Và **3 đối chứng âm** — phá đúng thứ đang được bảo vệ, test phải ĐỎ:
+Và **các đối chứng âm** — phá đúng thứ đang được bảo vệ, test phải ĐỎ:
 
 | # | Phá gì | Test phải đỏ |
 |---|---|---|
 | 1 | Bỏ điều kiện `active` trong truy vấn công khai | test inactive ẩn khỏi public |
 | 2 | Gỡ UNIQUE `sku` | test `sku` UNIQUE |
-| 3 | Bỏ nhánh lọc compatibility | test lọc theo `device_model` |
+| 3 | Bỏ nhánh lọc compatibility (`_compatible_exists`) | test lọc theo `device_model` **và** `test_NEGATIVE_control_device_filter_query_path_discriminates` |
+| 4 | Bỏ `ProductVariant.active` khỏi nhánh `q` | `test_keyword_search_does_not_match_deactivated_sku` (total 1 thay vì 0) |
+| 5 | Đưa `Number()` + `Intl.NumberFormat` trở lại `money.js` | `test_money_formatter_source_never_uses_float_or_intl` + `test_formatMoney_outputs_two_decimals_from_decimal_strings` |
+| 6 | Thêm ràng buộc cấm `sale_price < cost_price` | `test_selling_below_cost_price_is_allowed` |
 
 Cách phá + kết quả đo ghi vào `MASTER_STATUS.md`, không chỉ nói "đã có đối chứng âm".

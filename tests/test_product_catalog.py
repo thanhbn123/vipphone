@@ -26,6 +26,13 @@ from sqlalchemy.exc import IntegrityError
 
 from app.models import Category, DeviceCompatibility, Product, ProductVariant
 
+# V6: bộ này chạy trên PostgreSQL THẬT (fixture `db`/`client` của `conftest.py`
+# dựng schema bằng migration rồi TRUNCATE trước mỗi test). Thiếu dấu này thì bước
+# CI tên "Integration tests (PostgreSQL)" — `pytest -m integration` — KHÔNG chạy
+# một bài nào của tệp này, dù chúng đều là test tích hợp. Đo được: trước khi thêm,
+# `-m integration` chọn 0/36 bài của tệp này.
+pytestmark = pytest.mark.integration
+
 PRODUCT_PAYLOAD = {
     "name": "Ốp lưu niệm VIP",
     "slug": "op-luu-niem-vip",
@@ -197,6 +204,46 @@ def test_public_json_never_exposes_cost_price(client, staff_headers):
 
     admin_raw = client.get("/api/admin/products", headers=staff_headers).text
     assert "cost_price" in admin_raw, "quản trị PHẢI thấy giá nhập"
+
+
+def test_selling_below_cost_price_is_allowed(client, staff_headers):
+    """V11 — BÁN DƯỚI GIÁ NHẬP là ca HỢP LỆ (xả hàng), không phải lỗi dữ liệu.
+
+    §4 của `docs/catalog.md` liệt kê 5 luật giá nhưng TRƯỚC BẢN VÁ không nhắc luật
+    này, nên người đọc tài liệu không biết hệ thống cố ý cho phép hay bỏ sót. Đo
+    được trên bản cũ: `sale_price 100.00` + `cost_price 999.00` ⇒ **201**. Hành vi
+    đó ĐÚNG và được GIỮ NGUYÊN — bài này chốt lại để lần sau ai thêm ràng buộc
+    `sale_price >= cost_price` thì biết ngay mình vừa đổi luật nghiệp vụ.
+
+    Vì sao KHÔNG chặn: xả hàng tồn, bán lỗ có chủ đích, và bán dưới giá nhập để
+    đẩy dòng tiền là quyết định của Owner — một CHECK ở DB sẽ chặn luôn quyết định
+    đó mà không nói được lý do cho ai. Ghi vào tài liệu, không chặn ở DB.
+    """
+    created = _create_product(client, staff_headers)
+    response = client.post(
+        f"/api/admin/products/{created['product_id']}/variants",
+        json={
+            "sku": "OP-BAN-LO-01",
+            "variant_name": "Xả hàng tồn",
+            "sale_price": "100.00",
+            "cost_price": "999.00",
+            "currency": "VND",
+        },
+        headers=staff_headers,
+    )
+    assert response.status_code == 201, (
+        "bán dưới giá nhập phải được PHÉP (xả hàng) — nếu ai đó thêm ràng buộc "
+        f"sale_price >= cost_price thì đổi luật và phải sửa docs/catalog.md §4: {response.text}"
+    )
+    # Endpoint trả CẢ sản phẩm (`AdminProductOut`), không trả riêng SKU.
+    variant = response.json()["variants"][0]
+    assert Decimal(variant["sale_price"]) == Decimal("100.00")
+    assert Decimal(variant["cost_price"]) == Decimal("999.00")
+    assert Decimal(variant["sale_price"]) < Decimal(variant["cost_price"])
+
+    # Bán dưới giá nhập KHÔNG được kéo theo việc lộ giá nhập ra công khai.
+    public_raw = client.get(f"/api/products/{PRODUCT_PAYLOAD['slug']}").text
+    assert "cost_price" not in public_raw and "999" not in public_raw
 
 
 def test_availability_is_never_a_quantity(client, staff_headers):
@@ -487,6 +534,47 @@ def test_keyword_wildcards_are_escaped(client, staff_headers):
         assert body["total"] == 0, f"ký tự {wildcard!r} khớp tất cả — chưa escape LIKE!"
 
 
+def test_keyword_search_does_not_match_deactivated_sku(client, staff_headers):
+    """V4 — SKU ĐÃ TẮT không được kéo sản phẩm cha lên tìm kiếm CÔNG KHAI.
+
+    LỖI ĐÃ ĐO ĐƯỢC: nhánh `q` trong `product_query` chỉ so `ProductVariant.sku`
+    mà THIẾU `ProductVariant.active.is_(True)`, trong khi nhánh `device_model`
+    (`_compatible_exists`) và `active_only` đều đã lọc. Đo trên bản cũ: tạo SKU
+    đã tắt `SKU-AN-DA-TAT` ⇒ `GET /api/products?q=SKU-AN-DA-TAT` trả **total: 1**.
+
+    Vì sao vẫn là lỗi dù danh sách SKU trả về rỗng: khách gõ đúng mã hàng đã
+    ngừng bán thì thấy SẢN PHẨM hiện ra ở `/shop`. Đó là xác nhận sự tồn tại của
+    một món không còn bán — và `total` dùng cho phân trang cũng sai.
+    """
+    created = _create_product(client, staff_headers)
+    _create_variant(client, staff_headers, created["product_id"], sku="SKU-AN-DA-TAT")
+    _create_variant(client, staff_headers, created["product_id"], sku="SKU-CON-BAN")
+
+    # Trước khi tắt: tìm theo SKU đang bán phải thấy.
+    assert client.get("/api/products", params={"q": "SKU-CON-BAN"}).json()["total"] == 1
+
+    response = client.patch(
+        "/api/admin/variants/SKU-AN-DA-TAT", json={"active": False}, headers=staff_headers
+    )
+    assert response.status_code == 200, response.text
+
+    # Đường CÔNG KHAI: SKU đã tắt không được kéo sản phẩm lên nữa.
+    after = client.get("/api/products", params={"q": "SKU-AN-DA-TAT"}).json()
+    assert after["total"] == 0, (
+        f"tìm công khai khớp SKU ĐÃ TẮT — total phải là 0, đang là {after['total']}"
+    )
+    assert after["items"] == []
+
+    # SKU còn bán vẫn tìm được ⇒ bản vá không chặn nhầm cả nhánh SKU.
+    assert client.get("/api/products", params={"q": "SKU-CON-BAN"}).json()["total"] == 1
+
+    # Đường QUẢN TRỊ phải GIỮ NGUYÊN khả năng thấy hàng đã tắt (bật lại được).
+    admin = client.get("/api/admin/products", headers=staff_headers).json()
+    assert admin["total"] == 1
+    admin_skus = {v["sku"]: v["active"] for v in admin["items"][0]["variants"]}
+    assert admin_skus == {"SKU-AN-DA-TAT": False, "SKU-CON-BAN": True}, admin_skus
+
+
 def test_filter_by_category(client, staff_headers):
     _create_product(client, staff_headers)
     other = _create_product(
@@ -707,14 +795,39 @@ def test_NEGATIVE_control_join_would_duplicate_but_exists_does_not(client, staff
     assert count_products(db, ProductFilters(device_model="iphone-16-pro-max")) == 1
 
 
-def test_NEGATIVE_control_compatibility_rows_really_exist(db, client, staff_headers):
-    """Đối chứng cho lọc theo thiết bị: khai báo CÓ thật trong DB, không phải rỗng."""
+def test_NEGATIVE_control_device_filter_query_path_discriminates(db, client, staff_headers):
+    """Đối chứng âm cho lọc theo thiết bị — đo QUA ĐƯỜNG TRUY VẤN THẬT.
+
+    V10 — VÌ SAO PHẢI VIẾT LẠI: bản cũ tên là `..._compatibility_rows_really_exist`
+    nhưng chỉ khẳng định có dòng trong `device_compatibility`. Nó KHÔNG đi qua
+    `product_query`, nên khi phá bỏ nhánh lọc theo thiết bị thì nó **vẫn XANH** —
+    một "đối chứng âm" không phân biệt được gì, đúng thứ mà CLAUDE.md §12.1 gọi là
+    "thứ dùng để kiểm chứng lại tự nó không trung thực".
+
+    Bản này giữ lại phần tiền đề (dòng khai báo CÓ thật, để con số 0 bên dưới không
+    phải do DB rỗng) rồi ĐO QUA `count_products` — chính hàm dựng truy vấn của
+    đường công khai:
+
+    - khớp mã đã khai ⇒ 1
+    - KHÔNG khớp mã nào ⇒ 0   ← phá nhánh `_compatible_exists` là vế này ĐỎ (ra 1)
+    - không lọc thiết bị ⇒ 1  ← chốt con số 0 ở trên là do LỌC, không do thiếu dữ liệu
+    """
     created = _create_product(client, staff_headers)
     _create_variant(client, staff_headers, created["product_id"])
     _add_compatibility(client, staff_headers, "OP-VIP-01", "iphone-16-pro-max")
 
     rows = db.execute(select(DeviceCompatibility)).scalars().all()
-    assert len(rows) == 1
+    assert len(rows) == 1, "tiền đề sai: phải có ĐÚNG một dòng khai báo tương thích"
     assert rows[0].device_model_code == "iphone-16-pro-max", (
         "khoá join phải là MÃ máy, không phải tên hiển thị"
+    )
+
+    from app.services.catalog import ProductFilters, count_products
+
+    assert count_products(db, ProductFilters(device_model="iphone-16-pro-max")) == 1
+    assert count_products(db, ProductFilters(device_model="iphone-khong-co-that")) == 0, (
+        "lọc theo máy KHÔNG khớp mà vẫn ra sản phẩm — nhánh lọc đã hỏng"
+    )
+    assert count_products(db, ProductFilters()) == 1, (
+        "không lọc gì mà cũng ra 0 ⇒ con số 0 ở trên là do DB rỗng, không phải do lọc"
     )

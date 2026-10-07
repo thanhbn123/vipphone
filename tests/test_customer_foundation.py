@@ -6,10 +6,15 @@
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import func, select
 
 from app.models import Customer, CustomerAcquisition, CustomerDevice, Lead
 from app.phone import normalize_phone
+
+# V6: cùng lỗi như `test_product_catalog.py` — 20 bài DB-backed nhưng thiếu dấu,
+# nên bước CI `pytest -m integration` không chạy bài nào của tệp này.
+pytestmark = pytest.mark.integration
 
 
 def _lead_by_gift(db, gift_code):

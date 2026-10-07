@@ -38,6 +38,13 @@ depends_on: str | Sequence[str] | None = None
 
 #: 10 category — TỪ VỰNG phân loại, không phải dữ liệu bán hàng.
 #: Thứ tự trong danh sách này CHÍNH LÀ `sort_order` (0..9) ⇒ deterministic.
+#:
+#: ⚠️  G14 KHÔNG có đường GHI nào cho `categories` (không route POST/PATCH/DELETE).
+#: Đổi `name`, đổi `sort_order`, hay đặt `active = false` HIỆN CHỈ LÀM ĐƯỢC BẰNG SQL
+#: trực tiếp trên DB:
+#:     UPDATE categories SET active = false WHERE code = 'STAND';
+#: Đây là chủ ý (nhẹ hơn mở thêm route admin cho một bảng từ vựng), không phải sót.
+#: Xem `docs/catalog.md` §2.1 và §8. Route admin cho category là việc mở.
 SEED_CATEGORIES: list[tuple[str, str]] = [
     ("CASE", "Ốp lưng"),
     ("SCREEN_PROTECTOR", "Dán màn hình"),

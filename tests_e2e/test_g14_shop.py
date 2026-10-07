@@ -100,7 +100,13 @@ def test_shop_renders_product_created_through_admin_api(
     assert DEMO_NAME in page.inner_text("#productList")
     assert page.inner_text(".badge") == "Còn hàng"
     # Giá hiển thị theo định dạng Việt Nam, đọc từ API chứ không hard-code.
-    assert "250.000" in page.inner_text(".product-price")
+    #
+    # V8: phải khớp ĐỦ 2 chữ số thập phân. `sale_price` gửi lên là "250000.00";
+    # bản cũ dùng `Number` + `Intl` nên rút còn "250.000 đ" — trình duyệt thật là
+    # tầng duy nhất nhìn thấy lỗi này, nên chốt phải nằm ở đây, không chỉ ở API.
+    assert page.inner_text(".product-price").strip() == "250.000,00 đ", (
+        "giá hiển thị phải khớp giá đã lưu (đủ 2 chữ số thập phân)"
+    )
     assert page.inner_text("#shopCount").startswith("Tìm thấy 1 sản phẩm")
     assert console_errors == [], f"trang cửa hàng có lỗi console/CSP: {console_errors}"
 
@@ -117,6 +123,22 @@ def test_product_detail_shows_no_quantity_anywhere(page, live_server, demo_produ
     assert "Còn hàng" in body
     assert demo_product["sku"] in body
     assert "iphone-16-pro-max" in body
+    # V8: trang CHI TIẾT là trang thứ hai bị lỗi tiền hiển thị (`product.js` có bản
+    # `formatMoney` chép tay riêng). Chốt riêng ở đây, không suy từ trang `/shop`.
+    #
+    # `.sku-price` chứa CẢ giá bán LẪN giá gạch (`<s class="price-compare">`), nên
+    # phải kiểm cả hai — cả hai đều đi qua `formatMoney`.
+    sku_prices = page.inner_text(".sku-price").strip()
+    for expected in ("250.000,00 đ", "300.000,00 đ"):
+        assert expected in sku_prices, (
+            f"giá ở trang chi tiết phải khớp giá đã lưu (đủ 2 chữ số thập phân): "
+            f"thiếu {expected!r} trong {sku_prices!r}"
+        )
+    # Chốt chống tái phát: dạng RÚT GỌN của bản cũ (`Intl` mặc định bỏ số 0 cuối)
+    # không được xuất hiện.
+    assert "250.000 đ" not in sku_prices and "300.000 đ" not in sku_prices, (
+        f"tiền bị rút gọn mất chữ số thập phân (lỗi V8 quay lại): {sku_prices!r}"
+    )
     # KHÔNG có con số tồn kho nào — chưa có inventory engine.
     for forbidden in ("còn 1", "còn 2", "Số lượng:", "tồn kho:"):
         assert forbidden.lower() not in body.lower(), f"UI bịa số lượng tồn kho: {forbidden!r}"

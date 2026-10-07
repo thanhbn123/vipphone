@@ -123,13 +123,21 @@ def product_query(filters: ProductFilters) -> Select:
         stmt = stmt.where(_compatible_exists(Product.id, device_model=filters.device_model.strip()))
     if filters.q and filters.q.strip():
         pattern = _like_pattern(filters.q)
+        # Nhánh SKU phải lọc `active` Y NHƯ nhánh `device_model` và `active_only`.
+        # Thiếu nó thì một SKU ĐÃ TẮT vẫn kéo sản phẩm cha lên danh sách công khai:
+        # khách gõ đúng mã của hàng đã ngừng bán lại thấy sản phẩm hiện ra. Danh
+        # sách SKU vẫn đúng (serialize chỉ trả SKU active) nhưng `total` và SỰ TỒN
+        # TẠI của sản phẩm thì sai — mà sự tồn tại mới là thứ khách nhìn thấy.
+        # Vẫn theo luật 1 ở đầu file: công tắc `active_only` là nơi duy nhất quyết
+        # định, nên đường quản trị (`active_only=False`) giữ nguyên hành vi cũ.
+        q_variant_skus = select(ProductVariant.product_id).where(ProductVariant.sku.ilike(pattern))
+        if filters.active_only:
+            q_variant_skus = q_variant_skus.where(ProductVariant.active.is_(True))
         stmt = stmt.where(
             or_(
                 Product.name.ilike(pattern),
                 Product.slug.ilike(pattern),
-                Product.id.in_(
-                    select(ProductVariant.product_id).where(ProductVariant.sku.ilike(pattern))
-                ),
+                Product.id.in_(q_variant_skus),
             )
         )
     return stmt
