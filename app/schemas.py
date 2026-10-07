@@ -401,8 +401,21 @@ class CustomerGiftOut(BaseModel):
     redeemed_at: datetime | None = None
 
 
+class CustomerOrderOut(BaseModel):
+    """Đơn của khách trong Customer 360 — bản tóm tắt, không địa chỉ."""
+
+    order_id: uuid.UUID
+    order_number: str
+    status: str
+    payment_status: str
+    grand_total: Decimal
+    currency: str
+    source: str | None = None
+    created_at: datetime
+
+
 class CustomerDetailOut(CustomerOut):
-    """Customer 360. `orders` để trống cho tới khi G16 làm xong — cố ý, không bịa."""
+    """Customer 360: thiết bị, nguồn đầu tiên, lịch sử quà, ĐƠN HÀNG (G16)."""
 
     email: str | None = None
     company_name: str | None = None
@@ -411,7 +424,7 @@ class CustomerDetailOut(CustomerOut):
     devices: list[CustomerDeviceOut] = []
     acquisition: CustomerAcquisitionOut | None = None
     gift_history: list[CustomerGiftOut] = []
-    orders: list[dict] = []
+    orders: list[CustomerOrderOut] = []
 
 
 # ============================================================================
