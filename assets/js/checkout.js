@@ -7,6 +7,9 @@
  *   bấm đúp / mạng chập chờn / tải lại trang KHÔNG tạo đơn thứ hai.
  * - Tracking không PII: `vipphone_checkout_start`, `vipphone_order_created`
  *   (chỉ mã đơn, giá trị, số món — không tên, SĐT, email, địa chỉ).
+ * - G17: phương thức thanh toán lấy từ `/api/public-config` (máy chủ quyết định
+ *   phương thức nào dùng được); `vipphone_payment_method_selected` chỉ mang mã
+ *   phương thức.
  */
 "use strict";
 
@@ -19,6 +22,49 @@
   var errorBox = document.getElementById("checkoutError");
   var submit = document.getElementById("placeOrder");
   var currentCart = null;
+
+  var METHOD_LABELS = {
+    COD: "Thanh toán khi nhận hàng (COD)",
+    BANK_TRANSFER_MANUAL: "Chuyển khoản ngân hàng (VIP PHONE xác nhận thủ công)",
+    STAGING_MOCK: "Cổng thanh toán GIẢ LẬP (chỉ môi trường thử)"
+  };
+
+  function selectedMethod() {
+    var checked = form.querySelector('input[name="payment_method"]:checked');
+    return checked ? checked.value : null;
+  }
+
+  function renderMethods(methods) {
+    var box = document.getElementById("payMethods");
+    var loading = document.getElementById("payLoading");
+    if (loading) loading.remove();
+    methods.forEach(function (method, index) {
+      var label = el("label", "consent");
+      var input = document.createElement("input");
+      input.type = "radio";
+      input.name = "payment_method";
+      input.value = method;
+      input.id = "pay_" + method;
+      if (index === 0) input.checked = true;
+      input.addEventListener("change", function () {
+        track("vipphone_payment_method_selected", { payment_method: method });
+      });
+      label.appendChild(input);
+      label.appendChild(document.createTextNode(" " + (METHOD_LABELS[method] || method)));
+      box.appendChild(label);
+    });
+  }
+
+  function loadMethods() {
+    return fetch((window.VIPPHONE_CONFIG.apiBase || "") + "/api/public-config", {
+      headers: { Accept: "application/json" }
+    })
+      .then(function (r) { return r.ok ? r.json() : { payment_methods: ["COD"] }; })
+      .catch(function () { return { payment_methods: ["COD"] }; })
+      .then(function (cfg) {
+        renderMethods(cfg.payment_methods && cfg.payment_methods.length ? cfg.payment_methods : ["COD"]);
+      });
+  }
 
   function el(tag, className, text) {
     var node = document.createElement(tag);
@@ -101,6 +147,7 @@
         province: value("province")
       },
       customer_note: value("customer_note") || null,
+      payment_method: selectedMethod() || "COD",
       expected_total: cart.grand_total
     };
   }
@@ -174,5 +221,6 @@
       item_count: cart.item_count
     });
     form.addEventListener("submit", onSubmit);
+    return loadMethods();
   }).catch(function (e) { showError(e.message); });
 })();

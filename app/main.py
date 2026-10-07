@@ -31,6 +31,7 @@ from .routers import (
     gifts,
     health,
     leads,
+    payments,
     products,
     public_config,
     recommendations,
@@ -162,6 +163,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(recommendations.router)
     app.include_router(commerce.router)
     app.include_router(admin_orders.router)
+    app.include_router(payments.router)
 
     # -------------------------------------------------------------- tĩnh
     static_root: Path = app_settings.static_dir

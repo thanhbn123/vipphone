@@ -14,6 +14,9 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from ..config import settings
+from ..payments import method_available
+
+PAYMENT_METHOD_ORDER = ("COD", "BANK_TRANSFER_MANUAL", "STAGING_MOCK")
 
 router = APIRouter(prefix="/api", tags=["config"])
 
@@ -31,6 +34,9 @@ class TurnstilePublicConfig(BaseModel):
 
 class PublicConfigResponse(BaseModel):
     turnstile: TurnstilePublicConfig
+    #: G17 — phương thức thanh toán ĐANG DÙNG ĐƯỢC (thứ tự hiển thị). `STAGING_MOCK`
+    #: chỉ có mặt khi máy chủ bật giả lập (không bao giờ ở production).
+    payment_methods: list[str] = []
 
 
 @router.get(
@@ -59,5 +65,6 @@ def public_config() -> PublicConfigResponse:
             enabled=settings.turnstile_enabled,
             site_key=settings.turnstile_site_key if settings.turnstile_enabled else None,
             warning=warning,
-        )
+        ),
+        payment_methods=[m for m in PAYMENT_METHOD_ORDER if method_available(m)],
     )

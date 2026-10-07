@@ -709,6 +709,101 @@ class OrderStatusEvent(Base):
     )
 
 
+# ============================================================================
+# G17 — THANH TOÁN. Thiết kế: `docs/payments.md`.
+# ============================================================================
+
+
+class PaymentMethod(StrEnum):
+    COD = "COD"
+    BANK_TRANSFER_MANUAL = "BANK_TRANSFER_MANUAL"
+    STAGING_MOCK = "STAGING_MOCK"
+
+
+class PaymentState(StrEnum):
+    CREATED = "CREATED"
+    PENDING = "PENDING"
+    PAID = "PAID"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+    REFUNDED = "REFUNDED"
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+    __table_args__ = (
+        UniqueConstraint("payment_id", name="uq_payments_payment_id"),
+        UniqueConstraint("provider_reference", name="uq_payments_provider_reference"),
+        CheckConstraint(
+            "method IN ('COD', 'BANK_TRANSFER_MANUAL', 'STAGING_MOCK')", name="ck_payments_method"
+        ),
+        CheckConstraint(
+            "status IN ('CREATED', 'PENDING', 'PAID', 'FAILED', 'CANCELLED', 'REFUNDED')",
+            name="ck_payments_status",
+        ),
+        CheckConstraint("amount >= 0", name="ck_payments_amount_non_negative"),
+        CheckConstraint("currency ~ '^[A-Z]{3}$'", name="ck_payments_currency_format"),
+        Index(
+            "uq_payments_one_open_per_order",
+            "order_id",
+            unique=True,
+            postgresql_where=text("status IN ('CREATED','PENDING','PAID')"),
+        ),
+        Index("ix_payments_status_created", "status", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    payment_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    order_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("orders.id", ondelete="RESTRICT"), nullable=False
+    )
+    method: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    provider_reference: Mapped[str | None] = mapped_column(String(64))
+    confirmed_by: Mapped[str | None] = mapped_column(String(80))
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class PaymentEvent(Base):
+    """Vết thanh toán. KHÔNG lưu payload thô / chữ ký / dữ liệu tài khoản."""
+
+    __tablename__ = "payment_events"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_event_id", name="uq_payment_events_provider_event"),
+        CheckConstraint(
+            "outcome IN ('APPLIED', 'DUPLICATE', 'REJECTED')", name="ck_payment_events_outcome"
+        ),
+        Index("ix_payment_events_payment", "payment_id", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    payment_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("payments.id", ondelete="CASCADE"), nullable=True
+    )
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    provider_event_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    from_status: Mapped[str | None] = mapped_column(String(20))
+    to_status: Mapped[str | None] = mapped_column(String(20))
+    amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str | None] = mapped_column(String(3))
+    outcome: Mapped[str] = mapped_column(String(20), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(200))
+    payload_sha256: Mapped[str | None] = mapped_column(String(64))
+    actor: Mapped[str] = mapped_column(String(80), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 __all__ = [
     "ACTIVE_GIFT_STATUSES",
     "COMPATIBILITY_TYPE_VALUES",
@@ -732,6 +827,10 @@ __all__ = [
     "OrderItem",
     "OrderStatus",
     "OrderStatusEvent",
+    "Payment",
+    "PaymentEvent",
+    "PaymentMethod",
+    "PaymentState",
     "PaymentStatus",
     "Product",
     "ProductVariant",

@@ -73,6 +73,16 @@ class Settings(BaseSettings):
     #: Trần body cho checkout (byte).
     max_commerce_body_bytes: int = Field(default=16_384, ge=1024)
 
+    # ---------------------------------------------------------------- thanh toán
+    #: G17 — khoá ký webhook của nhà cung cấp GIẢ LẬP `STAGING_MOCK`. Rỗng = tắt.
+    #: Ở `production` phương thức giả lập LUÔN tắt, kể cả khi có khoá (fail closed).
+    payment_mock_webhook_secret: str = ""
+    #: Lệch thời gian tối đa (giây) của webhook — chặn phát lại webhook cũ.
+    payment_webhook_tolerance_seconds: int = Field(default=300, ge=30, le=3600)
+    #: Hướng dẫn chuyển khoản hiển thị cho khách (số TK, tên NH...). Rỗng ⇒ chỉ
+    #: hiện mã tham chiếu và "VIP PHONE sẽ liên hệ". KHÔNG phải secret.
+    bank_transfer_instructions: str = Field(default="", max_length=500)
+
     # --------------------------------------------------------------- turnstile
     #: Để trống = tắt. KHÔNG commit secret thật.
     #: Khoá SECRET — chỉ ở server, KHÔNG bao giờ lộ ra client.
@@ -124,6 +134,11 @@ class Settings(BaseSettings):
         return cleaned
 
     # -------------------------------------------------------------- tiện ích
+    @property
+    def payment_mock_enabled(self) -> bool:
+        """Giả lập thanh toán: CHỈ khi có khoá ký VÀ không phải production."""
+        return bool(self.payment_mock_webhook_secret) and self.app_env != "production"
+
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"

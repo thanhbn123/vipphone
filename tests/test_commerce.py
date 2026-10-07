@@ -478,7 +478,8 @@ def test_full_status_lifecycle_is_recorded(client, staff_headers, ready_cart):
     detail = client.get(f"/api/admin/orders/{order_id}", headers=staff_headers).json()
     assert detail["status"] == "COMPLETED"
     assert detail["allowed_transitions"] == []
-    assert [(e["from_value"], e["to_value"]) for e in detail["events"]] == [
+    status_events = [e for e in detail["events"] if e["field"] == "status"]
+    assert [(e["from_value"], e["to_value"]) for e in status_events] == [
         (None, "PENDING_PAYMENT"),
         ("PENDING_PAYMENT", "CONFIRMED"),
         ("CONFIRMED", "PROCESSING"),
