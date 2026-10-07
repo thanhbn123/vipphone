@@ -487,6 +487,47 @@ def test_keyword_wildcards_are_escaped(client, staff_headers):
         assert body["total"] == 0, f"ký tự {wildcard!r} khớp tất cả — chưa escape LIKE!"
 
 
+def test_keyword_search_does_not_match_deactivated_sku(client, staff_headers):
+    """V4 — SKU ĐÃ TẮT không được kéo sản phẩm cha lên tìm kiếm CÔNG KHAI.
+
+    LỖI ĐÃ ĐO ĐƯỢC: nhánh `q` trong `product_query` chỉ so `ProductVariant.sku`
+    mà THIẾU `ProductVariant.active.is_(True)`, trong khi nhánh `device_model`
+    (`_compatible_exists`) và `active_only` đều đã lọc. Đo trên bản cũ: tạo SKU
+    đã tắt `SKU-AN-DA-TAT` ⇒ `GET /api/products?q=SKU-AN-DA-TAT` trả **total: 1**.
+
+    Vì sao vẫn là lỗi dù danh sách SKU trả về rỗng: khách gõ đúng mã hàng đã
+    ngừng bán thì thấy SẢN PHẨM hiện ra ở `/shop`. Đó là xác nhận sự tồn tại của
+    một món không còn bán — và `total` dùng cho phân trang cũng sai.
+    """
+    created = _create_product(client, staff_headers)
+    _create_variant(client, staff_headers, created["product_id"], sku="SKU-AN-DA-TAT")
+    _create_variant(client, staff_headers, created["product_id"], sku="SKU-CON-BAN")
+
+    # Trước khi tắt: tìm theo SKU đang bán phải thấy.
+    assert client.get("/api/products", params={"q": "SKU-CON-BAN"}).json()["total"] == 1
+
+    response = client.patch(
+        "/api/admin/variants/SKU-AN-DA-TAT", json={"active": False}, headers=staff_headers
+    )
+    assert response.status_code == 200, response.text
+
+    # Đường CÔNG KHAI: SKU đã tắt không được kéo sản phẩm lên nữa.
+    after = client.get("/api/products", params={"q": "SKU-AN-DA-TAT"}).json()
+    assert after["total"] == 0, (
+        f"tìm công khai khớp SKU ĐÃ TẮT — total phải là 0, đang là {after['total']}"
+    )
+    assert after["items"] == []
+
+    # SKU còn bán vẫn tìm được ⇒ bản vá không chặn nhầm cả nhánh SKU.
+    assert client.get("/api/products", params={"q": "SKU-CON-BAN"}).json()["total"] == 1
+
+    # Đường QUẢN TRỊ phải GIỮ NGUYÊN khả năng thấy hàng đã tắt (bật lại được).
+    admin = client.get("/api/admin/products", headers=staff_headers).json()
+    assert admin["total"] == 1
+    admin_skus = {v["sku"]: v["active"] for v in admin["items"][0]["variants"]}
+    assert admin_skus == {"SKU-AN-DA-TAT": False, "SKU-CON-BAN": True}, admin_skus
+
+
 def test_filter_by_category(client, staff_headers):
     _create_product(client, staff_headers)
     other = _create_product(
