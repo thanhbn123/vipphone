@@ -598,7 +598,12 @@ def test_shop_and_product_pages_are_served_without_inline_code(client):
         # Thẻ script phải là file ngoài, không có nội dung nội tuyến.
         for chunk in html.split("<script")[1:]:
             head = chunk.split(">", 1)[0]
-            assert 'src="assets/js/' in head, f"script không phải file ngoài: {head}"
+            # Đường dẫn TUYỆT ĐỐI từ gốc: `/product/{slug}` là hai tầng, nên
+            # `assets/js/x.js` sẽ bị trình duyệt hiểu thành
+            # `/product/assets/js/x.js` và 404 — lỗi CHỈ trình duyệt thật bắt được
+            # (đã dính đúng lỗi này, xem MASTER_STATUS §36).
+            assert 'src="/assets/js/' in head, f"script không phải file ngoài/đường dẫn gốc: {head}"
+        assert 'href="/assets/css/styles.css"' in html
 
 
 def test_shop_page_has_no_hard_coded_products(client):
