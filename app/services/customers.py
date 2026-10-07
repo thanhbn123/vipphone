@@ -188,3 +188,43 @@ def link_lead_to_customer(db: Session, lead: Lead, *, is_new_lead: bool = True) 
         logger.exception("G13: liên kết lead %s vào customer thất bại", lead.gift_code)
         db.rollback()
         return None
+
+
+def find_or_create_customer_by_contact(
+    db: Session, *, full_name: str, phone: str, email: str | None
+) -> Customer:
+    """G16 — khách theo SĐT chuẩn hoá, dùng TRONG một giao dịch đang mở (checkout).
+
+    Khác `find_or_create_customer`: cuộc đua được xử lý bằng SAVEPOINT
+    (`begin_nested`), KHÔNG `db.rollback()` — rollback toàn phần ở đây sẽ xoá
+    luôn khoá giỏ hàng và mọi việc checkout đã làm trong cùng giao dịch.
+
+    Cùng luật G13: chỉ ĐIỀN KHI TRỐNG, không ghi đè lịch sử. Đặt hàng KHÔNG bật
+    `marketing_consent` — đồng ý nhận tiếp thị là quyết định riêng của khách.
+    """
+    canonical = normalize_phone(phone)
+    customer = db.execute(
+        select(Customer).where(Customer.phone_normalized == canonical)
+    ).scalar_one_or_none()
+    if customer is not None:
+        customer.full_name = _fill_if_empty(customer.full_name, full_name)
+        customer.email = _fill_if_empty(customer.email, email)
+        return customer
+
+    candidate = Customer(
+        full_name=full_name,
+        phone_normalized=canonical,
+        email=email,
+        status="ACTIVE",
+        marketing_consent=False,
+    )
+    try:
+        with db.begin_nested():
+            db.add(candidate)
+            db.flush()
+        return candidate
+    except IntegrityError:
+        # Request khác vừa tạo cùng SĐT — đọc lại bản của họ.
+        return db.execute(
+            select(Customer).where(Customer.phone_normalized == canonical)
+        ).scalar_one()

@@ -60,9 +60,18 @@ class Settings(BaseSettings):
     rate_limit_window_seconds: int = Field(default=60, ge=1)
     #: Số cửa sổ giữ trong bộ nhớ cho mỗi khoá.
     rate_limit_max_keys: int = Field(default=10_000, ge=100)
+    #: G16 — trần cho các đường THƯƠNG MẠI công khai (tạo giỏ, checkout), mỗi IP mỗi cửa sổ.
+    rate_limit_commerce_per_window: int = Field(default=60, ge=1)
     #: Chỉ bật khi máy chủ THẬT SỰ nằm sau reverse proxy tin cậy.
     #: Bật sai chỗ cho phép kẻ tấn công giả `X-Forwarded-For` để né rate limit.
     trust_proxy_headers: bool = False
+
+    # ---------------------------------------------------------------- thương mại
+    #: G16 — phí giao hàng CỐ ĐỊNH mỗi đơn (VND, chuỗi thập phân). Mặc định 0 vì
+    #: CHƯA có biểu phí được Owner duyệt — xem docs/OWNER_DECISIONS_REQUIRED.md.
+    shipping_fee_flat: str = Field(default="0.00", pattern=r"^\d{1,10}(\.\d{1,2})?$")
+    #: Trần body cho checkout (byte).
+    max_commerce_body_bytes: int = Field(default=16_384, ge=1024)
 
     # --------------------------------------------------------------- turnstile
     #: Để trống = tắt. KHÔNG commit secret thật.

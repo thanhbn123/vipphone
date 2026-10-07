@@ -20,7 +20,7 @@
   </header>
 
   <main class="container" id="main">
-    <p class="field-hint"><a href="/shop">← Về cửa hàng</a></p>
+    <p class="field-hint"><a href="/shop">← Về cửa hàng</a> · <a href="/cart">Giỏ hàng</a></p>
 
     <noscript>
       <p class="status bad" role="alert">
@@ -35,6 +35,7 @@
       <h1 id="productTitle"></h1>
       <p class="status ok" id="productAvailability"></p>
       <div id="productBody"></div>
+      <p class="status ok" id="cartStatus" role="status" aria-live="polite" hidden></p>
     </article>
 
     <section class="card" aria-labelledby="about-shop-title" id="aboutShop">
@@ -56,6 +57,7 @@
   <script src="/assets/js/tracking.js"></script>
   <script src="/assets/js/util.js"></script>
   <script src="/assets/js/money.js"></script>
+  <script src="/assets/js/cart-store.js"></script>
   <script src="/assets/js/product.js"></script>
 </body>
 </html>

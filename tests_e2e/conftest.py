@@ -242,7 +242,9 @@ def clean_database(live_server) -> None:
             conn.execute(
                 text(
                     "TRUNCATE TABLE audit_events, leads, device_compatibility, "
-                    "product_variants, products, categories RESTART IDENTITY CASCADE"
+                    "product_variants, products, categories, "
+                    "order_status_events, shipping_addresses, order_items, orders, cart_items, carts, "
+                    "customers RESTART IDENTITY CASCADE"
                 )
             )
             conn.execute(text("TRUNCATE TABLE iphone_models RESTART IDENTITY CASCADE"))

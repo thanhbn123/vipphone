@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>VIP PHONE — Giỏ hàng</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+</head>
+<body data-vp-page="cart">
+  <a class="skip-link" href="#main">Bỏ qua điều hướng, tới nội dung chính</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">VIP</span>
+      <span class="brand-name">PHONE</span>
+    </div>
+    <span class="co-brand">VIP ORDER × BNI</span>
+  </header>
+
+  <main class="container narrow" id="main">
+    <p class="field-hint"><a href="/shop">← Tiếp tục mua</a></p>
+    <noscript><p class="status bad" role="alert">Giỏ hàng cần JavaScript. Vui lòng bật JavaScript rồi tải lại.</p></noscript>
+    <section class="card" aria-labelledby="cart-title">
+      <h1 id="cart-title">Giỏ hàng</h1>
+      <p class="status bad" id="cartError" role="alert" hidden></p>
+      <p class="status warn" id="cartEmpty" hidden>Giỏ hàng đang trống. <a href="/shop">Xem phụ kiện</a></p>
+      <ul class="cart-lines" id="cartLines"></ul>
+      <dl class="totals" id="cartTotals" hidden>
+        <div><dt>Tạm tính</dt><dd id="cartSubtotal"></dd></div>
+        <div><dt>Phí giao hàng</dt><dd id="cartShipping"></dd></div>
+        <div class="grand"><dt>Tổng cộng</dt><dd id="cartGrand"></dd></div>
+      </dl>
+      <p class="field-hint">Giá và tổng tiền do hệ thống tính theo giá niêm yết hiện hành.</p>
+      <a class="primary-btn" id="toCheckout" href="/checkout" hidden>ĐẶT HÀNG</a>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>VIP PHONE — phụ kiện cho cộng đồng VIP ORDER × BNI.</p>
+  </footer>
+
+  <script src="/assets/js/config.js"></script>
+  <script src="/assets/js/tracking.js"></script>
+  <script src="/assets/js/util.js"></script>
+  <script src="/assets/js/money.js"></script>
+  <script src="/assets/js/cart-store.js"></script>
+  <script src="/assets/js/cart.js"></script>
+</body>
+</html>

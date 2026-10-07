@@ -184,6 +184,15 @@ lead_rate_limiter = SlidingWindowRateLimiter(
 )
 
 
+#: G16 — bộ đếm RIÊNG cho đường thương mại: dùng chung bộ đếm lead thì khách đang
+#: đặt hàng có thể làm cạn hạn mức gửi form nhận quà và ngược lại.
+commerce_rate_limiter = SlidingWindowRateLimiter(
+    limit=settings.rate_limit_commerce_per_window,
+    window_seconds=settings.rate_limit_window_seconds,
+    max_keys=settings.rate_limit_max_keys,
+)
+
+
 def client_ip(request: Request) -> str:
     """Địa chỉ dùng làm khoá rate limit.
 
@@ -205,6 +214,14 @@ def enforce_lead_rate_limit(request: Request) -> None:
     if not settings.rate_limit_enabled:
         return
     allowed, retry_after = lead_rate_limiter.check(client_ip(request))
+    if not allowed:
+        raise RateLimited(retry_after)
+
+
+def enforce_commerce_rate_limit(request: Request) -> None:
+    if not settings.rate_limit_enabled:
+        return
+    allowed, retry_after = commerce_rate_limiter.check(client_ip(request))
     if not allowed:
         raise RateLimited(retry_after)
 
