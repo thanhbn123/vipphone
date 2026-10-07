@@ -164,6 +164,8 @@ def attach_acquisition(db: Session, customer: Customer, lead: Lead) -> None:
             utm_medium=lead.utm_medium,
             utm_campaign=lead.utm_campaign,
             utm_content=lead.utm_content,
+            campaign=lead.campaign,
+            acquired_via="LEAD",
             first_gift_code=lead.gift_code,
             first_seen_at=lead.created_at,
         )
@@ -228,3 +230,32 @@ def find_or_create_customer_by_contact(
         return db.execute(
             select(Customer).where(Customer.phone_normalized == canonical)
         ).scalar_one()
+
+
+def attach_acquisition_from_order(db: Session, customer: Customer, order) -> None:
+    """FIRST-TOUCH cho khách đến THẲNG cửa hàng (chưa từng để lại lead).
+
+    Khách đã có first-touch (từ lead hay đơn trước) ⇒ KHÔNG đụng tới — ghi đè
+    first-touch là làm mất đúng thứ báo cáo "kênh nào mang khách về" cần.
+    """
+    existing = db.execute(
+        select(CustomerAcquisition.id).where(CustomerAcquisition.customer_id == customer.id)
+    ).first()
+    if existing is not None:
+        return
+    with db.begin_nested():
+        db.add(
+            CustomerAcquisition(
+                customer_id=customer.id,
+                source=order.source,
+                campaign=order.campaign,
+                ref=order.ref,
+                utm_source=order.utm_source,
+                utm_medium=order.utm_medium,
+                utm_campaign=order.utm_campaign,
+                utm_content=order.utm_content,
+                acquired_via="ORDER",
+                first_order_id=order.id,
+            )
+        )
+        db.flush()

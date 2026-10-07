@@ -56,7 +56,7 @@ from ..schemas import (
     OrderItemOut,
     OrderOut,
 )
-from .customers import find_or_create_customer_by_contact
+from .customers import attach_acquisition_from_order, find_or_create_customer_by_contact
 from .gifts import mask_phone
 
 logger = logging.getLogger("vipphone.commerce")
@@ -419,6 +419,7 @@ def checkout(
         discount_total=discount_total,
         grand_total=grand_total,
         customer_note=payload.customer_note,
+        **(payload.attribution.model_dump() if payload.attribution else {}),
     )
     db.add(order)
     try:
@@ -465,6 +466,8 @@ def checkout(
         to_value=order.status,
         actor="customer:checkout",
     )
+    # First-touch cho khách CHƯA có (đến thẳng cửa hàng). Có rồi thì giữ nguyên.
+    attach_acquisition_from_order(db, customer, order)
     cart.status = CartStatus.CHECKED_OUT.value
     db.flush()
 

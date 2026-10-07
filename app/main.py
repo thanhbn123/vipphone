@@ -27,6 +27,7 @@ from .routers import (
     admin_inventory,
     admin_orders,
     admin_products,
+    admin_reports,
     catalog,
     commerce,
     gifts,
@@ -166,6 +167,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admin_orders.router)
     app.include_router(payments.router)
     app.include_router(admin_inventory.router)
+    app.include_router(admin_reports.router)
 
     # -------------------------------------------------------------- tĩnh
     static_root: Path = app_settings.static_dir

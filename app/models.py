@@ -247,7 +247,10 @@ class CustomerAcquisition(Base):
     """
 
     __tablename__ = "customer_acquisition"
-    __table_args__ = (UniqueConstraint("customer_id", name="uq_customer_acquisition_customer"),)
+    __table_args__ = (
+        UniqueConstraint("customer_id", name="uq_customer_acquisition_customer"),
+        CheckConstraint("acquired_via IN ('LEAD', 'ORDER')", name="ck_customer_acquisition_via"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     customer_id: Mapped[int] = mapped_column(
@@ -261,6 +264,12 @@ class CustomerAcquisition(Base):
     utm_campaign: Mapped[str | None] = mapped_column(String(64))
     utm_content: Mapped[str | None] = mapped_column(String(64))
     first_gift_code: Mapped[str | None] = mapped_column(String(32))
+    #: Bổ sung ở migration 0014 — xem docs/attribution.md.
+    campaign: Mapped[str | None] = mapped_column(String(64))
+    acquired_via: Mapped[str] = mapped_column(String(10), nullable=False, server_default="LEAD")
+    first_order_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True
+    )
     first_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -599,6 +608,9 @@ class Order(Base):
         ),
         Index("ix_orders_status_created", "status", "created_at"),
         Index("ix_orders_customer", "customer_id"),
+        Index("ix_orders_source", "source"),
+        Index("ix_orders_utm_campaign", "utm_campaign"),
+        Index("ix_orders_ref", "ref"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
@@ -626,6 +638,14 @@ class Order(Base):
     )
     grand_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     customer_note: Mapped[str | None] = mapped_column(String(500))
+    #: Attribution của LẦN ĐẶT NÀY (last-touch, chụp lúc checkout) — migration 0014.
+    source: Mapped[str | None] = mapped_column(String(32))
+    campaign: Mapped[str | None] = mapped_column(String(64))
+    ref: Mapped[str | None] = mapped_column(String(64))
+    utm_source: Mapped[str | None] = mapped_column(String(64))
+    utm_medium: Mapped[str | None] = mapped_column(String(64))
+    utm_campaign: Mapped[str | None] = mapped_column(String(64))
+    utm_content: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

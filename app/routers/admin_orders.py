@@ -14,12 +14,13 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..errors import NotFound
-from ..models import Customer, Order, OrderStatusEvent
+from ..models import Customer, CustomerAcquisition, Order, OrderStatusEvent
 from ..schemas import (
     AdminOrderDetailOut,
     AdminOrderPageOut,
     AdminOrderSummaryOut,
     AdminShippingOut,
+    OrderAttributionOut,
     OrderItemOut,
     OrderStatusChangeRequest,
     OrderStatusEventOut,
@@ -100,8 +101,15 @@ def _detail(db: Session, order: Order) -> AdminOrderDetailOut:
         .all()
     )
     summary = _summary(order, customer, sum(item.quantity for item in items))
+    first_touch = db.execute(
+        select(CustomerAcquisition).where(CustomerAcquisition.customer_id == customer.id)
+    ).scalar_one_or_none()
     return AdminOrderDetailOut(
         **summary.model_dump(),
+        attribution=OrderAttributionOut.model_validate(order),
+        customer_first_touch=OrderAttributionOut.model_validate(first_touch)
+        if first_touch
+        else None,
         subtotal=order.subtotal,
         shipping_fee=order.shipping_fee,
         discount_total=order.discount_total,

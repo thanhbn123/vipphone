@@ -376,6 +376,8 @@ class CustomerAcquisitionOut(BaseModel):
     utm_campaign: str | None = None
     utm_content: str | None = None
     first_gift_code: str | None = None
+    campaign: str | None = None
+    acquired_via: str | None = None
 
 
 class CustomerOut(BaseModel):
@@ -934,6 +936,30 @@ class ShippingAddressIn(BaseModel):
         return _optional_text(value)
 
 
+class AttributionIn(BaseModel):
+    """Nguồn của LẦN ĐẶT NÀY (whitelist + làm sạch y như form lead)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: TrackingValue | None = None
+    campaign: TrackingValue | None = None
+    ref: TrackingValue | None = None
+    utm_source: TrackingValue | None = None
+    utm_medium: TrackingValue | None = None
+    utm_campaign: TrackingValue | None = None
+    utm_content: TrackingValue | None = None
+
+    @field_validator(
+        "source", "campaign", "ref", "utm_source", "utm_medium", "utm_campaign", "utm_content"
+    )
+    @classmethod
+    def _clean(cls, value: str | None, info) -> str | None:
+        cleaned = _clean_tracking(value, info.field_name)
+        if cleaned is not None and info.field_name == "source":
+            cleaned = cleaned[:32]
+        return cleaned
+
+
 class CheckoutRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -943,6 +969,8 @@ class CheckoutRequest(BaseModel):
     customer_note: str | None = Field(default=None, max_length=500)
     #: G17 — phương thức thanh toán. `STAGING_MOCK` chỉ nhận khi máy chủ bật giả lập.
     payment_method: Literal["COD", "BANK_TRANSFER_MANUAL", "STAGING_MOCK"] = "COD"
+    #: Attribution của lần đặt (last-touch). Không bắt buộc.
+    attribution: AttributionIn | None = None
     #: Tổng khách ĐÃ THẤY trên màn hình. KHÔNG dùng để tính tiền — chỉ để phát
     #: hiện giá đổi giữa lúc xem và lúc đặt (lệch ⇒ 409 `PRICE_CHANGED`).
     expected_total: Money | None = None
@@ -1042,7 +1070,22 @@ class AdminOrderPageOut(BaseModel):
     total: int
 
 
+class OrderAttributionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    source: str | None = None
+    campaign: str | None = None
+    ref: str | None = None
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_campaign: str | None = None
+    utm_content: str | None = None
+
+
 class AdminOrderDetailOut(AdminOrderSummaryOut):
+    #: Nguồn của LẦN ĐẶT (last-touch) và nguồn ĐẦU TIÊN của khách (first-touch).
+    attribution: OrderAttributionOut
+    customer_first_touch: OrderAttributionOut | None = None
     subtotal: Decimal
     shipping_fee: Decimal
     discount_total: Decimal
@@ -1186,3 +1229,18 @@ class ProductImagePatchRequest(BaseModel):
         if value is None:
             return None
         return _required_text(value, "Mô tả ảnh (alt)")
+
+
+class AttributionReportRow(BaseModel):
+    #: Giá trị của chiều nhóm; `None` = không có nguồn (truy cập trực tiếp).
+    key: str | None
+    customers: int
+    orders: int
+    revenue: Decimal
+    paid_revenue: Decimal
+
+
+class AttributionReportOut(BaseModel):
+    model: str
+    dimension: str
+    rows: list[AttributionReportRow]
