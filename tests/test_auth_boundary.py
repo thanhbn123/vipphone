@@ -32,6 +32,8 @@ PUBLIC_API_ROUTES = {
     ("GET", "/api/catalog/categories"),
     ("GET", "/api/products"),
     ("GET", "/api/products/{slug}"),
+    # G15: gợi ý theo MÃ MÁY — đầu vào duy nhất là mã máy, không có dữ liệu khách.
+    ("GET", "/api/recommendations"),
 }
 
 #: Giá trị thay cho tham số đường dẫn khi dò.

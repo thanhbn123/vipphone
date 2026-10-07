@@ -425,6 +425,40 @@ class DeviceCompatibility(Base):
     )
 
 
+class RecommendationCategoryPriority(Base):
+    """G15 — thứ tự ưu tiên NHÓM HÀNG khi gợi ý, theo ngữ cảnh.
+
+    Thứ tự là DỮ LIỆU: đổi bằng `UPDATE`, không cần deploy. UNIQUE (context,
+    priority) ở tầng DB vì hai nhóm cùng hạng làm thứ tự gợi ý KHÔNG xác định.
+    Xem `docs/recommendation-engine.md`.
+    """
+
+    __tablename__ = "recommendation_category_priority"
+    __table_args__ = (
+        UniqueConstraint("context", "category_code", name="uq_reco_priority_context_category"),
+        UniqueConstraint("context", "priority", name="uq_reco_priority_context_priority"),
+        CheckConstraint("priority > 0", name="ck_reco_priority_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    context: Mapped[str] = mapped_column(String(40), nullable=False)
+    category_code: Mapped[str] = mapped_column(
+        String(40),
+        ForeignKey(
+            "categories.code",
+            name="fk_reco_priority_category_code",
+            onupdate="CASCADE",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+    priority: Mapped[int] = mapped_column(Integer, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class AuditEvent(Base):
     """Audit trail cho mọi thay đổi quan trọng.
 
@@ -480,5 +514,6 @@ __all__ = [
     "Lead",
     "Product",
     "ProductVariant",
+    "RecommendationCategoryPriority",
     "Text",
 ]

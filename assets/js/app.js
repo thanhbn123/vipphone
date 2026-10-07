@@ -250,6 +250,9 @@
           // Chỉ lưu trường cần hiển thị lại. KHÔNG lưu số điện thoại.
           full_name: String(form.elements.full_name.value).trim(),
           iphone_model: selectedModelName(),
+          // G15: MÃ máy (không phải tên hiển thị) để trang thành công gọi
+          // `/api/recommendations?device_model=...`. Không phải PII.
+          model_code: String(modelSelect.value || ""),
           case_color: String(form.elements.case_color.value)
         })
       );

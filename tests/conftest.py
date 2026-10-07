@@ -112,8 +112,21 @@ def load_catalog_migration():
     return module
 
 
+def load_migration(filename: str, module_name: str):
+    """Nạp một module migration bất kỳ theo tên file (cùng lý do như trên)."""
+    import importlib.util
+
+    path = REPO_ROOT / "migrations" / "versions" / filename
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 INITIAL_MIGRATION = load_initial_migration()
 CATALOG_MIGRATION = load_catalog_migration()
+#: G15 — thứ tự ưu tiên gợi ý lấy TỪ CHÍNH migration 0008.
+RECO_MIGRATION = load_migration("0008_recommendation_priority.py", "vipphone_migration_0008")
 
 
 @pytest.fixture(scope="session")
@@ -168,6 +181,14 @@ def clean_tables(engine, migrated_database: str) -> None:
                 {"code": code, "name": name, "sort_order": index}
                 for index, (code, name) in enumerate(CATALOG_MIGRATION.SEED_CATEGORIES)
             ],
+        )
+        # G15: TRUNCATE categories ... CASCADE xoá luôn bảng ưu tiên (FK) ⇒ dựng lại.
+        conn.execute(
+            text(
+                "INSERT INTO recommendation_category_priority (context, category_code, priority) "
+                "VALUES (:context, :category_code, :priority)"
+            ),
+            RECO_MIGRATION.seed_rows(),
         )
 
 

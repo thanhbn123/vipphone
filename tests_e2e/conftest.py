@@ -257,6 +257,18 @@ def clean_database(live_server) -> None:
                     for index, (code, name) in enumerate(CATALOG_MIGRATION.SEED_CATEGORIES)
                 ],
             )
+            # G15: TRUNCATE categories CASCADE xoá cả bảng ưu tiên gợi ý ⇒ dựng lại
+            # từ CHÍNH migration 0008.
+            from tests.conftest import RECO_MIGRATION
+
+            conn.execute(
+                text(
+                    "INSERT INTO recommendation_category_priority "
+                    "(context, category_code, priority) "
+                    "VALUES (:context, :category_code, :priority)"
+                ),
+                RECO_MIGRATION.seed_rows(),
+            )
     finally:
         engine.dispose()
 
