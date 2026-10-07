@@ -231,6 +231,35 @@ else
   bad "không chốt được số worker = 1"
 fi
 
+grp "11d. Danh sách check bắt buộc KHÔNG được đòi job đang chạy tay"
+# Chốt CHÉO giữa hai file. Ca thật đã xảy ra: job `e2e` chuyển sang
+# workflow_dispatch nhưng scripts/enable_branch_protection.sh vẫn đòi ba check
+# `E2E (...)` ⇒ branch protection trên develop giữ ba tên đó và PR #64 bị
+# BLOCKED. Phép thử này hỏng nếu hai file lệch nhau lần nữa, theo chiều NÀO.
+BP="$REPO/scripts/enable_branch_protection.sh"
+CI="$REPO/.github/workflows/ci.yml"
+if [ -f "$BP" ] && [ -f "$CI" ]; then
+  e2e_tay=0
+  # KHÔNG dùng dải awk `/^  e2e:/,/^  [a-z0-9-]+:$/`: dòng mở đầu `  e2e:` khớp
+  # LUÔN cả mẫu kết thúc, nên dải chỉ gồm đúng một dòng và phép đo ra 0 — đã
+  # dính thật lúc viết ca này.
+  grep -A 30 '^  e2e:' "$CI" | grep -q "workflow_dispatch'" && e2e_tay=1
+  bp_doi=0
+  awk '/^CHECKS=\(/,/^\)/' "$BP" | grep -q '"E2E' && bp_doi=1
+  if [ "$e2e_tay" = 1 ] && [ "$bp_doi" = 1 ]; then
+    bad "ci.yml để e2e chạy TAY nhưng enable_branch_protection.sh VẪN đòi check E2E ⇒ PR sẽ kẹt"
+  elif [ "$e2e_tay" = 0 ] && [ "$bp_doi" = 0 ]; then
+    bad "e2e chạy trên PR nhưng KHÔNG nằm trong check bắt buộc ⇒ bảo vệ yếu hơn mức đã định"
+  else
+    ok "ci.yml và enable_branch_protection.sh khớp nhau (e2e tay=$e2e_tay · bp đòi E2E=$bp_doi)"
+  fi
+  if grep -q 'preflight_checks develop' "$BP"; then
+    ok "script bảo vệ nhánh tự đối chiếu danh sách trước khi áp dụng"
+  else
+    bad "script bảo vệ nhánh KHÔNG đối chiếu ⇒ danh sách viết tay lại lệch trong im lặng"
+  fi
+fi
+
 grp "12. Chạy khô không được chạm máy chủ"
 if grep -q 'DEPLOY_DRY_RUN' "$DEPLOY/common.sh" \
    && awk '/^remote_sh\(\)/,/^}/' "$DEPLOY/common.sh" | grep -q 'DEPLOY_DRY_RUN'; then
