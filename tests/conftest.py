@@ -42,6 +42,8 @@ os.environ["RATE_LIMIT_ENABLED"] = "true"
 os.environ["RATE_LIMIT_LEADS_PER_WINDOW"] = "1000"
 os.environ["RATE_LIMIT_WINDOW_SECONDS"] = "60"
 os.environ["RATE_LIMIT_COMMERCE_PER_WINDOW"] = "100000"
+# G17: khoá ký webhook GIẢ LẬP — giá trị của test, độ phức tạp thấp có chủ ý (gitleaks).
+os.environ["PAYMENT_MOCK_WEBHOOK_SECRET"] = "mock-webhook-secret-for-tests-only"
 os.environ["TURNSTILE_SECRET_KEY"] = ""
 os.environ["TURNSTILE_REQUIRED"] = "false"
 os.environ["TRUST_PROXY_HEADERS"] = "false"

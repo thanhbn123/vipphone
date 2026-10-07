@@ -16,6 +16,43 @@
     CANCELLED: "Đơn đã huỷ."
   };
 
+  var track = window.VPTrack ? window.VPTrack.track : function () {};
+
+  var PAYMENT_TITLE = {
+    PENDING: "Thanh toán: đang chờ",
+    PAID: "Thanh toán: đã nhận tiền",
+    FAILED: "Thanh toán: không thành công",
+    CANCELLED: "Thanh toán: đã huỷ",
+    REFUNDED: "Thanh toán: đã hoàn tiền"
+  };
+
+  /** Event thanh toán — KHÔNG PII, KHÔNG dữ liệu tài khoản: chỉ mã đơn + phương thức + giá trị. */
+  var PAYMENT_EVENT = {
+    PENDING: "vipphone_payment_pending",
+    PAID: "vipphone_payment_succeeded",
+    FAILED: "vipphone_payment_failed"
+  };
+
+  function renderPayment(order) {
+    var payment = order.payment;
+    if (!payment) return;
+    var box = document.getElementById("paymentBox");
+    document.getElementById("paymentTitle").textContent =
+      PAYMENT_TITLE[payment.status] || payment.status;
+    document.getElementById("paymentText").textContent = payment.instructions || "";
+    box.className = "status " + (payment.status === "PAID" ? "ok" : payment.status === "FAILED" ? "bad" : "warn");
+    box.hidden = false;
+    var eventName = PAYMENT_EVENT[payment.status];
+    if (eventName) {
+      track(eventName, {
+        order_number: order.order_number,
+        payment_method: payment.method,
+        value: payment.amount,
+        currency: payment.currency
+      });
+    }
+  }
+
   function el(tag, className, text) {
     var node = document.createElement(tag);
     if (className) node.className = className;
@@ -65,6 +102,7 @@
       document.getElementById("orderRecipient").textContent =
         order.recipient_name + " · " + order.phone_masked + " · " + order.province;
       document.getElementById("orderBox").hidden = false;
+      renderPayment(order);
     })
     .catch(function (error) { showError(error.message); });
 })();

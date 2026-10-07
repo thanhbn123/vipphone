@@ -10,7 +10,7 @@ import re
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -919,6 +919,8 @@ class CheckoutRequest(BaseModel):
     customer: CheckoutCustomerIn
     shipping: ShippingAddressIn
     customer_note: str | None = Field(default=None, max_length=500)
+    #: G17 — phương thức thanh toán. `STAGING_MOCK` chỉ nhận khi máy chủ bật giả lập.
+    payment_method: Literal["COD", "BANK_TRANSFER_MANUAL", "STAGING_MOCK"] = "COD"
     #: Tổng khách ĐÃ THẤY trên màn hình. KHÔNG dùng để tính tiền — chỉ để phát
     #: hiện giá đổi giữa lúc xem và lúc đặt (lệch ⇒ 409 `PRICE_CHANGED`).
     expected_total: Money | None = None
@@ -940,6 +942,18 @@ class OrderItemOut(BaseModel):
     line_total: Decimal
 
 
+class PaymentPublicOut(BaseModel):
+    """Khoản thu — bản cho chủ đơn. KHÔNG có dữ liệu tài khoản/thẻ nào."""
+
+    method: str
+    status: str
+    amount: Decimal
+    currency: str
+    #: Mã tham chiếu của cổng (chỉ STAGING_MOCK có).
+    provider_reference: str | None = None
+    instructions: str | None = None
+
+
 class OrderOut(BaseModel):
     """Đơn — bản cho CHÍNH chủ đơn (có token). Không có PII đầy đủ."""
 
@@ -957,6 +971,7 @@ class OrderOut(BaseModel):
     phone_masked: str
     province: str
     created_at: datetime
+    payment: PaymentPublicOut | None = None
 
 
 class CheckoutOut(OrderOut):
@@ -1025,4 +1040,54 @@ class OrderStatusChangeRequest(BaseModel):
     @field_validator("reason")
     @classmethod
     def _reason(cls, value: str | None) -> str | None:
+        return _optional_text(value)
+
+
+# ============================================================================
+# G17 — THANH TOÁN (quản trị). Thiết kế: `docs/payments.md`.
+# ============================================================================
+class PaymentEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    provider: str
+    event_type: str
+    from_status: str | None
+    to_status: str | None
+    amount: Decimal | None
+    currency: str | None
+    outcome: str
+    reason: str | None
+    actor: str
+    created_at: datetime
+
+
+class AdminPaymentOut(BaseModel):
+    payment_id: uuid.UUID
+    order_id: uuid.UUID
+    order_number: str
+    method: str
+    status: str
+    amount: Decimal
+    currency: str
+    provider_reference: str | None
+    confirmed_by: str | None
+    confirmed_at: datetime | None
+    created_at: datetime
+    allowed_actions: list[str]
+    events: list[PaymentEventOut] = []
+
+
+class AdminPaymentPageOut(BaseModel):
+    items: list[AdminPaymentOut]
+    total: int
+
+
+class PaymentActionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    note: str | None = Field(default=None, max_length=200)
+
+    @field_validator("note")
+    @classmethod
+    def _note(cls, value: str | None) -> str | None:
         return _optional_text(value)
