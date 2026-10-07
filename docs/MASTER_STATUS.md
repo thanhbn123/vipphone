@@ -1513,3 +1513,162 @@ Bằng chứng gián tiếp đủ mạnh: **mọi container khác đều có `un
 - **`/api/health` không phát hiện được DB chết.** Chỉ `ready` phát hiện. Đừng bao giờ chỉ nhìn `health`.
 - **Tôi đã tự che bằng chứng của chính mình:** lệnh deploy ghi `>/dev/null 2>&1` nên khi `alembic upgrade` thất bại, tôi **không thấy** — và tưởng deploy thành công trong khi container app không hề được thay. Từ nay deploy phải hiện output.
 - **Các kết quả "staging PASS" báo trong phiên 07/10 TRƯỚC khi phát hiện sự cố này cần được coi là CHƯA CHẮC CHẮN** và nên đo lại.
+
+---
+
+## 36. G14 — PRODUCT CATALOG (4 bảng, tiền `Decimal`, tương thích thiết bị)
+
+Thiết kế: [`docs/catalog.md`](catalog.md) — viết **TRƯỚC** khi code (commit `0e1161e`).
+
+### 36.1 Số đo gate
+
+| Mục | Giá trị đo được | Cách đo |
+|---|---|---|
+| Issue | [#58](https://github.com/thanhbn123/vipphone/issues/58) | `gh issue create` |
+| PR | [#59](https://github.com/thanhbn123/vipphone/pull/59) | `gh pr view 59` |
+| Nhánh | `g14-product-catalog` | `git rev-parse --abbrev-ref HEAD` |
+| EXPECTED develop (trước merge) | `db84838415920ef5c52f8d24e4c06d1d52aff199` | `git rev-parse origin/develop` |
+| ACTUAL develop (trước merge) | `db84838415920ef5c52f8d24e4c06d1d52aff199` | `git rev-parse origin/develop` |
+| MERGE BASE | `db84838415920ef5c52f8d24e4c06d1d52aff199` | `git merge-base origin/develop <PR HEAD>` |
+| PR HEAD | `d6d862cd53a086929c2a3fbe37a949438292f639` | `gh pr view 59 --json headRefOid` |
+| **Merge SHA vào `develop`** | **`aa911c2d1462017cfea031042bcc60d9a747eb1f`** | `git rev-parse origin/develop` sau khi merge (2026-10-07) |
+| `main` sau gate | `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **KHÔNG ĐỔI** | `git rev-parse origin/main` |
+| CI | **7/7 check PASS** (secret-scan · validate-static · backend · dependency-scan · E2E chromium/firefox/webkit) | `gh pr checks 59` |
+| Migration head mới | **`0007_product_catalog`** | `alembic current` |
+
+Drift: **expected == actual == merge-base** ⇒ không lệch, được phép merge.
+
+### 36.2 Migration `0007` — additive, 4 bảng
+
+| Bảng | Số cột | Ràng buộc |
+|---|---|---|
+| `categories` | **7** | `code` UNIQUE · CHECK `code = upper(code)` |
+| `products` | **10** | `product_id` UNIQUE · `slug` UNIQUE · FK category **RESTRICT** |
+| `product_variants` | **13** | `sku` UNIQUE · 4 CHECK (giá ≥ 0 · giá gạch ≥ giá bán · currency 3 chữ HOA) |
+| `device_compatibility` | **6** | UNIQUE `(sku_id, device_brand, device_model_code)` · CHECK `compatibility_type` |
+
+**TIỀN — đo trên DB thật, không suy đoán:** `information_schema.columns` trả
+`compare_at_price:numeric(12,2)  cost_price:numeric(12,2)  sale_price:numeric(12,2)`.
+Không có cột tiền nào là `float`/`double precision`. Ghi trên staging: `sale=250000.10`,
+`cost=120000.33` — đọc lại **đúng từng đồng**, không sai số nhị phân.
+
+**Seed:** đúng **10 category**, deterministic + idempotent (`ON CONFLICT (code) DO NOTHING`).
+**0 sản phẩm được seed** — category là *từ vựng*, sản phẩm là *dữ liệu kinh doanh*.
+Chốt an toàn trong migration: seed thiếu category ⇒ **NỔ**.
+
+**`alembic check`**: *No new upgrade operations detected*.
+⚠️ **Phạm vi của phép đo đó:** Alembic so **bảng/cột/index/unique** — nó **KHÔNG so
+`CheckConstraint`** (đúng như đã ghi ở §12.1). 4 CHECK của G14 được kiểm bằng **test riêng
+trên DB thật**, không tin `alembic check`.
+
+### 36.3 Test — trước / sau
+
+| Bộ | Trước G14 | Sau G14 |
+|---|---|---|
+| Backend (`tests/`) | 359 | **396** (+37) |
+| E2E trình duyệt | 33 | **39** (+6) |
+
+- **E2E 3 engine (local, chạy RIÊNG từng engine): chromium 39/39 · firefox 39/39 · webkit 39/39.** CI cũng xanh cả 3.
+- `ruff check` + `ruff format --check` sạch · `gitleaks git --no-banner --redact --exit-code 1` → **80 commit, no leaks**.
+- ⚠️ **Bài học phép đo:** lần đầu tôi chạy `pytest tests` **và** E2E **cùng lúc** trên **cùng một
+  database test** ⇒ 3 test E2E đỏ giả (redeem idempotent). Hai bộ dùng chung một DB nên **phải
+  chạy tuần tự**. Đây là lỗi phép đo, không phải lỗi mã — nhưng nếu không kiểm lại thì đã báo sai.
+
+### 36.4 ĐỐI CHỨNG ÂM — ba lần phá THẬT, đo, rồi hoàn nguyên
+
+| # | Đã phá gì | Test ĐỎ | Nguyên văn kết quả |
+|---|---|---|---|
+| 1 | Bỏ `Product.active` trong `product_query` (`app/services/catalog.py`) | 3 test | `test_public_list_hides_inactive_product` — `assert 1 == 0`; `test_public_detail_returns_404_for_inactive_product`; `test_NEGATIVE_control_unfiltered_query_WOULD_show_inactive` |
+| 2 | Gỡ `UniqueConstraint("sku")` ở **cả** `app/models.py` **và** `migrations/versions/0007_product_catalog.py` | `test_unique_constraints_exist_at_database_level` | `Failed: DID NOT RAISE IntegrityError` |
+| 3 | Bỏ điều kiện `DeviceCompatibility.device_model_code == device_model` trong `_compatible_exists` | `test_compatibility_filter_by_device` | đỏ ở nhánh "máy không khớp" |
+
+Sau mỗi lần phá đều **hoàn nguyên** và chạy lại: xanh. Đã `grep` lại mã nguồn để chắc chắn
+không sót dấu vết phá hoại (`0 dòng` chứa marker `ĐỐI CHỨNG ÂM`).
+
+**Phát hiện phải nói thẳng (đừng giấu):** ở đối chứng #2, test **API** `test_sku_is_unique`
+**VẪN XANH** — vì router chặn bằng `SELECT` trước khi `INSERT` nên vẫn trả 409 dù ràng buộc DB
+đã bị gỡ. **Chỉ test ở tầng DB mới bắt được.** Nếu bộ test chỉ có test API thì nó đã nói dối:
+"UNIQUE hoạt động" trong khi thật ra chỉ có một lớp kiểm ở ứng dụng — mà lớp đó **không chặn
+được hai request đồng thời**.
+
+### 36.5 Deploy staging — HIỆN OUTPUT (bài học §35.5)
+
+| Bước | Kết quả |
+|---|---|
+| `staging_health_guard.sh` **TRƯỚC** deploy | **ĐẠT** (4/4 tầng; migration head `0006_customer_foundation`) |
+| Checkout trên máy chủ | `~/vipphone-staging/repo` → `aa911c2d1462017cfea031042bcc60d9a747eb1f` (`git status` sạch) |
+| `docker build` | **BUILD EXIT=0** · image `vipphone-staging:aa911c2d…` ID `2bf8626fb770` · 373MB |
+| `alembic upgrade head` (container dùng-một-lần) | **MIGRATION EXIT=0** · `0006_customer_foundation -> 0007_product_catalog` · `alembic current` = `0007_product_catalog (head)` |
+| Thay container | image cũ `db848384…` (giữ lại để quay lui) → image mới `aa911c2d…` · `STATUS=running` · `RESTART=0` · `POLICY=unless-stopped` |
+| Log khởi động | `VIP PHONE khởi động: env=staging, staff_auth=configured` |
+| `staging_health_guard.sh` **SAU** deploy | **ĐẠT** (4/4 tầng; migration head `0007_product_catalog`) |
+
+Không lệnh nào ghi `>/dev/null`: mọi output đều hiện.
+
+### 36.6 Nghiệm thu THẬT trên staging (`https://qua.viporder.vn`)
+
+**API (curl qua HTTPS thật):**
+
+| Phép đo | Kết quả |
+|---|---|
+| `GET /api/catalog/categories` | **10** category, đúng 10 mã đã seed |
+| `GET /api/products` (trước khi tạo dữ liệu) | **total = 0** |
+| `GET /api/admin/products` không khoá / khoá SAI / khoá ĐÚNG | **401 / 401 / 200** |
+| Tạo sản phẩm + SKU + tương thích qua API admin | 201 · giá lưu `250000.10` / `300000.20` / `120000.33` — **đúng từng đồng** |
+| `GET /api/products` JSON công khai | **không có `cost_price`**, không có `120000` |
+| Lọc `device_model=iphone-16-pro-max` / `iphone-11` | **1 / 0** |
+| Lọc `category=CASE` · `q=DEMO-STAGING` · `q=<SKU>` | 1 · 1 · 1 |
+| `q=%` (ký tự đại diện) | **0** — đã escape, không "trả về tất cả" |
+| Tắt sản phẩm ⇒ công khai / chi tiết | **total 0** / **404**; admin **vẫn thấy** (`active=false`) |
+| Bật lại | công khai **total 1** |
+| Giá gạch < giá bán (POST) | **422** |
+| Trùng `sku` / trùng `slug` | **409 / 409** |
+
+**UI thật, trình duyệt thật (Playwright chromium headless trỏ vào staging): 17 PASS · 0 FAIL**, gồm:
+vẽ sản phẩm **từ API** (không hard-code) · nhãn "Còn hàng" · giá đọc từ API · **0 px tràn ngang ở
+320px** ở cả `/shop` và `/product/{slug}` · **0 lỗi console/CSP** · lọc theo dòng máy trên giao diện
+(máy khớp ⇒ có, máy không khớp ⇒ rỗng, **không nhân bản**) · slug sai ⇒ "Không tìm thấy" ·
+**không có con số tồn kho nào**.
+
+**Đọc DB THẬT (`docker exec -i vipphone-staging-pg psql`, có `-i`):**
+
+| Thời điểm | products | skus | categories | compatibility |
+|---|---|---|---|---|
+| Sau nghiệm thu API | 1 | 1 | 10 | 1 |
+| Sau nghiệm thu UI | 1 | 1 | 10 | 1 |
+| **Sau dọn dữ liệu test** | **0** | **0** | **10** | **0** |
+
+`marker_products = 0` · `marker_skus = 0` sau dọn. `migration_head = 0007_product_catalog`.
+Log ứng dụng 30 phút: **0 Traceback**; 1 `WARNING` duy nhất là ca **cố ý** gửi khoá sai (401).
+
+### 36.7 Lỗi THẬT chỉ trình duyệt bắt được (đã vá)
+
+`product.html` ban đầu dùng đường dẫn **tương đối** (`assets/js/product.js`). Ở `/product/{slug}`
+(hai tầng), trình duyệt hiểu thành `/product/assets/js/product.js` ⇒ **404** ⇒ trang chi tiết
+**không chạy JS**, tiêu đề rỗng, console đầy lỗi MIME + CSP.
+
+**Test tầng API hoàn toàn không thấy** — nó chỉ đo HTTP 200 của trang. Chỉ Playwright thật mới lộ.
+Đã đổi sang đường dẫn **tuyệt đối từ gốc**, và thêm test chặn tái phát
+(`test_shop_and_product_pages_are_served_without_inline_code`).
+
+### 36.8 Nằm NGOÀI phạm vi G14 — nói thẳng
+
+- **Không có inventory engine** ⇒ **không có số lượng tồn kho ở bất kỳ đâu**, kể cả admin.
+  `stock_tracking` chỉ là **cờ**; UI chỉ có "Còn hàng / Hết hàng" suy từ `active`.
+- Giỏ hàng / đơn hàng / thanh toán (G16) · ảnh sản phẩm · lịch sử giá + audit đổi giá ·
+  đồng bộ tồn kho/giá với kênh bán ngoài.
+- **Không có FK cứng** `device_compatibility.device_model_code → iphone_models.model_code`
+  (cố ý — `docs/catalog.md` §3.6). **Rủi ro đã ghi:** khai sai mã máy thì hệ thống **không báo**.
+  Việc mở: cảnh báo ở admin + báo cáo mã mồ côi.
+- **Chưa làm:** audit event cho thay đổi catalog (`ck_audit_events_event_type` hiện là CHECK
+  đóng, thêm loại mới cần migration riêng).
+
+### 36.9 Việc còn dở sau gate này
+
+| # | Việc | Loại |
+|---|---|---|
+| 1 | Inventory engine (số lượng tồn thật) | chưa làm — G16+ |
+| 2 | Cảnh báo `device_model_code` gõ sai + báo cáo mã mồ côi | kỹ thuật |
+| 3 | Audit thay đổi giá/catalog | kỹ thuật — cần mở CHECK `event_type` |
+| 4 | Ảnh sản phẩm (kho ảnh, không hotlink) | chưa làm |
+| 5 | Giữ lại 2 image staging cũ (`db848384…`, `9aba9e0c…`) để quay lui — dọn khi hết nhu cầu | vận hành |
