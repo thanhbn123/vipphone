@@ -3,16 +3,23 @@
 > Chỉ chứa những việc **thật sự** cần Owner: cần hạ tầng, cần credential, cần quyền quyết định
 > chính sách, hoặc cần thao tác trên kênh thật. **Không** nhét quyết định kỹ thuật nhỏ vào đây.
 >
-> Đo ngày **2026-10-01** trên `develop` = `f79834fcd36778994a62248747ff3cc114d4e88b`.
-> Mọi thứ repo-side đã xong và **không** chờ các mục dưới đây.
+> Đo lần đầu ngày **2026-10-01**; **cập nhật 2026-10-07** sau các gate thương mại (G15–G17, kho,
+> lịch sử giá, ảnh, attribution). Mọi thứ repo-side đã xong và **không** chờ các mục dưới đây.
 
 | # | Quyết định | Trạng thái | Chặn cái gì |
 |---|---|---|---|
 | D-001 | Hạ tầng staging | ✅ **CLOSED** — máy chủ + `qua.viporder.vn` (DNS) + **TLS Let's Encrypt** đều XONG | — |
 | D-002 | Credential Turnstile | **BLOCKED_EXTERNAL_CREDENTIAL** | bot protection thật |
-| D-003 | Branch protection | **OWNER_ACTION_REQUIRED** | chống push thẳng `main` |
+| D-003 | Branch protection | ✅ **CLOSED** — đo 2026-10-07: `main` + `develop` bắt buộc PR + đúng 4 check tự động, `strict`, cấm force-push/xoá; đối chứng âm PR #65 bị chặn | — |
 | D-004 | Chính sách lưu trữ PII | **CLOSED** — Owner đã chốt 2026-10-02 | — |
 | D-005 | RPO/RTO + lịch sao lưu | **CLOSED** — Owner đã chốt 2026-10-02 | — |
+| D-006 | **Đường triển khai staging cho các gate thương mại** | **BLOCKED_EXTERNAL_ACCESS** | deploy + nghiệm thu staging G15→attribution; `develop == staging` |
+| D-007 | `enforce_admins` của branch protection | **OWNER_DECISION** (hiện `false`) | admin vẫn bypass được check đỏ |
+| D-008 | Biểu phí giao hàng | **OWNER_DECISION** (hiện `SHIPPING_FEE_FLAT=0.00`) | tổng đơn thật |
+| D-009 | Nội dung chuyển khoản (số TK, ngân hàng, chủ TK) | **OWNER_INPUT** (`BANK_TRANSFER_INSTRUCTIONS` đang rỗng) | khách tự chuyển khoản không cần gọi |
+| D-010 | Kho ảnh production + sao lưu ảnh | **OWNER_DECISION** | ảnh sản phẩm ở production |
+| D-011 | Khoá webhook giả lập trên staging | **OWNER_INPUT** (tuỳ chọn) | nghiệm thu đường webhook trên staging |
+| — | Cổng thanh toán thật | **NOT INTEGRATED** (ranh giới cho phép) | thu tiền online thật |
 
 ---
 
@@ -77,9 +84,28 @@ và **không** chờ khoá thật.
 
 ---
 
-## D-003 — BRANCH PROTECTION
+## D-003 — BRANCH PROTECTION — ✅ CLOSED (đo lại 2026-10-07)
 
-**Trạng thái đo được ngày 2026-10-01:**
+Đo bằng GitHub API (`GET /repos/thanhbn123/vipphone/branches/{main,develop}/protection`):
+
+| | `main` | `develop` |
+|---|---|---|
+| check bắt buộc | `Backend (lint, migration, tests)`, `Dependency scan (pip-audit)`, `Secret scan (gitleaks)`, `Validate static frontend` | như `main` |
+| `strict` (phải cập nhật với base) | `true` | `true` |
+| bắt buộc PR | có (0 người duyệt) | có (0 người duyệt) |
+| force-push / xoá nhánh | cấm / cấm | cấm / cấm |
+| `enforce_admins` | **`false`** | **`false`** |
+
+4 check bắt buộc = **đúng 4 job tự động** của `ci.yml`. Ba job E2E chỉ chạy tay (`workflow_dispatch`) và
+**không** còn nằm trong danh sách bắt buộc ⇒ PR không bị kẹt bởi check không bao giờ chạy.
+(Bản handoff nói "vẫn đòi 3 check E2E" — đo lại thì **đã** được sửa trước lượt này; không cần đổi gì.)
+
+**Đối chứng âm:** PR #65 cố ý thêm import thừa ⇒ job bắt buộc `Backend` **failure** ⇒
+`mergeable_state = blocked`. Đã đóng, không merge.
+
+Phần lịch sử bên dưới giữ để tham chiếu.
+
+**Trạng thái đo được ngày 2026-10-01 (cũ):**
 
 ```
 main    : "Branch not protected"  (HTTP 404)
@@ -259,3 +285,67 @@ PostgreSQL. Không có bản sao lưu nào **đã được kiểm** thì chưa c
 
 **Vì sao không tự chọn:** đây là **mức chấp nhận rủi ro kinh doanh**. Kỹ thuật dựng được cơ chế;
 chỉ Owner biết mất một ngày lead có sao không.
+
+
+---
+
+## D-006 — ĐƯỜNG TRIỂN KHAI STAGING CHO CÁC GATE THƯƠNG MẠI — BLOCKED_EXTERNAL_ACCESS
+
+**Đo được (2026-10-07) từ phiên làm việc của harness (container cloud):**
+
+```
+curl https://qua.viporder.vn/   → CONNECT tunnel failed, response 403   (proxy mạng của môi trường chặn)
+ls ~/.ssh                        → trống (không có khoá SSH của host staging)
+```
+
+Hệ quả: mã G15 → attribution **đã merge vào `develop` và xanh CI 7/7**, nhưng **chưa** được deploy lên
+`https://qua.viporder.vn`; `develop ≠ staging`. Không có gì bị "giả PASS" — xem `docs/OWNER_ACCEPTANCE_COMMERCE.md`.
+
+**Chọn MỘT trong hai cách:**
+
+1. **Chạy từ MacBook** (máy đang có khoá `vip_viettelpost_staging_*`), trên `develop` mới nhất:
+
+   ```bash
+   git fetch origin && git checkout develop && git pull --ff-only
+   ./deploy/staging.sh                         # 4 cửa khoá: cây sạch · test · phiếu · băm gói
+   ./deploy/verify.sh staging                  # đối chiếu băm mã trên máy chủ
+   STAFF_KEY=<khoá nhân viên staging> [MOCK_SECRET=<khoá webhook giả lập>] \
+     .venv/bin/python scripts/staging_commerce_smoke.py \
+       --base-url https://qua.viporder.vn --i-know-this-is-staging     # 24 bước, PASS/FAIL
+   # Dọn dữ liệu thử (chạy TRÊN máy chủ, trong mạng docker của staging):
+   DATABASE_URL=... APP_ENV=staging python scripts/cleanup_test_data.py           # đếm
+   DATABASE_URL=... APP_ENV=staging python scripts/cleanup_test_data.py --apply   # xoá
+   DATABASE_URL=... python scripts/restore_drill.py                               # sao lưu → phục hồi → so md5
+   ```
+
+2. **Cho harness quyền đi tới staging**: trong cài đặt môi trường cloud, thêm `qua.viporder.vn` (và
+   cổng SSH của host) vào danh sách mạng cho phép, và cấp khoá SSH deploy dưới dạng **secret** của môi
+   trường (không dán vào chat). Phiên sau harness tự chạy toàn bộ khối lệnh trên.
+
+## D-007 — `enforce_admins`
+
+Hiện `false` ở cả hai nhánh: tài khoản admin vẫn merge được PR có check đỏ (PR thường thì bị chặn — đã đo).
+`true` = kỷ luật chặt nhất nhưng sự cố khẩn cấp phải tắt protection mới sửa nhanh được. Harness **không** tự đổi.
+
+## D-008 — BIỂU PHÍ GIAO HÀNG
+
+Mã đã có MỘT hàm `shipping_fee_for()` dùng chung cho giỏ và checkout; hiện là phí **cố định**
+`SHIPPING_FEE_FLAT` (mặc định `0.00`). Owner chốt: miễn phí / đồng giá (bao nhiêu) / theo tỉnh / theo
+ngưỡng đơn. Đồng giá thì chỉ cần đặt biến môi trường; các kiểu khác cần một gate nhỏ.
+
+## D-009 — NỘI DUNG CHUYỂN KHOẢN
+
+`BANK_TRANSFER_INSTRUCTIONS` (≤ 500 ký tự, không phải secret) hiển thị cho khách chọn chuyển khoản, sau dòng
+"Ghi nội dung chuyển khoản: <mã đơn>". Owner cung cấp số tài khoản, ngân hàng, chủ tài khoản.
+
+## D-010 — KHO ẢNH PRODUCTION + SAO LƯU ẢNH
+
+Staging lưu ảnh trên Docker named volume `vipphone-staging-media`. `deploy/backup.sh` **chưa** sao lưu volume
+này (chỉ sao lưu DB). Production nên dùng kho đối tượng S3-compatible (+ CDN) — chỉ cần thêm một lớp hiện thực
+`app/storage.ObjectStorage`. Owner chọn nhà cung cấp/vùng lưu trữ; chưa chọn thì production chưa có ảnh bền.
+
+## D-011 — KHOÁ WEBHOOK GIẢ LẬP TRÊN STAGING (tuỳ chọn)
+
+Đặt `PAYMENT_MOCK_WEBHOOK_SECRET` (chuỗi ngẫu nhiên, chỉ trong `shared/.env` của staging) để bật phương thức
+`STAGING_MOCK` và chạy được phần webhook của `staging_commerce_smoke.py`. Không đặt thì phần đó ghi NOT TESTED.
+**Không bao giờ** đặt ở production (mã cũng tự tắt giả lập khi `APP_ENV=production`).

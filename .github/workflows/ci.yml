@@ -102,6 +102,8 @@ jobs:
             migrations/versions/0012_price_history.py docs/price-history.md \
             migrations/versions/0013_product_images.py docs/product-images.md app/storage.py \
             migrations/versions/0014_order_attribution.py docs/attribution.md \
+            app/logredact.py scripts/restore_drill.py scripts/staging_commerce_smoke.py \
+            docs/OWNER_ACCEPTANCE_COMMERCE.md \
             docs/MASTER_STATUS.md docs/architecture.md docs/lead-schema.md \
             docs/catalog.md \
             docs/adr/0001-stack-selection.md \
@@ -456,7 +458,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
 
+      # Bình thường 30-50 giây. Đã đo được 2 lần treo >10 phút ở `apt-get` của
+      # `--with-deps` (07/10/2026, chưa chạy test nào). Trần thời gian để treo thì
+      # FAIL NHANH và chạy lại được, thay vì giữ runner tới 6 giờ.
       - name: Install ${{ matrix.browser }}
+        timeout-minutes: 8
         run: python -m playwright install --with-deps ${{ matrix.browser }}
 
       - name: Wait for PostgreSQL

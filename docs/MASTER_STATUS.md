@@ -1672,3 +1672,85 @@ Log ứng dụng 30 phút: **0 Traceback**; 1 `WARNING` duy nhất là ca **cố
 | 3 | Audit thay đổi giá/catalog | kỹ thuật — cần mở CHECK `event_type` |
 | 4 | Ảnh sản phẩm (kho ảnh, không hotlink) | chưa làm |
 | 5 | Giữ lại 2 image staging cũ (`db848384…`, `9aba9e0c…`) để quay lui — dọn khi hết nhu cầu | vận hành |
+
+---
+
+## 37. THƯƠNG MẠI — G15 → ATTRIBUTION + NGHIỆM THU TÍCH HỢP + BẢO MẬT (2026-10-07)
+
+Người đo: DEEPSEEK HARNESS — COMMERCE COMPLETION. Môi trường đo: container cloud (PostgreSQL 16 thật,
+Chromium thật) + GitHub Actions (Chromium/Firefox/WebKit thật). **Không có số đo nào trên staging** — §37.5.
+
+### 37.1 Đo lại TRƯỚC khi làm (không tin handoff)
+
+| Mục | Handoff nói | Đo được |
+|---|---|---|
+| `develop` | — | `f1dcd024dfa44b62b6bbd90f0a33d66691d9f660` |
+| `main` | bản khởi tạo | `7d6162cf31eb96ea27879be3a4671812a9cd7e01` (đúng) |
+| Branch protection | "vẫn đòi 3 check E2E" | **DRIFT**: đã chỉ còn 4 check tự động trên cả `main`/`develop` — không cần đổi |
+| Test | ~418 | 418 passed + 1 lỗi môi trường (docker daemon) — đúng |
+| G15 | chưa | issue #63 mở, **chưa có mã** |
+| Staging | đang chạy | **không đo được** từ phiên này (proxy 403, không khoá SSH) |
+
+Đối chứng âm branch protection: PR #65 (import thừa) ⇒ job bắt buộc `Backend` failure ⇒ `blocked`. Đóng, không merge.
+
+### 37.2 Các gate — mỗi gate một PR, CI 7/7 (gồm E2E 3 engine chạy tay)
+
+| Gate | Issue | PR | Merge vào `develop` | Migration |
+|---|---|---|---|---|
+| G15 gợi ý phụ kiện | #63 | #66 | `08e5c79009c7d74857b9d146af1ef6350ce03dbe` | `0008` |
+| G16 giỏ + đơn | #67 | #68 | `179ef8aafb4b089365619f138c41e733e83af4c7` | `0009` |
+| G17 thanh toán | #69 | #70 | `ebe4d09af8b4fb2e60cab7a632ce4832d3f7cf09` | `0010` |
+| Kho tối giản | #71 | #72 | `6008440a7d21b3b89a50f61acce8cd8b1e61ada6` | `0011` |
+| Lịch sử giá | #73 | #74 | `75509f1f2c4fc684c41d28fe8f33d6f64350be0e` | `0012` |
+| Ảnh sản phẩm | #75 | #80 | `4f4305e9c2d54731c889aa5c5c99ce15914e72d3` | `0013` |
+| Attribution | #76 | #81 | `9b096c7093dbe1ae710415ca08265e6fcd552ebb` | `0014` |
+| Admin bán hàng + nghiệm thu tích hợp | #77 #78 | #82 | `34afdf3c99a9ca9973133d848d28ead212c414b9` | — |
+| Bảo mật log + script nghiệm thu staging + tài liệu | #79 | #83 | (PR này) | — |
+
+Thiết kế từng gate: `docs/recommendation-engine.md`, `docs/commerce.md`, `docs/payments.md`, `docs/inventory.md`,
+`docs/price-history.md`, `docs/product-images.md`, `docs/attribution.md`.
+
+### 37.3 Đối chứng âm — phá mã THẬT → test đỏ → hoàn nguyên (tổng 40 ca)
+
+G15: 4 · G16: 6 backend + 2 trình duyệt · G17: 7 · kho: 4 · giá: 3 · ảnh: 3 · attribution: 3 · dọn dữ liệu: 3 ·
+diễn tập phục hồi: 1 · che log: 3 · branch protection: 1 (PR #65). Chi tiết ở mô tả từng PR.
+
+**Phép đo tự lộ lỗi của chính nó (ghi lại, không giấu):**
+1. Lịch sử giá: đối chứng "trigger ghi cả khi giá không đổi" **lần đầu KHÔNG đỏ** — ORM không gửi UPDATE khi giá trị
+   không đổi nên điều kiện `IS NOT DISTINCT FROM` chưa từng bị đo. Thêm test bằng SQL trực tiếp ⇒ đỏ.
+2. E2E G15: kiểm PII bằng chuỗi con `"phone"` báo động giả vì `iphone-16-pro-max` chứa "phone" ⇒ đổi sang kiểm theo
+   KHOÁ + theo GIÁ TRỊ thật.
+3. E2E G16: tự tính sai kỳ vọng (120.000,50 × 2) ⇒ sửa số kỳ vọng, không sửa mã.
+4. Chốt CI chống định dạng tiền bằng số thực (cấm `Number(`) bắt được mã ảnh mới ⇒ đổi sang `parseInt`.
+5. **Lỗi quy trình của harness:** kiểm lint tại máy bỏ sót `scripts/` (CI kiểm `app tests tests_e2e migrations
+   scripts`) ⇒ PR #82 đỏ ở `ruff format --check` (`tests/test_cleanup_script.py`). Sửa bằng commit `style:`
+   trên chính PR; từ đó chạy **đúng lệnh của CI** trước khi đẩy.
+
+### 37.4 Lỗi THẬT tìm được và đã sửa
+
+| Lỗi | Ảnh hưởng | Sửa |
+|---|---|---|
+| Lỗi SQL in tham số bind (họ tên, SĐT) và mã cũ ghi nguyên lỗi vào log | PII khách trong log máy chủ | `hide_parameters=True`; 2 chỗ log chỉ ghi loại lỗi |
+| PostgreSQL `DETAIL: Failing row contains (…)` chứa dữ liệu dòng | như trên, không che được ở SQLAlchemy | `ErrorRedactor` gắn vào mọi handler (gồm traceback uvicorn) |
+| Access log uvicorn ghi `?q=<SĐT>`, `?phone=<SĐT>` | SĐT trong log truy cập | `AccessLogRedactor`; test bằng uvicorn THẬT |
+| Báo cáo doanh thu 0 trả `"0"` thay vì `"0.00"` | tiền lệch định dạng | `quantize` |
+| Customer 360 trả `orders: []` dù G16 đã có | nhân viên không thấy đơn của khách | nối đơn vào Customer 360 |
+| CI: bước `playwright install --with-deps webkit` treo >5–10 phút (≥ 4 lượt, luôn ở bước cài, chưa chạy test nào) | PR treo | chạy lại 1 lần/lượt (đạt); thêm `timeout-minutes: 8` |
+
+### 37.5 Ranh giới — KHÔNG phải PASS
+
+| Mục | Trạng thái |
+|---|---|
+| Deploy các gate lên staging | **BLOCKED_EXTERNAL_ACCESS** (D-006): `curl https://qua.viporder.vn` ⇒ `CONNECT tunnel failed, response 403`; `~/.ssh` trống |
+| `develop == staging` | **NO** — staging đang ở bản G14 (`aa911c2…`, §36.5), không đo lại được |
+| Script deploy mới trên staging thật | **NOT RUN** — bộ thử `deploy/tests/thu-deploy.sh` 66/66 tại máy |
+| Sao lưu/phục hồi trên staging | **NOT RUN** — tại máy: `restore_drill.py` 24/24 bảng khớp md5 |
+| Rollback mã trên staging | **NOT RUN** — tại máy: mã `develop@G17` trên schema `0014`, 12/12 khói, 0 traceback |
+| Turnstile thật | **BLOCKED_EXTERNAL_CREDENTIAL** (D-002) |
+| Cổng thanh toán thật | **NOT INTEGRATED** (ranh giới cho phép) |
+| `main` | **KHÔNG ĐỔI** · production **NOT DEPLOYED** |
+
+### 37.6 Việc tiếp theo cho Owner
+
+`docs/OWNER_DECISIONS_REQUIRED.md` D-006 (đường deploy staging — có sẵn khối lệnh một lần chạy), D-007..D-011.
+Nghiệm thu: `docs/OWNER_ACCEPTANCE_COMMERCE.md`.

@@ -170,7 +170,10 @@ def create_lead(
         db.refresh(lead)
         return LeadCreationResult(lead=lead, duplicate=False)
 
-    logger.error("Không sinh được gift code duy nhất sau nhiều lần thử: %s", last_error)
+    # Chỉ ghi LOẠI lỗi: thông điệp lỗi DB có thể chứa dữ liệu dòng (tên, SĐT).
+    logger.error(
+        "Không sinh được gift code duy nhất sau nhiều lần thử: %s", type(last_error).__name__
+    )
     raise ApiError(
         503,
         "GIFT_CODE_EXHAUSTED",
