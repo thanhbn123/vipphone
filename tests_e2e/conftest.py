@@ -232,14 +232,31 @@ def clean_database(live_server) -> None:
     """Mỗi test bắt đầu từ database sạch, danh mục dựng lại như migration."""
     from sqlalchemy import create_engine, text
 
-    from tests.conftest import INITIAL_MIGRATION
+    from tests.conftest import CATALOG_MIGRATION, INITIAL_MIGRATION
 
     engine = create_engine(TEST_DATABASE_URL, future=True)
     try:
         with engine.begin() as conn:
-            conn.execute(text("TRUNCATE TABLE audit_events, leads RESTART IDENTITY CASCADE"))
+            # G14: dọn CẢ bảng danh mục sản phẩm, nếu không sản phẩm của test này
+            # rò sang test khác và `Tìm thấy N sản phẩm` sẽ sai một cách khó hiểu.
+            conn.execute(
+                text(
+                    "TRUNCATE TABLE audit_events, leads, device_compatibility, "
+                    "product_variants, products, categories RESTART IDENTITY CASCADE"
+                )
+            )
             conn.execute(text("TRUNCATE TABLE iphone_models RESTART IDENTITY CASCADE"))
             conn.execute(INITIAL_MIGRATION.MODELS_TABLE.insert(), INITIAL_MIGRATION.seed_rows())
+            conn.execute(
+                text(
+                    "INSERT INTO categories (code, name, sort_order, active) "
+                    "VALUES (:code, :name, :sort_order, true)"
+                ),
+                [
+                    {"code": code, "name": name, "sort_order": index}
+                    for index, (code, name) in enumerate(CATALOG_MIGRATION.SEED_CATEGORIES)
+                ],
+            )
     finally:
         engine.dispose()
 

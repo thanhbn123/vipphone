@@ -97,7 +97,23 @@ def load_initial_migration():
     return module
 
 
+def load_catalog_migration():
+    """Nạp module migration 0007 để dùng CHUNG danh sách 10 category (G14).
+
+    Cùng lý do với `load_initial_migration`: nếu test tự chép lại danh sách
+    category thì hai bản sẽ lệch nhau, và bản test sẽ là bản nói dối.
+    """
+    import importlib.util
+
+    path = REPO_ROOT / "migrations" / "versions" / "0007_product_catalog.py"
+    spec = importlib.util.spec_from_file_location("vipphone_migration_0007", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 INITIAL_MIGRATION = load_initial_migration()
+CATALOG_MIGRATION = load_catalog_migration()
 
 
 @pytest.fixture(scope="session")
@@ -129,11 +145,29 @@ def clean_tables(engine, migrated_database: str) -> None:
     sau sẽ hỏng vì lý do chẳng liên quan gì tới chúng.
     """
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE TABLE audit_events, leads RESTART IDENTITY CASCADE"))
+        # G14: dọn CẢ bảng danh mục sản phẩm. Không dọn thì sản phẩm của test này
+        # rò sang test khác, và `total` ở các test phân trang sẽ sai một cách khó hiểu.
+        conn.execute(
+            text(
+                "TRUNCATE TABLE audit_events, leads, device_compatibility, "
+                "product_variants, products, categories RESTART IDENTITY CASCADE"
+            )
+        )
         conn.execute(text("TRUNCATE TABLE iphone_models RESTART IDENTITY CASCADE"))
         conn.execute(
             INITIAL_MIGRATION.MODELS_TABLE.insert(),
             INITIAL_MIGRATION.seed_rows(),
+        )
+        # 10 category lấy TỪ CHÍNH migration 0007 — một nguồn duy nhất.
+        conn.execute(
+            text(
+                "INSERT INTO categories (code, name, sort_order, active) "
+                "VALUES (:code, :name, :sort_order, true)"
+            ),
+            [
+                {"code": code, "name": name, "sort_order": index}
+                for index, (code, name) in enumerate(CATALOG_MIGRATION.SEED_CATEGORIES)
+            ],
         )
 
 

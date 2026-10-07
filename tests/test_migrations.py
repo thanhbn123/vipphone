@@ -125,6 +125,74 @@ def test_migration_head_is_recorded(temp_database: str):
     assert head == _migration_head()
 
 
+def test_g14_creates_catalog_tables_and_seeds_categories_only(temp_database: str):
+    """G14 — migration `0007` dựng 4 bảng và seed ĐÚNG 10 category, 0 sản phẩm.
+
+    Vì sao khẳng định "0 sản phẩm" ở đây: seed sản phẩm giả là **bịa dữ liệu** —
+    một sản phẩm giả có giá giả nằm lẫn trong danh mục thật sẽ bị đối xử như dữ
+    liệu thật (hiện lên `/shop`, lọt vào báo cáo, có ngày bị bán).
+    """
+    command.upgrade(alembic_config(temp_database), "head")
+    engine = create_engine(temp_database, future=True)
+    inspector = inspect(engine)
+
+    tables = set(inspector.get_table_names())
+    assert {"categories", "products", "product_variants", "device_compatibility"} <= tables
+
+    with engine.connect() as conn:
+        expected = {
+            "CASE",
+            "SCREEN_PROTECTOR",
+            "CABLE",
+            "CHARGER",
+            "POWER_BANK",
+            "EARPHONE",
+            "MAGSAFE",
+            "CAR_ACCESSORY",
+            "STAND",
+            "OTHER",
+        }
+        codes = {row[0] for row in conn.execute(text("SELECT code FROM categories"))}
+        assert codes == expected, f"seed category lệch: {codes ^ expected}"
+
+        for table in ("products", "product_variants", "device_compatibility"):
+            assert conn.execute(text(f"SELECT count(*) FROM {table}")).scalar() == 0
+
+        money_types = {
+            row[0]: (row[1], row[2], row[3])
+            for row in conn.execute(
+                text(
+                    """
+                    SELECT column_name, data_type, numeric_precision, numeric_scale
+                    FROM information_schema.columns
+                    WHERE table_name = 'product_variants'
+                      AND column_name IN ('sale_price', 'cost_price', 'compare_at_price')
+                    """
+                )
+            )
+        }
+    engine.dispose()
+
+    assert len(money_types) == 3
+    for column, (data_type, precision, scale) in money_types.items():
+        assert data_type == "numeric", f"{column} là {data_type} — TIỀN không được là float"
+        assert (precision, scale) == (12, 2)
+
+
+def test_g14_downgrade_removes_only_catalog_tables(temp_database: str):
+    """Rollback G14 không được đụng lead/khách/gift — đó là lý do nó additive."""
+    cfg = alembic_config(temp_database)
+    command.upgrade(cfg, "head")
+    command.downgrade(cfg, "0006_customer_foundation")
+
+    engine = create_engine(temp_database, future=True)
+    remaining = set(inspect(engine).get_table_names())
+    engine.dispose()
+
+    assert not {"categories", "products", "product_variants", "device_compatibility"} & remaining
+    assert {"leads", "customers", "customer_devices", "customer_acquisition"} <= remaining
+
+
 def test_seed_inserts_exactly_the_verified_models(temp_database: str):
     """Seed phải đúng 35 model — 28 cũ + 7 dòng 2025/2026 đã TRA NGUỒN, không tự bịa."""
     command.upgrade(alembic_config(temp_database), "head")

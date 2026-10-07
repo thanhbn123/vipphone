@@ -25,6 +25,13 @@ PUBLIC_API_ROUTES = {
     ("GET", "/api/catalog/iphone-models"),
     ("POST", "/api/leads"),
     ("GET", "/api/gifts/{gift_code}/qr.png"),
+    # G14 — DUYỆT CỬA HÀNG là việc công khai: khách xem giá và phụ kiện trước khi
+    # để lại thông tin. Ba đường dưới đây CHỈ ĐỌC, chỉ trả sản phẩm đang bán, và
+    # KHÔNG BAO GIỜ trả `cost_price` (giá nhập) — xem `docs/catalog.md` §5.
+    # Mọi đường GHI (`/api/admin/products*`) vẫn bắt buộc `require_staff`.
+    ("GET", "/api/catalog/categories"),
+    ("GET", "/api/products"),
+    ("GET", "/api/products/{slug}"),
 }
 
 #: Giá trị thay cho tham số đường dẫn khi dò.
@@ -32,6 +39,7 @@ DUMMY = {
     "gift_code": "VIP-26-ABCDEF",
     "lead_id": "00000000-0000-0000-0000-000000000000",
     "model_code": "iphone-16",
+    "slug": "khong-ton-tai",
 }
 
 
