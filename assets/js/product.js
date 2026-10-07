@@ -111,6 +111,16 @@
     errorBox.hidden = true;
     if (aboutBox) aboutBox.hidden = true;
     document.title = "VIP PHONE — " + product.name;
+
+    // G15 — tracking KHÔNG PII: chỉ định danh sản phẩm + nhóm hàng.
+    if (window.VPTrack) {
+      window.VPTrack.track("vipphone_product_view", {
+        product_id: product.product_id,
+        sku: product.variants.length ? product.variants[0].sku : null,
+        category: product.category ? product.category.code : null,
+        source_surface: "product_detail"
+      });
+    }
   }
 
   var slug = slugFromPath();

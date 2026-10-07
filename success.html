@@ -39,6 +39,18 @@
 
       <a class="secondary-btn" href="index.html">Đăng ký người khác</a>
     </section>
+
+    <!-- G15: gợi ý MỀM — không popup, không ép mua. Ẩn cho tới khi có dữ liệu. -->
+    <section class="card reco-card" id="recoSection" aria-labelledby="reco-title" hidden>
+      <p class="eyebrow">PHỤ KIỆN HỢP VỚI MÁY CỦA BẠN</p>
+      <h2 id="reco-title" class="h3">Gợi ý cho <span id="recoDevice"></span></h2>
+      <nav class="reco-ctas" aria-label="Lối tắt phụ kiện">
+        <a class="secondary-btn" id="recoCtaGlass" data-reco-cta="SCREEN_PROTECTOR">Xem kính phù hợp</a>
+        <a class="secondary-btn" id="recoCtaCharge" data-reco-cta="CHARGER">Xem sạc/cáp phù hợp</a>
+        <a class="secondary-btn" id="recoCtaAll" data-reco-cta="ALL">Xem phụ kiện cho máy của bạn</a>
+      </nav>
+      <div id="recoList" class="product-grid"></div>
+    </section>
   </main>
 
   <footer class="site-footer">
@@ -50,5 +62,7 @@
   <script src="assets/js/util.js"></script>
   <script src="assets/js/qr.js"></script>
   <script src="assets/js/success.js"></script>
+  <script src="assets/js/money.js"></script>
+  <script src="assets/js/reco.js"></script>
 </body>
 </html>

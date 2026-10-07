@@ -106,3 +106,4 @@ input.has-error,select.has-error{border-color:#b91c1c;background:#fff5f5}
 .price-compare{color:#9ca3af;font-weight:500;font-size:.85rem}
 .sku-compat{color:#4b5563;font-size:.82rem}
 @media(min-width:720px){.product-grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}}
+.reco-card{margin-top:18px}.reco-ctas{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 16px}.reco-ctas .secondary-btn{flex:1 1 auto;text-align:center}

@@ -732,3 +732,23 @@ class CompatibilityCreateRequest(BaseModel):
                 "compatibility_type phải là một trong: " + ", ".join(COMPATIBILITY_TYPES)
             )
         return cleaned
+
+
+# ============================================================================
+# G15 — GỢI Ý PHỤ KIỆN. Thiết kế: `docs/recommendation-engine.md`.
+#
+# Lược đồ CÔNG KHAI: chỉ theo MÁY, KHÔNG có trường nào về khách (không phone,
+# không email, không tên). `product` là CHÍNH `ProductOut` của G14 — nên
+# `cost_price` không thể lọt vào đây.
+# ============================================================================
+class RecommendationItemOut(BaseModel):
+    #: Hạng 1..n theo đúng thứ tự trả về — để tracking ghi được vị trí đã click.
+    rank: int
+    category_code: str
+    product: ProductOut
+
+
+class RecommendationsOut(BaseModel):
+    context: str
+    device_model_code: str
+    items: list[RecommendationItemOut]

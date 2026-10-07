@@ -31,6 +31,7 @@ from .routers import (
     leads,
     products,
     public_config,
+    recommendations,
 )
 from .security import apply_security_headers
 
@@ -151,6 +152,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admin_customers.router)
     app.include_router(products.router)
     app.include_router(admin_products.router)
+    app.include_router(recommendations.router)
 
     # -------------------------------------------------------------- tĩnh
     static_root: Path = app_settings.static_dir
