@@ -35,7 +35,7 @@ from ..schemas import (
     _clean_sku,
 )
 from ..security import enforce_commerce_rate_limit
-from ..services import commerce
+from ..services import commerce, inventory
 from ..services import payments as payment_service
 from .leads import _field_errors
 
@@ -44,12 +44,13 @@ router = APIRouter(prefix="/api", tags=["commerce"])
 IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
 
 #: Hook chạy TRONG giao dịch checkout, theo THỨ TỰ. Hook ném lỗi ⇒ cả đơn rollback.
-#: G17: tạo khoản thu theo phương thức khách chọn.
-CHECKOUT_HOOKS: list = [payment_service.checkout_hook]
+#: Kho giữ hàng TRƯỚC (thiếu hàng thì không tạo khoản thu vô ích), rồi G17 tạo khoản thu.
+CHECKOUT_HOOKS: list = [inventory.checkout_hook, payment_service.checkout_hook]
 
-#: Huỷ đơn ⇒ huỷ khoản thu đang chờ (G17).
-if payment_service.on_order_status not in commerce.STATUS_HOOKS:
-    commerce.STATUS_HOOKS.append(payment_service.on_order_status)
+#: Huỷ đơn ⇒ nhả hàng giữ + huỷ khoản thu đang chờ; giao đi ⇒ trừ kho.
+for _hook in (inventory.on_order_status, payment_service.on_order_status):
+    if _hook not in commerce.STATUS_HOOKS:
+        commerce.STATUS_HOOKS.append(_hook)
 
 
 async def _parse(request: Request, model: type[BaseModel]):

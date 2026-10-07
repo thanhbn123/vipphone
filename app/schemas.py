@@ -1091,3 +1091,50 @@ class PaymentActionRequest(BaseModel):
     @classmethod
     def _note(cls, value: str | None) -> str | None:
         return _optional_text(value)
+
+
+# ============================================================================
+# KHO (quản trị). Thiết kế: `docs/inventory.md`. Con số tồn CHỈ có ở đây —
+# đường công khai chỉ thấy nhãn Còn/Hết hàng.
+# ============================================================================
+class InventoryBalanceOut(BaseModel):
+    sku: str
+    product_name: str
+    variant_name: str
+    stock_tracking: bool
+    quantity_on_hand: int
+    quantity_reserved: int
+    quantity_available: int
+    updated_at: datetime | None = None
+
+
+class InventoryMovementOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    movement_type: str
+    delta_on_hand: int
+    delta_reserved: int
+    order_number: str | None = None
+    actor: str
+    reason: str | None
+    created_at: datetime
+
+
+class InventoryDetailOut(BaseModel):
+    balance: InventoryBalanceOut
+    movements: list[InventoryMovementOut]
+
+
+class InventoryMovementCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    movement_type: Literal["OPENING", "RECEIPT", "ADJUSTMENT", "RETURN"]
+    #: Dương cho OPENING/RECEIPT/RETURN; ADJUSTMENT có thể âm (kiểm kê thiếu).
+    quantity: int = Field(ge=-100_000, le=100_000)
+    reason: str | None = Field(default=None, max_length=300)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason(cls, value: str | None) -> str | None:
+        return _optional_text(value)

@@ -24,6 +24,7 @@ from .giftcodes import is_well_formed_gift_code, normalize_gift_code
 from .routers import (
     admin,
     admin_customers,
+    admin_inventory,
     admin_orders,
     admin_products,
     catalog,
@@ -164,6 +165,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(commerce.router)
     app.include_router(admin_orders.router)
     app.include_router(payments.router)
+    app.include_router(admin_inventory.router)
 
     # -------------------------------------------------------------- tĩnh
     static_root: Path = app_settings.static_dir

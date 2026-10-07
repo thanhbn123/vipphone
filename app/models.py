@@ -15,6 +15,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Computed,
     DateTime,
     ForeignKey,
     Identity,
@@ -804,6 +805,81 @@ class PaymentEvent(Base):
     )
 
 
+# ============================================================================
+# KHO TỐI GIẢN. Thiết kế: `docs/inventory.md`.
+# ============================================================================
+
+
+class MovementType(StrEnum):
+    OPENING = "OPENING"
+    RECEIPT = "RECEIPT"
+    RESERVE = "RESERVE"
+    RELEASE = "RELEASE"
+    SALE = "SALE"
+    ADJUSTMENT = "ADJUSTMENT"
+    RETURN = "RETURN"
+
+
+class InventoryBalance(Base):
+    __tablename__ = "inventory_balances"
+    __table_args__ = (
+        UniqueConstraint("sku_id", name="uq_inventory_balances_sku"),
+        CheckConstraint("quantity_on_hand >= 0", name="ck_inventory_on_hand_non_negative"),
+        CheckConstraint("quantity_reserved >= 0", name="ck_inventory_reserved_non_negative"),
+        CheckConstraint(
+            "quantity_reserved <= quantity_on_hand", name="ck_inventory_reserved_le_on_hand"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    sku_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("product_variants.id", ondelete="RESTRICT"), nullable=False
+    )
+    quantity_on_hand: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    quantity_reserved: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    #: CỘT SINH — `on_hand - reserved`. Không ai ghi được vào nó.
+    quantity_available: Mapped[int] = mapped_column(
+        Integer, Computed("quantity_on_hand - quantity_reserved", persisted=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class InventoryMovement(Base):
+    """Sổ cái chỉ-thêm. Số dư của một SKU = tổng các dòng của nó."""
+
+    __tablename__ = "inventory_movements"
+    __table_args__ = (
+        CheckConstraint(
+            "movement_type IN ('OPENING', 'RECEIPT', 'RESERVE', 'RELEASE', 'SALE', "
+            "'ADJUSTMENT', 'RETURN')",
+            name="ck_inventory_movements_type",
+        ),
+        CheckConstraint(
+            "delta_on_hand <> 0 OR delta_reserved <> 0", name="ck_inventory_movements_not_empty"
+        ),
+        Index("ix_inventory_movements_sku", "sku_id", "id"),
+        Index("ix_inventory_movements_order", "order_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    sku_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("product_variants.id", ondelete="RESTRICT"), nullable=False
+    )
+    movement_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    delta_on_hand: Mapped[int] = mapped_column(Integer, nullable=False)
+    delta_reserved: Mapped[int] = mapped_column(Integer, nullable=False)
+    order_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("orders.id", ondelete="RESTRICT"), nullable=True
+    )
+    actor: Mapped[str] = mapped_column(String(80), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 __all__ = [
     "ACTIVE_GIFT_STATUSES",
     "COMPATIBILITY_TYPE_VALUES",
@@ -821,8 +897,11 @@ __all__ = [
     "CustomerDevice",
     "DeviceCompatibility",
     "GiftStatus",
+    "InventoryBalance",
+    "InventoryMovement",
     "IphoneModel",
     "Lead",
+    "MovementType",
     "Order",
     "OrderItem",
     "OrderStatus",

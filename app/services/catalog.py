@@ -44,6 +44,7 @@ from ..schemas import (
     VariantOut,
     VariantPatchRequest,
 )
+from .inventory import available_by_sku
 
 logger = logging.getLogger(__name__)
 
@@ -219,9 +220,17 @@ def _category_codes(db: Session, category_ids: list[int]) -> dict[int, Category]
     return {row.id: row for row in rows}
 
 
-def _availability(variants: list[ProductVariant]) -> str:
-    """Còn hàng = có ÍT NHẤT MỘT SKU `active`. KHÔNG suy từ số lượng (chưa có)."""
-    return AVAILABILITY_IN_STOCK if any(v.active for v in variants) else AVAILABILITY_OUT_OF_STOCK
+def _availability(variants: list[ProductVariant], available: dict[int, int]) -> str:
+    """Còn hàng = có ÍT NHẤT MỘT SKU `active` BÁN ĐƯỢC.
+
+    SKU không theo dõi tồn (`stock_tracking=false`) bán được khi `active` — như G14.
+    SKU có theo dõi chỉ bán được khi `quantity_available > 0` (chưa có sổ kho = 0).
+    Vẫn KHÔNG trả con số tồn ra ngoài — chỉ nhãn Còn/Hết.
+    """
+    sellable = any(
+        v.active and (not v.stock_tracking or available.get(v.id, 0) > 0) for v in variants
+    )
+    return AVAILABILITY_IN_STOCK if sellable else AVAILABILITY_OUT_OF_STOCK
 
 
 def serialize_public(db: Session, products: list[Product]) -> list[ProductOut]:
@@ -233,6 +242,7 @@ def serialize_public(db: Session, products: list[Product]) -> list[ProductOut]:
     categories = _category_codes(db, [p.category_id for p in products])
     all_variants = [v for group in variants_by_product.values() for v in group]
     compatibility_by_sku = load_compatibility(db, [v.id for v in all_variants])
+    available = available_by_sku(db, [v.id for v in all_variants if v.stock_tracking])
 
     results: list[ProductOut] = []
     for product in products:
@@ -246,7 +256,7 @@ def serialize_public(db: Session, products: list[Product]) -> list[ProductOut]:
                 description=product.description,
                 brand=product.brand,
                 category=CategoryOut.model_validate(category) if category else None,
-                availability=_availability(variants),
+                availability=_availability(variants, available),
                 variants=[
                     VariantOut(
                         sku=v.sku,
@@ -276,6 +286,7 @@ def serialize_admin(db: Session, products: list[Product]) -> list[AdminProductOu
     categories = _category_codes(db, [p.category_id for p in products])
     all_variants = [v for group in variants_by_product.values() for v in group]
     compatibility_by_sku = load_compatibility(db, [v.id for v in all_variants])
+    available = available_by_sku(db, [v.id for v in all_variants if v.stock_tracking])
 
     results: list[AdminProductOut] = []
     for product in products:
@@ -289,7 +300,7 @@ def serialize_admin(db: Session, products: list[Product]) -> list[AdminProductOu
                 description=product.description,
                 brand=product.brand,
                 category=CategoryOut.model_validate(category) if category else None,
-                availability=_availability(variants),
+                availability=_availability(variants, available),
                 active=product.active,
                 created_at=product.created_at,
                 updated_at=product.updated_at,
