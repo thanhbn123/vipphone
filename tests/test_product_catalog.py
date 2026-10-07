@@ -124,7 +124,9 @@ def test_public_list_hides_inactive_product(client, staff_headers):
     assert client.get("/api/products").json()["total"] == 1
 
     off = client.patch(
-        f"/api/admin/products/{created['product_id']}", json={"active": False}, headers=staff_headers
+        f"/api/admin/products/{created['product_id']}",
+        json={"active": False},
+        headers=staff_headers,
     )
     assert off.status_code == 200, off.text
     assert off.json()["active"] is False
@@ -137,7 +139,9 @@ def test_public_list_hides_inactive_product(client, staff_headers):
 def test_public_detail_returns_404_for_inactive_product(client, staff_headers):
     created = _create_product(client, staff_headers)
     client.patch(
-        f"/api/admin/products/{created['product_id']}", json={"active": False}, headers=staff_headers
+        f"/api/admin/products/{created['product_id']}",
+        json={"active": False},
+        headers=staff_headers,
     )
     response = client.get(f"/api/products/{PRODUCT_PAYLOAD['slug']}")
     assert response.status_code == 404, "sản phẩm đã tắt vẫn xem được công khai!"
@@ -154,16 +158,16 @@ def test_public_hides_inactive_sku(client, staff_headers):
     assert off.status_code == 200, off.text
 
     body = client.get(f"/api/products/{PRODUCT_PAYLOAD['slug']}").json()
-    assert [v["sku"] for v in body["variants"]] == ["OP-VIP-ON"], (
-        "SKU đã tắt vẫn lộ ra công khai!"
-    )
+    assert [v["sku"] for v in body["variants"]] == ["OP-VIP-ON"], "SKU đã tắt vẫn lộ ra công khai!"
 
 
 def test_admin_sees_inactive_product_and_sku(client, staff_headers):
     created = _create_product(client, staff_headers)
     _create_variant(client, staff_headers, created["product_id"], sku="OP-VIP-OFF")
     client.patch(
-        f"/api/admin/products/{created['product_id']}", json={"active": False}, headers=staff_headers
+        f"/api/admin/products/{created['product_id']}",
+        json={"active": False},
+        headers=staff_headers,
     )
     client.patch("/api/admin/variants/OP-VIP-OFF", json={"active": False}, headers=staff_headers)
 
@@ -453,7 +457,10 @@ def test_keyword_search_by_name_and_sku(client, staff_headers):
     _create_variant(client, staff_headers, first["product_id"], sku="OP-ALPHA-01")
 
     second = _create_product(
-        client, staff_headers, name="Cáp sạc nhanh 20W", slug="cap-sac-nhanh-20w",
+        client,
+        staff_headers,
+        name="Cáp sạc nhanh 20W",
+        slug="cap-sac-nhanh-20w",
         category_code="CABLE",
     )
     _create_variant(client, staff_headers, second["product_id"], sku="CABLE-BETA-02")
@@ -497,7 +504,10 @@ def test_filter_by_category(client, staff_headers):
 def test_pagination_total_and_page_size_cap(client, staff_headers):
     for index in range(3):
         _create_product(
-            client, staff_headers, name=f"Ốp {index}", slug=f"op-{index}",
+            client,
+            staff_headers,
+            name=f"Ốp {index}",
+            slug=f"op-{index}",
         )
 
     page = client.get("/api/products", params={"page_size": 2}).json()
@@ -559,9 +569,7 @@ def test_every_admin_catalog_route_requires_staff(client, staff_headers):
         )
 
         wrong = client.request(method, path, headers={"X-Staff-Key": "sai-khoa"}, **kwargs)
-        assert wrong.status_code == 401, (
-            f"{method} {path} trả {wrong.status_code} với khoá SAI"
-        )
+        assert wrong.status_code == 401, f"{method} {path} trả {wrong.status_code} với khoá SAI"
 
     # Đối chứng dương: có khoá đúng thì đọc được (nếu không, test trên vô nghĩa).
     ok = client.get("/api/admin/products", headers=staff_headers)
@@ -626,7 +634,9 @@ def test_NEGATIVE_control_unfiltered_query_WOULD_show_inactive(client, staff_hea
     """
     created = _create_product(client, staff_headers)
     client.patch(
-        f"/api/admin/products/{created['product_id']}", json={"active": False}, headers=staff_headers
+        f"/api/admin/products/{created['product_id']}",
+        json={"active": False},
+        headers=staff_headers,
     )
 
     assert client.get("/api/products").json()["total"] == 0
