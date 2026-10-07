@@ -1710,7 +1710,7 @@ Chromium thật) + GitHub Actions (Chromium/Firefox/WebKit thật). **Không có
 Thiết kế từng gate: `docs/recommendation-engine.md`, `docs/commerce.md`, `docs/payments.md`, `docs/inventory.md`,
 `docs/price-history.md`, `docs/product-images.md`, `docs/attribution.md`.
 
-### 37.3 Đối chứng âm — phá mã THẬT → test đỏ → hoàn nguyên (tổng 41 ca)
+### 37.3 Đối chứng âm — phá mã THẬT → test đỏ → hoàn nguyên (tổng 40 ca)
 
 G15: 4 · G16: 6 backend + 2 trình duyệt · G17: 7 · kho: 4 · giá: 3 · ảnh: 3 · attribution: 3 · dọn dữ liệu: 3 ·
 diễn tập phục hồi: 1 · che log: 3 · branch protection: 1 (PR #65). Chi tiết ở mô tả từng PR.
