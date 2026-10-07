@@ -25,6 +25,7 @@ from ..schemas import (
     AdminProductOut,
     AdminProductPageOut,
     CompatibilityCreateRequest,
+    PriceHistoryOut,
     ProductCreateRequest,
     ProductPatchRequest,
     VariantCreateRequest,
@@ -193,9 +194,9 @@ def admin_create_variant(
 ) -> AdminProductOut:
     """`sku` trùng ⇒ **409**. Giá là `Decimal`; `compare_at_price` < `sale_price`
     bị chặn từ tầng lược đồ (422) trước khi chạm DB."""
-    del actor  # chỉ dùng để chặn truy cập
-
     product = _product_or_404(db, product_id)
+    # Trigger lịch sử giá ghi giá khởi điểm với ĐÚNG người tạo.
+    catalog_service.stamp_change_context(db, actor=actor, reason="Tạo SKU")
     if catalog_service.get_variant_by_sku(db, payload.sku) is not None:
         raise _duplicate("sku", DUPLICATE_SKU_MESSAGE, "Chọn mã SKU khác.")
 
@@ -225,9 +226,9 @@ def admin_patch_variant(
 
     KHÔNG cho sửa `sku` (mã hàng là khoá tra cứu) và không đổi `product_id`.
     """
-    del actor  # chỉ dùng để chặn truy cập
-
     variant = _variant_or_404(db, sku)
+    # Lịch sử giá do TRIGGER DB ghi trong CÙNG giao dịch — xem migration 0012.
+    catalog_service.stamp_change_context(db, actor=actor, reason=payload.price_change_reason)
     try:
         catalog_service.patch_variant(db, variant, payload)
     except ValueError as exc:
@@ -246,6 +247,22 @@ def admin_patch_variant(
     db.commit()
     db.refresh(product)
     return catalog_service.serialize_admin_one(db, product)
+
+
+@router.get(
+    "/api/admin/variants/{sku}/price-history",
+    response_model=list[PriceHistoryOut],
+    summary="Lịch sử giá bán của SKU (cần xác thực)",
+)
+def admin_price_history(
+    sku: str,
+    db: Session = Depends(get_db),
+    actor: str = Depends(require_staff),
+) -> list[PriceHistoryOut]:
+    variant = _variant_or_404(db, sku)
+    return [
+        PriceHistoryOut.model_validate(row) for row in catalog_service.price_history(db, variant)
+    ]
 
 
 # --------------------------------------------------------------------------

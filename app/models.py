@@ -880,6 +880,29 @@ class InventoryMovement(Base):
     )
 
 
+class PriceHistory(Base):
+    """Lịch sử giá bán — do TRIGGER DB ghi (migration 0012), ứng dụng chỉ ĐỌC."""
+
+    __tablename__ = "price_history"
+    __table_args__ = (
+        CheckConstraint("new_price >= 0", name="ck_price_history_new_price"),
+        Index("ix_price_history_sku", "sku_id", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    sku_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("product_variants.id", ondelete="CASCADE"), nullable=False
+    )
+    old_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    new_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    changed_by: Mapped[str] = mapped_column(String(80), nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    reason: Mapped[str | None] = mapped_column(String(300))
+
+
 __all__ = [
     "ACTIVE_GIFT_STATUSES",
     "COMPATIBILITY_TYPE_VALUES",
@@ -911,6 +934,7 @@ __all__ = [
     "PaymentMethod",
     "PaymentState",
     "PaymentStatus",
+    "PriceHistory",
     "Product",
     "ProductVariant",
     "RecommendationCategoryPriority",
