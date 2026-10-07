@@ -15,25 +15,29 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..errors import ApiError, NotFound
+from ..limits import read_limited_body
 from ..schemas import (
     AdminProductOut,
     AdminProductPageOut,
     CompatibilityCreateRequest,
     PriceHistoryOut,
     ProductCreateRequest,
+    ProductImagePatchRequest,
     ProductPatchRequest,
     VariantCreateRequest,
     VariantPatchRequest,
 )
 from ..security import require_staff
 from ..services import catalog as catalog_service
+from ..services import images as image_service
 from ..services.catalog import PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX, ProductFilters
+from ..storage import get_storage
 
 router = APIRouter(tags=["admin-products"])
 
@@ -322,5 +326,98 @@ def admin_delete_compatibility(
 
     product = catalog_service.get_product_by_pk(db, variant.product_id)
     db.commit()
+    db.refresh(product)
+    return catalog_service.serialize_admin_one(db, product)
+
+
+# --------------------------------------------------------------------------
+# Ảnh sản phẩm — xem docs/product-images.md
+# --------------------------------------------------------------------------
+@router.post(
+    "/api/admin/products/{product_id}/images",
+    response_model=AdminProductOut,
+    status_code=201,
+    summary="Tải ảnh sản phẩm lên (byte ảnh thô, cần xác thực)",
+)
+async def admin_upload_image(
+    product_id: uuid.UUID,
+    request: Request,
+    alt_text: str = Query(min_length=1, max_length=200),
+    is_primary: bool = Query(default=False),
+    sort_order: int = Query(default=0, ge=0, le=1000),
+    db: Session = Depends(get_db),
+    actor: str = Depends(require_staff),
+) -> AdminProductOut:
+    """Body là BYTE ẢNH (không multipart), `Content-Type` = image/png|jpeg|webp.
+
+    Không có tham số URL nào: ảnh ngoài không thể được khai vào hệ thống.
+    """
+    product = _product_or_404(db, product_id)
+    cleaned_alt = " ".join(alt_text.split())
+    if not cleaned_alt:
+        raise ApiError(
+            422,
+            "VALIDATION_FAILED",
+            "Mô tả ảnh (alt) là bắt buộc.",
+            fields={"alt_text": "Bắt buộc."},
+        )
+    raw = await read_limited_body(request, image_service.max_bytes())
+    clean = image_service.clean_image(raw, request.headers.get("content-type", ""))
+    try:
+        image_service.add_image(
+            db, product, clean, alt_text=cleaned_alt, is_primary=is_primary, sort_order=sort_order
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(product)
+    return catalog_service.serialize_admin_one(db, product)
+
+
+@router.patch(
+    "/api/admin/products/{product_id}/images/{image_id}",
+    response_model=AdminProductOut,
+    summary="Sửa alt / thứ tự / ảnh chính (cần xác thực)",
+)
+def admin_patch_image(
+    product_id: uuid.UUID,
+    image_id: uuid.UUID,
+    payload: ProductImagePatchRequest,
+    db: Session = Depends(get_db),
+    actor: str = Depends(require_staff),
+) -> AdminProductOut:
+    product = _product_or_404(db, product_id)
+    image = image_service.get_image(db, product, image_id)
+    image_service.update_image(
+        db,
+        product,
+        image,
+        alt_text=payload.alt_text,
+        sort_order=payload.sort_order,
+        is_primary=payload.is_primary,
+    )
+    db.commit()
+    db.refresh(product)
+    return catalog_service.serialize_admin_one(db, product)
+
+
+@router.delete(
+    "/api/admin/products/{product_id}/images/{image_id}",
+    response_model=AdminProductOut,
+    summary="Xoá ảnh (cần xác thực)",
+)
+def admin_delete_image(
+    product_id: uuid.UUID,
+    image_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor: str = Depends(require_staff),
+) -> AdminProductOut:
+    product = _product_or_404(db, product_id)
+    image = image_service.get_image(db, product, image_id)
+    key = image_service.delete_image(db, product, image)
+    db.commit()
+    # Xoá tệp CHỈ sau khi DB đã commit: commit lỗi thì ảnh vẫn còn nguyên.
+    get_storage().delete(key)
     db.refresh(product)
     return catalog_service.serialize_admin_one(db, product)

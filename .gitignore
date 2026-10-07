@@ -45,3 +45,6 @@ blob-report/
 *.dump.age
 *.dump.sha256
 pg-backup/
+
+# Ảnh sản phẩm tải lên (kho lưu local) — dữ liệu, không phải mã nguồn
+var/

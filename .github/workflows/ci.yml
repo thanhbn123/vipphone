@@ -100,6 +100,7 @@ jobs:
             migrations/versions/0010_payments.py docs/payments.md app/payments/providers.py \
             migrations/versions/0011_inventory.py docs/inventory.md \
             migrations/versions/0012_price_history.py docs/price-history.md \
+            migrations/versions/0013_product_images.py docs/product-images.md app/storage.py \
             docs/MASTER_STATUS.md docs/architecture.md docs/lead-schema.md \
             docs/catalog.md \
             docs/adr/0001-stack-selection.md \

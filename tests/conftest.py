@@ -43,6 +43,10 @@ os.environ["RATE_LIMIT_LEADS_PER_WINDOW"] = "1000"
 os.environ["RATE_LIMIT_WINDOW_SECONDS"] = "60"
 os.environ["RATE_LIMIT_COMMERCE_PER_WINDOW"] = "100000"
 # G17: khoá ký webhook GIẢ LẬP — giá trị của test, độ phức tạp thấp có chủ ý (gitleaks).
+# Ảnh sản phẩm: kho lưu TẠM riêng cho phiên test — không ghi vào cây mã nguồn.
+import tempfile  # noqa: E402
+
+os.environ["MEDIA_ROOT"] = tempfile.mkdtemp(prefix="vipphone-media-test-")
 os.environ["PAYMENT_MOCK_WEBHOOK_SECRET"] = "mock-webhook-secret-for-tests-only"
 os.environ["TURNSTILE_SECRET_KEY"] = ""
 os.environ["TURNSTILE_REQUIRED"] = "false"

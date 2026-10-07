@@ -153,6 +153,14 @@
 
     var parts = [];
     parts.push('<article class="product-card">');
+    // Ảnh CHÍNH (máy chủ đặt ảnh chính đứng đầu). Ảnh luôn cùng origin (/media/...).
+    var image = product.images && product.images.length ? product.images[0] : null;
+    if (image) {
+      parts.push('<a class="product-thumb" href="' + util.escapeHtml(href) + '">' +
+        '<img src="' + util.escapeHtml(image.url) + '" alt="' + util.escapeHtml(image.alt_text) +
+        '" width="' + parseInt(image.width, 10) + '" height="' + parseInt(image.height, 10) +
+        '" loading="lazy" decoding="async"></a>');
+    }
     parts.push('<p class="product-category">' + util.escapeHtml(categoryName) + "</p>");
     parts.push('<h3 class="product-name"><a href="' + util.escapeHtml(href) + '">' +
       util.escapeHtml(product.name) + "</a></h3>");

@@ -109,7 +109,7 @@ def apply_security_headers(response: Response, path: str, *, is_https: bool) -> 
         )
 
     # Trang HTML không được cache để tránh lộ dữ liệu qua proxy trung gian.
-    if not path.startswith(("/assets/", "/data/")):
+    if not path.startswith(("/assets/", "/data/", "/media/")):
         response.headers.setdefault("Cache-Control", "no-store")
 
 
