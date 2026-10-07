@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 
 from sqlalchemy import (
@@ -19,6 +20,7 @@ from sqlalchemy import (
     Identity,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -263,6 +265,166 @@ class CustomerAcquisition(Base):
     )
 
 
+# ============================================================================
+# G14 — DANH MỤC SẢN PHẨM. Thiết kế: `docs/catalog.md`.
+#
+# LUẬT TIỀN (không có ngoại lệ): mọi cột tiền là `Numeric(12, 2)` / `Decimal`.
+# KHÔNG dùng `Float`. `float` là số nhị phân nên `0.1 + 0.2 != 0.3`; giá đã ghi
+# vào đơn hàng là thứ không migration nào vá lại được.
+# ============================================================================
+
+
+class CompatibilityType(StrEnum):
+    """Mức tương thích. `PARTIAL` tồn tại vì thực tế phụ kiện không nhị phân."""
+
+    FULL = "FULL"
+    PARTIAL = "PARTIAL"
+    CASE_FIT = "CASE_FIT"
+
+
+COMPATIBILITY_TYPE_VALUES = tuple(t.value for t in CompatibilityType)
+
+
+class Category(Base):
+    """Nhóm hàng. `code` là TỪ VỰNG ổn định (slug chữ HOA), UNIQUE ở tầng DB."""
+
+    __tablename__ = "categories"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_categories_code"),
+        CheckConstraint("code = upper(code)", name="ck_categories_code_upper"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    code: Mapped[str] = mapped_column(String(40), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Product(Base):
+    """Sản phẩm. `product_id` UUID là định danh CÔNG KHAI; `id` là khoá nội bộ."""
+
+    __tablename__ = "products"
+    __table_args__ = (
+        UniqueConstraint("product_id", name="uq_products_product_id"),
+        UniqueConstraint("slug", name="uq_products_slug"),
+        Index("ix_products_category_active", "category_id", "active"),
+        Index("ix_products_active_name", "active", "name"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False, default=uuid.uuid4
+    )
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    slug: Mapped[str] = mapped_column(String(160), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    brand: Mapped[str | None] = mapped_column(String(80))
+    #: RESTRICT: xoá category còn sản phẩm là phá dữ liệu. Muốn ẩn ⇒ `active = false`.
+    category_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("categories.id", ondelete="RESTRICT"), nullable=False
+    )
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ProductVariant(Base):
+    """SKU — thứ thật sự bán được.
+
+    `cost_price` là giá NHẬP: dữ liệu nội bộ, KHÔNG BAO GIỜ trả ra API công khai
+    (lộ giá nhập = lộ biên lợi nhuận). Có test khẳng định JSON công khai không
+    chứa khoá này.
+
+    `stock_tracking` chỉ là CỜ: G14 chưa có inventory engine, cột này KHÔNG sinh
+    ra số lượng tồn kho nào. Đừng đọc nó thành "đang có hàng".
+    """
+
+    __tablename__ = "product_variants"
+    __table_args__ = (
+        UniqueConstraint("sku", name="uq_product_variants_sku"),
+        Index("ix_product_variants_product_active", "product_id", "active"),
+        CheckConstraint("sale_price >= 0", name="ck_product_variants_sale_price_non_negative"),
+        CheckConstraint(
+            "cost_price IS NULL OR cost_price >= 0",
+            name="ck_product_variants_cost_price_non_negative",
+        ),
+        CheckConstraint(
+            "compare_at_price IS NULL OR compare_at_price >= sale_price",
+            name="ck_product_variants_compare_at_not_below_sale",
+        ),
+        CheckConstraint("currency ~ '^[A-Z]{3}$'", name="ck_product_variants_currency_format"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    sku: Mapped[str] = mapped_column(String(64), nullable=False)
+    product_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
+    variant_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    color: Mapped[str | None] = mapped_column(String(40))
+    cost_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    sale_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    compare_at_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default="VND")
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    stock_tracking: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class DeviceCompatibility(Base):
+    """SKU này dùng được cho máy nào.
+
+    Trỏ tới **SKU**, không trỏ tới product: hai SKU của cùng một product có thể
+    tương thích khác nhau (ốp iPhone 15 không vừa iPhone 16). Gắn vào product là
+    ép một sự thật sai — và sai theo hướng khách mua nhầm.
+
+    `device_model_code` khớp `iphone_models.model_code` (MÃ), không khớp
+    `display_name` (tên hiển thị — không UNIQUE, xem `docs/adr/0002` §2.4).
+    Cố ý KHÔNG có FK cứng: xem `docs/catalog.md` §3.6 (kèm rủi ro đã ghi).
+    """
+
+    __tablename__ = "device_compatibility"
+    __table_args__ = (
+        UniqueConstraint(
+            "sku_id", "device_brand", "device_model_code", name="uq_device_compatibility_sku_device"
+        ),
+        Index("ix_device_compatibility_lookup", "device_brand", "device_model_code"),
+        CheckConstraint(
+            "compatibility_type IN ('FULL','PARTIAL','CASE_FIT')",
+            name="ck_device_compatibility_type",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    sku_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("product_variants.id", ondelete="CASCADE"), nullable=False
+    )
+    device_brand: Mapped[str] = mapped_column(String(40), nullable=False, server_default="Apple")
+    device_model_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    compatibility_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class AuditEvent(Base):
     """Audit trail cho mọi thay đổi quan trọng.
 
@@ -302,12 +464,21 @@ class AuditEvent(Base):
 
 __all__ = [
     "ACTIVE_GIFT_STATUSES",
+    "COMPATIBILITY_TYPE_VALUES",
     "GIFT_STATUS_VALUES",
     "AuditEvent",
     "AuditEventType",
     "Base",
+    "Category",
+    "CompatibilityType",
+    "Customer",
+    "CustomerAcquisition",
+    "CustomerDevice",
+    "DeviceCompatibility",
     "GiftStatus",
     "IphoneModel",
     "Lead",
+    "Product",
+    "ProductVariant",
     "Text",
 ]
