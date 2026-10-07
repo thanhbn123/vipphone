@@ -206,6 +206,46 @@ def test_public_json_never_exposes_cost_price(client, staff_headers):
     assert "cost_price" in admin_raw, "quản trị PHẢI thấy giá nhập"
 
 
+def test_selling_below_cost_price_is_allowed(client, staff_headers):
+    """V11 — BÁN DƯỚI GIÁ NHẬP là ca HỢP LỆ (xả hàng), không phải lỗi dữ liệu.
+
+    §4 của `docs/catalog.md` liệt kê 5 luật giá nhưng TRƯỚC BẢN VÁ không nhắc luật
+    này, nên người đọc tài liệu không biết hệ thống cố ý cho phép hay bỏ sót. Đo
+    được trên bản cũ: `sale_price 100.00` + `cost_price 999.00` ⇒ **201**. Hành vi
+    đó ĐÚNG và được GIỮ NGUYÊN — bài này chốt lại để lần sau ai thêm ràng buộc
+    `sale_price >= cost_price` thì biết ngay mình vừa đổi luật nghiệp vụ.
+
+    Vì sao KHÔNG chặn: xả hàng tồn, bán lỗ có chủ đích, và bán dưới giá nhập để
+    đẩy dòng tiền là quyết định của Owner — một CHECK ở DB sẽ chặn luôn quyết định
+    đó mà không nói được lý do cho ai. Ghi vào tài liệu, không chặn ở DB.
+    """
+    created = _create_product(client, staff_headers)
+    response = client.post(
+        f"/api/admin/products/{created['product_id']}/variants",
+        json={
+            "sku": "OP-BAN-LO-01",
+            "variant_name": "Xả hàng tồn",
+            "sale_price": "100.00",
+            "cost_price": "999.00",
+            "currency": "VND",
+        },
+        headers=staff_headers,
+    )
+    assert response.status_code == 201, (
+        "bán dưới giá nhập phải được PHÉP (xả hàng) — nếu ai đó thêm ràng buộc "
+        f"sale_price >= cost_price thì đổi luật và phải sửa docs/catalog.md §4: {response.text}"
+    )
+    # Endpoint trả CẢ sản phẩm (`AdminProductOut`), không trả riêng SKU.
+    variant = response.json()["variants"][0]
+    assert Decimal(variant["sale_price"]) == Decimal("100.00")
+    assert Decimal(variant["cost_price"]) == Decimal("999.00")
+    assert Decimal(variant["sale_price"]) < Decimal(variant["cost_price"])
+
+    # Bán dưới giá nhập KHÔNG được kéo theo việc lộ giá nhập ra công khai.
+    public_raw = client.get(f"/api/products/{PRODUCT_PAYLOAD['slug']}").text
+    assert "cost_price" not in public_raw and "999" not in public_raw
+
+
 def test_availability_is_never_a_quantity(client, staff_headers):
     """Nhãn tồn kho chỉ có hai giá trị. Không có con số nào — chưa có sổ kho."""
     created = _create_product(client, staff_headers)
@@ -785,10 +825,9 @@ def test_NEGATIVE_control_device_filter_query_path_discriminates(db, client, sta
     from app.services.catalog import ProductFilters, count_products
 
     assert count_products(db, ProductFilters(device_model="iphone-16-pro-max")) == 1
-    assert (
-        count_products(db, ProductFilters(device_model="iphone-khong-co-that")) == 0
-    ), "lọc theo máy KHÔNG khớp mà vẫn ra sản phẩm — nhánh lọc đã hỏng"
+    assert count_products(db, ProductFilters(device_model="iphone-khong-co-that")) == 0, (
+        "lọc theo máy KHÔNG khớp mà vẫn ra sản phẩm — nhánh lọc đã hỏng"
+    )
     assert count_products(db, ProductFilters()) == 1, (
         "không lọc gì mà cũng ra 0 ⇒ con số 0 ở trên là do DB rỗng, không phải do lọc"
     )
-
