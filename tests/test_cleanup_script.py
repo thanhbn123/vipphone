@@ -54,7 +54,13 @@ def buy(client, sku, phone, attribution=None):
 def lead(client, phone, **extra):
     r = client.post(
         "/api/leads",
-        json={"full_name": "K", "phone": phone, "iphone_model": "iphone-16-pro-max", "consent": True, **extra},
+        json={
+            "full_name": "K",
+            "phone": phone,
+            "iphone_model": "iphone-16-pro-max",
+            "consent": True,
+            **extra,
+        },
     )
     assert r.status_code == 201, r.text
 
