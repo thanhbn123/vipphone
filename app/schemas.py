@@ -752,3 +752,277 @@ class RecommendationsOut(BaseModel):
     context: str
     device_model_code: str
     items: list[RecommendationItemOut]
+
+
+# ============================================================================
+# G16 — GIỎ HÀNG + ĐƠN HÀNG. Thiết kế: `docs/commerce.md`.
+#
+# LUẬT: KHÔNG có trường nào nhận GIÁ hay TỔNG TIỀN để TÍNH. `expected_total` chỉ
+# là con số khách ĐÃ THẤY — máy chủ so với tổng tự tính, lệch thì từ chối (409),
+# không bao giờ dùng nó làm giá.
+# ============================================================================
+SKU_RE = re.compile(r"^[A-Z0-9][A-Z0-9._-]{0,63}$")
+
+
+def _clean_sku(value: str) -> str:
+    cleaned = str(value).strip().upper()
+    if not SKU_RE.match(cleaned):
+        raise ValueError("Mã SKU không hợp lệ")
+    return cleaned
+
+
+def _required_text(value: str | None, field: str) -> str:
+    cleaned = " ".join(str(value or "").split())
+    if not cleaned:
+        raise ValueError(f"{field} là bắt buộc")
+    return cleaned
+
+
+def _optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = " ".join(str(value).split())
+    return cleaned or None
+
+
+def _canonical_phone(value: str) -> str:
+    if not is_valid_vn_mobile(value):
+        raise ValueError("Số điện thoại di động Việt Nam không hợp lệ")
+    return normalize_phone(value)
+
+
+class CartItemAddRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sku: str = Field(min_length=1, max_length=64)
+    quantity: int = Field(default=1, ge=1, le=99)
+
+    @field_validator("sku")
+    @classmethod
+    def _sku(cls, value: str) -> str:
+        return _clean_sku(value)
+
+
+class CartItemUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    quantity: int = Field(ge=1, le=99)
+
+
+class CartItemOut(BaseModel):
+    sku: str
+    product_name: str
+    product_slug: str
+    variant_name: str
+    quantity: int
+    #: Giá HIỆN HÀNH của SKU — chỉ để hiển thị; đơn sẽ chụp lại giá lúc đặt.
+    unit_price: Decimal
+    line_total: Decimal
+    currency: str
+    #: `False` khi SKU/sản phẩm đã tắt — dòng này KHÔNG được tính vào tổng và chặn checkout.
+    available: bool
+
+
+class CartOut(BaseModel):
+    cart_id: uuid.UUID
+    status: str
+    currency: str
+    items: list[CartItemOut]
+    item_count: int
+    subtotal: Decimal
+    #: Phí giao hàng + tổng DỰ KIẾN theo giá hiện hành. Checkout tính LẠI từ đầu;
+    #: trang checkout gửi `grand_total` này làm `expected_total` để bắt giá đổi.
+    shipping_fee: Decimal
+    grand_total: Decimal
+
+
+class CartCreatedOut(CartOut):
+    #: Token sở hữu — CHỈ trả MỘT LẦN lúc tạo. Máy chủ chỉ giữ SHA-256 của nó.
+    cart_token: str
+
+
+class CheckoutCustomerIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    full_name: str = Field(min_length=1, max_length=80)
+    phone: str = Field(min_length=1, max_length=32)
+    email: str | None = Field(default=None, max_length=254)
+
+    @field_validator("full_name")
+    @classmethod
+    def _name(cls, value: str) -> str:
+        return _required_text(value, "Họ tên")
+
+    @field_validator("phone")
+    @classmethod
+    def _phone(cls, value: str) -> str:
+        return _canonical_phone(value)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, value: str | None) -> str | None:
+        cleaned = _optional_text(value)
+        if cleaned is None:
+            return None
+        cleaned = cleaned.lower()
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", cleaned):
+            raise ValueError("Email không hợp lệ")
+        return cleaned
+
+
+class ShippingAddressIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    recipient_name: str = Field(min_length=1, max_length=80)
+    phone: str = Field(min_length=1, max_length=32)
+    address_line: str = Field(min_length=5, max_length=300)
+    ward: str | None = Field(default=None, max_length=80)
+    district: str | None = Field(default=None, max_length=80)
+    province: str = Field(min_length=2, max_length=80)
+
+    @field_validator("recipient_name")
+    @classmethod
+    def _recipient(cls, value: str) -> str:
+        return _required_text(value, "Người nhận")
+
+    @field_validator("phone")
+    @classmethod
+    def _phone(cls, value: str) -> str:
+        return _canonical_phone(value)
+
+    @field_validator("address_line")
+    @classmethod
+    def _address(cls, value: str) -> str:
+        cleaned = _required_text(value, "Địa chỉ")
+        if len(cleaned) < 5:
+            raise ValueError("Địa chỉ quá ngắn")
+        return cleaned
+
+    @field_validator("province")
+    @classmethod
+    def _province(cls, value: str) -> str:
+        cleaned = _required_text(value, "Tỉnh/Thành phố")
+        if len(cleaned) < 2:
+            raise ValueError("Tỉnh/Thành phố không hợp lệ")
+        return cleaned
+
+    @field_validator("ward", "district")
+    @classmethod
+    def _optional(cls, value: str | None) -> str | None:
+        return _optional_text(value)
+
+
+class CheckoutRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cart_id: uuid.UUID
+    customer: CheckoutCustomerIn
+    shipping: ShippingAddressIn
+    customer_note: str | None = Field(default=None, max_length=500)
+    #: Tổng khách ĐÃ THẤY trên màn hình. KHÔNG dùng để tính tiền — chỉ để phát
+    #: hiện giá đổi giữa lúc xem và lúc đặt (lệch ⇒ 409 `PRICE_CHANGED`).
+    expected_total: Money | None = None
+
+    @field_validator("customer_note")
+    @classmethod
+    def _note(cls, value: str | None) -> str | None:
+        return _optional_text(value)
+
+
+class OrderItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    sku: str
+    product_name: str
+    variant_name: str
+    unit_price: Decimal
+    quantity: int
+    line_total: Decimal
+
+
+class OrderOut(BaseModel):
+    """Đơn — bản cho CHÍNH chủ đơn (có token). Không có PII đầy đủ."""
+
+    order_id: uuid.UUID
+    order_number: str
+    status: str
+    payment_status: str
+    currency: str
+    subtotal: Decimal
+    shipping_fee: Decimal
+    discount_total: Decimal
+    grand_total: Decimal
+    items: list[OrderItemOut]
+    recipient_name: str
+    phone_masked: str
+    province: str
+    created_at: datetime
+
+
+class CheckoutOut(OrderOut):
+    #: `True` khi đây là phản hồi PHÁT LẠI của cùng `Idempotency-Key`.
+    replayed: bool = False
+
+
+class OrderStatusEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    field: str
+    from_value: str | None
+    to_value: str
+    actor: str
+    reason: str | None
+    created_at: datetime
+
+
+class AdminShippingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    recipient_name: str
+    phone: str
+    address_line: str
+    ward: str | None
+    district: str | None
+    province: str
+
+
+class AdminOrderSummaryOut(BaseModel):
+    order_id: uuid.UUID
+    order_number: str
+    status: str
+    payment_status: str
+    grand_total: Decimal
+    currency: str
+    item_count: int
+    customer_id: uuid.UUID
+    customer_name: str
+    phone_masked: str
+    created_at: datetime
+
+
+class AdminOrderPageOut(BaseModel):
+    items: list[AdminOrderSummaryOut]
+    total: int
+
+
+class AdminOrderDetailOut(AdminOrderSummaryOut):
+    subtotal: Decimal
+    shipping_fee: Decimal
+    discount_total: Decimal
+    customer_note: str | None
+    items_detail: list[OrderItemOut]
+    shipping: AdminShippingOut
+    events: list[OrderStatusEventOut]
+    allowed_transitions: list[str]
+
+
+class OrderStatusChangeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    to_status: str = Field(min_length=1, max_length=20)
+    reason: str | None = Field(default=None, max_length=300)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason(cls, value: str | None) -> str | None:
+        return _optional_text(value)

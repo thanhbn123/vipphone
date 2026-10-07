@@ -83,6 +83,8 @@ jobs:
             assets/js/redeem.js assets/js/qr-scan.js assets/js/admin-leads.js \
             assets/js/turnstile.js \
             assets/js/shop.js assets/js/product.js assets/js/reco.js \
+            assets/js/cart-store.js assets/js/cart.js assets/js/checkout.js assets/js/order-success.js \
+            cart.html checkout.html order-success.html \
             app/routers/public_config.py \
             tests/test_turnstile.py tests/test_auth_boundary.py \
             data/iphone-models.json \
@@ -94,6 +96,7 @@ jobs:
             migrations/versions/0001_initial.py \
             migrations/versions/0007_product_catalog.py \
             migrations/versions/0008_recommendation_priority.py \
+            migrations/versions/0009_cart_order.py docs/commerce.md \
             docs/MASTER_STATUS.md docs/architecture.md docs/lead-schema.md \
             docs/catalog.md \
             docs/adr/0001-stack-selection.md \

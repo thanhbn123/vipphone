@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>VIP PHONE — Đặt hàng thành công</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+</head>
+<body data-vp-page="order-success">
+  <a class="skip-link" href="#main">Bỏ qua điều hướng, tới nội dung chính</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">VIP</span>
+      <span class="brand-name">PHONE</span>
+    </div>
+    <span class="co-brand">VIP ORDER × BNI</span>
+  </header>
+
+  <main class="container narrow" id="main">
+    <section class="card success-card" aria-labelledby="order-title">
+      <div class="success-icon" aria-hidden="true">✓</div>
+      <p class="eyebrow">ĐẶT HÀNG THÀNH CÔNG</p>
+      <h1 id="order-title">Cảm ơn bạn!</h1>
+      <p class="status bad" id="orderError" role="alert" hidden></p>
+      <div id="orderBox" hidden>
+        <div class="gift-code-wrap"><span>Mã đơn hàng</span><strong id="orderNumber"></strong></div>
+        <p id="orderStatus" class="status warn"></p>
+        <ul class="cart-lines" id="orderLines"></ul>
+        <dl class="totals">
+          <div><dt>Tạm tính</dt><dd id="orderSubtotal"></dd></div>
+          <div><dt>Phí giao hàng</dt><dd id="orderShipping"></dd></div>
+          <div class="grand"><dt>Tổng cộng</dt><dd id="orderGrand"></dd></div>
+        </dl>
+        <p class="helper">Giao tới: <span id="orderRecipient"></span></p>
+      </div>
+      <a class="secondary-btn" href="/shop">Tiếp tục mua sắm</a>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>VIP PHONE — phụ kiện cho cộng đồng VIP ORDER × BNI.</p>
+  </footer>
+
+  <script src="/assets/js/config.js"></script>
+  <script src="/assets/js/tracking.js"></script>
+  <script src="/assets/js/util.js"></script>
+  <script src="/assets/js/money.js"></script>
+  <script src="/assets/js/cart-store.js"></script>
+  <script src="/assets/js/order-success.js"></script>
+</body>
+</html>

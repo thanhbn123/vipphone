@@ -496,6 +496,219 @@ class AuditEvent(Base):
     )
 
 
+# ============================================================================
+# G16 — GIỎ HÀNG + ĐƠN HÀNG. Thiết kế: `docs/commerce.md`.
+#
+# MÁY CHỦ GIỮ GIÁ: tổng tiền do máy chủ tính từ giá SKU hiện hành lúc đặt, rồi
+# CHỤP vào `order_items.unit_price`. Không có đường nào nhận tổng tiền từ client.
+# ============================================================================
+
+
+class CartStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    CHECKED_OUT = "CHECKED_OUT"
+    ABANDONED = "ABANDONED"
+
+
+class OrderStatus(StrEnum):
+    DRAFT = "DRAFT"
+    PENDING_PAYMENT = "PENDING_PAYMENT"
+    CONFIRMED = "CONFIRMED"
+    PROCESSING = "PROCESSING"
+    SHIPPED = "SHIPPED"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+
+
+class PaymentStatus(StrEnum):
+    UNPAID = "UNPAID"
+    PENDING = "PENDING"
+    PAID = "PAID"
+    FAILED = "FAILED"
+    REFUNDED = "REFUNDED"
+
+
+class Cart(Base):
+    __tablename__ = "carts"
+    __table_args__ = (
+        UniqueConstraint("cart_id", name="uq_carts_cart_id"),
+        CheckConstraint("status IN ('ACTIVE', 'CHECKED_OUT', 'ABANDONED')", name="ck_carts_status"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    cart_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    #: SHA-256 của token bí mật đưa cho trình duyệt. KHÔNG lưu token thô.
+    owner_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="ACTIVE")
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default="VND")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class CartItem(Base):
+    __tablename__ = "cart_items"
+    __table_args__ = (
+        UniqueConstraint("cart_id", "sku_id", name="uq_cart_items_cart_sku"),
+        CheckConstraint("quantity BETWEEN 1 AND 99", name="ck_cart_items_quantity"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    cart_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("carts.id", ondelete="CASCADE"), nullable=False
+    )
+    sku_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("product_variants.id", ondelete="CASCADE"), nullable=False
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Order(Base):
+    __tablename__ = "orders"
+    __table_args__ = (
+        UniqueConstraint("order_id", name="uq_orders_order_id"),
+        UniqueConstraint("order_number", name="uq_orders_order_number"),
+        UniqueConstraint("idempotency_key", name="uq_orders_idempotency_key"),
+        UniqueConstraint("cart_id", name="uq_orders_cart_id"),
+        CheckConstraint(
+            "status IN ('DRAFT', 'PENDING_PAYMENT', 'CONFIRMED', 'PROCESSING', 'SHIPPED', "
+            "'COMPLETED', 'CANCELLED')",
+            name="ck_orders_status",
+        ),
+        CheckConstraint(
+            "payment_status IN ('UNPAID', 'PENDING', 'PAID', 'FAILED', 'REFUNDED')",
+            name="ck_orders_payment_status",
+        ),
+        CheckConstraint(
+            "subtotal >= 0 AND shipping_fee >= 0 AND discount_total >= 0 AND grand_total >= 0",
+            name="ck_orders_money_non_negative",
+        ),
+        CheckConstraint(
+            "grand_total = subtotal + shipping_fee - discount_total",
+            name="ck_orders_grand_total_formula",
+        ),
+        Index("ix_orders_status_created", "status", "created_at"),
+        Index("ix_orders_customer", "customer_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    order_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    order_number: Mapped[str] = mapped_column(String(24), nullable=False)
+    customer_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("customers.id", ondelete="RESTRICT"), nullable=False
+    )
+    cart_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("carts.id", ondelete="SET NULL"), nullable=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    #: SHA-256 của nội dung yêu cầu checkout — dùng lại CÙNG khoá với nội dung KHÁC ⇒ 422.
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    owner_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    payment_status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="UNPAID")
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default="VND")
+    subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    shipping_fee: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, server_default="0"
+    )
+    discount_total: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, server_default="0"
+    )
+    grand_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    customer_note: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class OrderItem(Base):
+    """Dòng đơn — ẢNH CHỤP tên + giá lúc đặt. Đổi giá SKU sau đó không đụng tới đây."""
+
+    __tablename__ = "order_items"
+    __table_args__ = (
+        UniqueConstraint("order_id", "sku_id", name="uq_order_items_order_sku"),
+        CheckConstraint("quantity BETWEEN 1 AND 99", name="ck_order_items_quantity"),
+        CheckConstraint("unit_price >= 0", name="ck_order_items_unit_price"),
+        CheckConstraint("line_total = unit_price * quantity", name="ck_order_items_line_total"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    order_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False
+    )
+    sku_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("product_variants.id", ondelete="RESTRICT"), nullable=False
+    )
+    sku: Mapped[str] = mapped_column(String(64), nullable=False)
+    product_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    variant_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    line_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ShippingAddress(Base):
+    __tablename__ = "shipping_addresses"
+    __table_args__ = (
+        UniqueConstraint("order_id", name="uq_shipping_addresses_order"),
+        CheckConstraint("phone ~ '^0[35789][0-9]{8}$'", name="ck_shipping_addresses_phone"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    order_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False
+    )
+    recipient_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    phone: Mapped[str] = mapped_column(String(16), nullable=False)
+    address_line: Mapped[str] = mapped_column(String(300), nullable=False)
+    ward: Mapped[str | None] = mapped_column(String(80))
+    district: Mapped[str | None] = mapped_column(String(80))
+    province: Mapped[str] = mapped_column(String(80), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class OrderStatusEvent(Base):
+    """Vết chuyển trạng thái đơn (cả `status` lẫn `payment_status`). Không chứa PII."""
+
+    __tablename__ = "order_status_events"
+    __table_args__ = (
+        CheckConstraint(
+            "field IN ('status','payment_status')", name="ck_order_status_events_field"
+        ),
+        Index("ix_order_status_events_order", "order_id", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    order_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False
+    )
+    field: Mapped[str] = mapped_column(String(20), nullable=False)
+    from_value: Mapped[str | None] = mapped_column(String(20))
+    to_value: Mapped[str] = mapped_column(String(20), nullable=False)
+    actor: Mapped[str] = mapped_column(String(80), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 __all__ = [
     "ACTIVE_GIFT_STATUSES",
     "COMPATIBILITY_TYPE_VALUES",
@@ -503,6 +716,9 @@ __all__ = [
     "AuditEvent",
     "AuditEventType",
     "Base",
+    "Cart",
+    "CartItem",
+    "CartStatus",
     "Category",
     "CompatibilityType",
     "Customer",
@@ -512,8 +728,14 @@ __all__ = [
     "GiftStatus",
     "IphoneModel",
     "Lead",
+    "Order",
+    "OrderItem",
+    "OrderStatus",
+    "OrderStatusEvent",
+    "PaymentStatus",
     "Product",
     "ProductVariant",
     "RecommendationCategoryPriority",
+    "ShippingAddress",
     "Text",
 ]

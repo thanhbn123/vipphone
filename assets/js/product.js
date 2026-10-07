@@ -70,6 +70,9 @@
     }
     parts.push("</span>");
     parts.push('<span class="sku-compat">Dùng cho: ' + util.escapeHtml(compatibilityLine(variant)) + "</span>");
+    // G16 — chỉ mang MÃ SKU. Giá không bao giờ đi từ trang lên máy chủ.
+    parts.push('<button type="button" class="primary-btn add-to-cart" data-add-sku="' +
+      util.escapeHtml(variant.sku) + '">THÊM VÀO GIỎ</button>');
     parts.push("</li>");
     return parts.join("");
   }
@@ -112,6 +115,8 @@
     if (aboutBox) aboutBox.hidden = true;
     document.title = "VIP PHONE — " + product.name;
 
+    wireAddToCart(product);
+
     // G15 — tracking KHÔNG PII: chỉ định danh sản phẩm + nhóm hàng.
     if (window.VPTrack) {
       window.VPTrack.track("vipphone_product_view", {
@@ -121,6 +126,49 @@
         source_surface: "product_detail"
       });
     }
+  }
+
+  var cartStatus = document.getElementById("cartStatus");
+
+  function setCartStatus(message, kind) {
+    if (!cartStatus) return;
+    cartStatus.textContent = "";
+    cartStatus.className = "status " + kind;
+    cartStatus.appendChild(document.createTextNode(message + " "));
+    if (kind === "ok") {
+      var link = document.createElement("a");
+      link.href = "/cart";
+      link.textContent = "Xem giỏ hàng →";
+      cartStatus.appendChild(link);
+    }
+    cartStatus.hidden = false;
+  }
+
+  function wireAddToCart(product) {
+    var buttons = bodyBox.querySelectorAll("[data-add-sku]");
+    Array.prototype.forEach.call(buttons, function (button) {
+      button.addEventListener("click", function () {
+        var sku = button.getAttribute("data-add-sku");
+        button.disabled = true;
+        window.VPCart.add(sku, 1)
+          .then(function () {
+            setCartStatus("Đã thêm vào giỏ.", "ok");
+            if (window.VPTrack) {
+              window.VPTrack.track("vipphone_add_to_cart", {
+                product_id: product.product_id,
+                sku: sku,
+                category: product.category ? product.category.code : null,
+                quantity: 1,
+                source_surface: "product_detail"
+              });
+            }
+          })
+          .catch(function (error) {
+            setCartStatus(error.message || "Không thêm được vào giỏ.", "bad");
+          })
+          .then(function () { button.disabled = false; });
+      });
+    });
   }
 
   var slug = slugFromPath();

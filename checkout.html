@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>VIP PHONE — Đặt hàng</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+</head>
+<body data-vp-page="checkout">
+  <a class="skip-link" href="#main">Bỏ qua điều hướng, tới nội dung chính</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">VIP</span>
+      <span class="brand-name">PHONE</span>
+    </div>
+    <span class="co-brand">VIP ORDER × BNI</span>
+  </header>
+
+  <main class="container narrow" id="main">
+    <p class="field-hint"><a href="/cart">← Về giỏ hàng</a></p>
+    <noscript><p class="status bad" role="alert">Đặt hàng cần JavaScript. Vui lòng bật JavaScript rồi tải lại.</p></noscript>
+    <section class="card" aria-labelledby="summary-title">
+      <h1 id="summary-title">Đặt hàng</h1>
+      <p class="status bad" id="checkoutError" role="alert" hidden></p>
+      <ul class="cart-lines" id="summaryLines"></ul>
+      <dl class="totals">
+        <div><dt>Tạm tính</dt><dd id="sumSubtotal"></dd></div>
+        <div><dt>Phí giao hàng</dt><dd id="sumShipping"></dd></div>
+        <div class="grand"><dt>Tổng cộng</dt><dd id="sumGrand"></dd></div>
+      </dl>
+    </section>
+    <form class="card" id="checkoutForm" novalidate aria-labelledby="form-title">
+      <h2 id="form-title" class="h3">Thông tin nhận hàng</h2>
+      <label>Họ tên người đặt
+        <input id="full_name" name="full_name" autocomplete="name" maxlength="80" required>
+        <span class="field-error" data-error-for="full_name"></span>
+      </label>
+      <label>Số điện thoại
+        <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="32" required>
+        <span class="field-error" data-error-for="phone"></span>
+      </label>
+      <label>Email (không bắt buộc)
+        <input id="email" name="email" type="email" autocomplete="email" maxlength="254">
+        <span class="field-error" data-error-for="email"></span>
+      </label>
+      <label>Địa chỉ (số nhà, đường)
+        <input id="address_line" name="address_line" autocomplete="street-address" maxlength="300" required>
+        <span class="field-error" data-error-for="address_line"></span>
+      </label>
+      <div class="grid two">
+        <label>Phường/Xã
+          <input id="ward" name="ward" maxlength="80">
+          <span class="field-error" data-error-for="ward"></span>
+        </label>
+        <label>Quận/Huyện
+          <input id="district" name="district" maxlength="80">
+          <span class="field-error" data-error-for="district"></span>
+        </label>
+      </div>
+      <label>Tỉnh/Thành phố
+        <input id="province" name="province" maxlength="80" required>
+        <span class="field-error" data-error-for="province"></span>
+      </label>
+      <label>Ghi chú (không bắt buộc)
+        <input id="customer_note" name="customer_note" maxlength="500">
+      </label>
+      <button type="submit" class="primary-btn" id="placeOrder">XÁC NHẬN ĐẶT HÀNG</button>
+    </form>
+  </main>
+
+  <footer class="site-footer">
+    <p>VIP PHONE — phụ kiện cho cộng đồng VIP ORDER × BNI.</p>
+  </footer>
+
+  <script src="/assets/js/config.js"></script>
+  <script src="/assets/js/tracking.js"></script>
+  <script src="/assets/js/util.js"></script>
+  <script src="/assets/js/money.js"></script>
+  <script src="/assets/js/cart-store.js"></script>
+  <script src="/assets/js/checkout.js"></script>
+</body>
+</html>

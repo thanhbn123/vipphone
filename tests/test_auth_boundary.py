@@ -34,6 +34,16 @@ PUBLIC_API_ROUTES = {
     ("GET", "/api/products/{slug}"),
     # G15: gợi ý theo MÃ MÁY — đầu vào duy nhất là mã máy, không có dữ liệu khách.
     ("GET", "/api/recommendations"),
+    # G16: KHÔNG dùng khoá nhân viên — quyền nằm ở TOKEN SỞ HỮU giỏ/đơn
+    # (X-Cart-Token / X-Order-Token). Thiếu/sai token ⇒ 404, có test riêng ở
+    # tests/test_commerce.py (test_cart_requires_owner_token, test_order_lookup_*).
+    ("POST", "/api/cart"),
+    ("GET", "/api/cart/{cart_id}"),
+    ("POST", "/api/cart/{cart_id}/items"),
+    ("PATCH", "/api/cart/{cart_id}/items/{sku}"),
+    ("DELETE", "/api/cart/{cart_id}/items/{sku}"),
+    ("POST", "/api/checkout"),
+    ("GET", "/api/orders/{order_id}"),
 }
 
 #: Giá trị thay cho tham số đường dẫn khi dò.

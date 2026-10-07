@@ -24,8 +24,10 @@ from .giftcodes import is_well_formed_gift_code, normalize_gift_code
 from .routers import (
     admin,
     admin_customers,
+    admin_orders,
     admin_products,
     catalog,
+    commerce,
     gifts,
     health,
     leads,
@@ -50,6 +52,11 @@ STATIC_PAGES = {
     #: `/api/products`. Hard-code sản phẩm vào HTML là thứ bị cấm (xem
     #: `docs/catalog.md` §7.4).
     "/shop": "shop.html",
+    #: G16 — vỏ trang thương mại. KHÔNG chứa dữ liệu: giỏ/đơn chỉ đọc được qua
+    #: API bằng token sở hữu.
+    "/cart": "cart.html",
+    "/checkout": "checkout.html",
+    "/order/success": "order-success.html",
 }
 
 
@@ -153,6 +160,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(products.router)
     app.include_router(admin_products.router)
     app.include_router(recommendations.router)
+    app.include_router(commerce.router)
+    app.include_router(admin_orders.router)
 
     # -------------------------------------------------------------- tĩnh
     static_root: Path = app_settings.static_dir
