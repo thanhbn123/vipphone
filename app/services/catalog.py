@@ -31,6 +31,7 @@ from ..models import (
 from ..schemas import (
     AVAILABILITY_IN_STOCK,
     AVAILABILITY_OUT_OF_STOCK,
+    AdminCompatibilityOut,
     AdminProductOut,
     AdminVariantOut,
     CategoryOut,
@@ -296,7 +297,7 @@ def serialize_admin(db: Session, products: list[Product]) -> list[AdminProductOu
                         stock_tracking=v.stock_tracking,
                         cost_price=v.cost_price,
                         compatibility=[
-                            CompatibilityOut.model_validate(c)
+                            AdminCompatibilityOut.model_validate(c)
                             for c in compatibility_by_sku.get(v.id, [])
                         ],
                     )

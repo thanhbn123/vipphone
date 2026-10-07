@@ -495,12 +495,22 @@ class ProductPageOut(BaseModel):
     page_size: int
 
 
+class AdminCompatibilityOut(CompatibilityOut):
+    """Bản quản trị của khai báo tương thích — THÊM `id` để gỡ được khai báo sai.
+
+    `id` là khoá nội bộ nên CHỈ có ở đây, không có ở lược đồ công khai.
+    """
+
+    id: int
+
+
 class AdminVariantOut(VariantOut):
-    """Bản quản trị: THÊM cờ nội bộ và `cost_price`. Chiều kế thừa có kiểm soát."""
+    """Bản quản trị: THÊM cờ nội bộ, `cost_price`, và `id` của khai báo tương thích."""
 
     active: bool
     stock_tracking: bool
     cost_price: Decimal | None = None
+    compatibility: list[AdminCompatibilityOut] = []
 
 
 class AdminProductOut(ProductOut):
