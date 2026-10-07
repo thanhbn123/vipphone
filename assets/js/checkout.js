@@ -132,6 +132,21 @@
     return String(form.elements[name].value || "").trim();
   }
 
+  function attributionPayload() {
+    var a = window.VPTrack ? window.VPTrack.getAttribution() : {};
+    var out = {
+      source: a.src || null,
+      campaign: a.campaign || a.utm_campaign || null,
+      ref: a.ref || null,
+      utm_source: a.utm_source || null,
+      utm_medium: a.utm_medium || null,
+      utm_campaign: a.utm_campaign || null,
+      utm_content: a.utm_content || null
+    };
+    var any = Object.keys(out).some(function (k) { return out[k]; });
+    return any ? out : null;
+  }
+
   function payload(cart) {
     var name = value("full_name");
     var phone = value("phone");
@@ -148,6 +163,8 @@
       },
       customer_note: value("customer_note") || null,
       payment_method: selectedMethod() || "COD",
+      // Nguồn của lần đặt (whitelist đã làm sạch trong tracking.js). Không PII.
+      attribution: attributionPayload(),
       expected_total: cart.grand_total
     };
   }
