@@ -1,0 +1,14 @@
+# Chép thành deploy/deploy.local.conf rồi điền. File thật KHÔNG vào Git.
+# Đây KHÔNG phải chỗ đặt secret ứng dụng — secret nằm ở <APP_ROOT>/shared/.env
+# TRÊN MÁY CHỦ, do người đặt một lần, và không script nào trong repo này đọc nó
+# về máy trạm.
+
+STAGING_HOST=160.22.170.20          # Owner cấp; KHÁC production
+STAGING_USER=deploy
+STAGING_SSH_KEY=~/.ssh/vipphone_staging_deploy
+STAGING_URL=https://staging.vipphone.vn
+
+# PRODUCTION_HOST=
+# PRODUCTION_USER=deploy
+# PRODUCTION_SSH_KEY=~/.ssh/vipphone_prod_deploy
+# PRODUCTION_URL=https://vipphone.vn

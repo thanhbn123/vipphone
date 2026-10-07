@@ -1,0 +1,11 @@
+# Trạng thái triển khai của TỪNG MÁY TRẠM — không vào Git.
+#
+# Vì sao bắt buộc: staging.sh ghi phiếu và sổ artifact vào state/. Nếu state/
+# được Git theo dõi thì mỗi lượt deploy làm cây làm việc BẨN, và production.sh
+# — vốn đòi cây sạch — sẽ bị khoá chết ngay sau lượt staging đầu tiên.
+# Bộ thử deploy/tests/thu-deploy.sh có ca riêng chốt điều này.
+state/
+artifacts/
+
+# Cấu hình riêng của máy trạm (host, đường dẫn khoá SSH).
+deploy.local.conf

@@ -1,7 +1,17 @@
 name: CI
 
 on:
+  # push KHÔNG còn chạy cho MỌI nhánh.
+  #
+  # Vì sao: với `push:` trần, một nhánh có PR mở sẽ chạy TRỌN BỘ CI HAI LẦN cho
+  # cùng một commit (một lần event `push`, một lần event `pull_request`) — đo
+  # được trên repo này. Giới hạn push vào develop/main giữ nguyên độ phủ (PR
+  # vẫn chạy đủ) mà bỏ đúng phần trùng lặp.
+  #
+  # Từ 07/10/2026, GitHub Actions KHÔNG còn là cửa quyết định triển khai
+  # (docs/DIRECT-DEPLOY.md). Nó vẫn là lưới an toàn cho mã vào develop/main.
   push:
+    branches: [develop, main]
   pull_request:
   workflow_dispatch:
 
@@ -372,6 +382,25 @@ jobs:
   # PHẦN nên sẽ nói dối về chính sách chống trùng.
   # ---------------------------------------------------------------------
   e2e:
+    # ---------------------------------------------------------------------
+    # CHUYỂN SANG CHẠY TAY (07/10/2026) — đây là job tốn nhất của repo:
+    # ba engine trình duyệt × (PostgreSQL service + tải Playwright browser).
+    #
+    # Nó KHÔNG bị xoá, và đường chạy không bị bỏ: `make test-e2e` chạy đúng bộ
+    # đó tại máy, và bước nghiệm thu staging (deploy/verify.sh) đo trên bản
+    # ĐANG CHẠY THẬT — thứ mà CI không bao giờ đo được.
+    #
+    # Chạy lại trên GitHub khi cần: tab Actions → CI → Run workflow.
+    # Bật lại vĩnh viễn: xoá dòng `if:` ngay dưới đây.
+    #
+    # ⚠️  HỆ QUẢ PHẢI BIẾT: scripts/enable_branch_protection.sh liệt kê ba check
+    #     `E2E (chromium|firefox|webkit)` là check bắt buộc. Ba check đó nay
+    #     KHÔNG xuất hiện trên PR, nên bật branch protection với danh sách cũ
+    #     sẽ làm PR chờ mãi một check không bao giờ tới. Xem §8 của
+    #     docs/DIRECT-DEPLOY.md trước khi bật protection.
+    # ---------------------------------------------------------------------
+    if: github.event_name == 'workflow_dispatch'
+
     # Tên job chứa tên engine ⇒ GitHub sinh BA check riêng. Danh sách check bắt
     # buộc trong scripts/enable_branch_protection.sh PHẢI khớp cả ba, nếu không
     # Owner bật protection xong sẽ chờ mãi một check không bao giờ xuất hiện.
