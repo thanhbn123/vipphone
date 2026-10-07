@@ -22,6 +22,7 @@ from ..models import (
     Lead,
 )
 from ..schemas import LeadCreateRequest
+from .customers import link_lead_to_customer
 
 logger = logging.getLogger("vipphone.leads")
 
@@ -134,6 +135,10 @@ def create_lead(
                 settings.gift_code_max_attempts,
             )
             continue
+
+        # G13 — liên kết khách hàng. Việc PHỤ: lỗi ở đây KHÔNG được làm hỏng việc
+        # tạo lead. Hàm tự bắt lỗi và ghi log, không ném ra ngoài (ADR-0002 §4).
+        link_lead_to_customer(db, lead)
 
         record_event(
             db,

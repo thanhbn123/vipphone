@@ -16,6 +16,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Identity,
     Index,
     Integer,
     String,
@@ -132,6 +133,12 @@ class Lead(Base):
     utm_content: Mapped[str | None] = mapped_column(String(64))
     ref: Mapped[str | None] = mapped_column(String(64))
 
+    #: G13 — khách hàng sở hữu vết lead này. NULLABLE vì lead cũ được backfill dần
+    #: và vì liên kết là việc PHỤ: lỗi liên kết KHÔNG được làm hỏng việc tạo lead.
+    customer_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     consent: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
     gift_status: Mapped[str] = mapped_column(
@@ -149,6 +156,111 @@ class Lead(Base):
     )
     redeemed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     redeemed_by: Mapped[str | None] = mapped_column(String(120))
+
+
+class CustomerStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    BLOCKED = "BLOCKED"
+    MERGED = "MERGED"
+
+
+class Customer(Base):
+    """Danh tính thương mại lâu dài. Xem `docs/adr/0002-customer-identity.md`.
+
+    `phone_normalized` UNIQUE ở TẦNG DB — ràng buộc chỉ ở tầng ứng dụng thì hai
+    request đồng thời vẫn tạo được hai khách (§ADR-0002 §2.1).
+    """
+
+    __tablename__ = "customers"
+    __table_args__ = (
+        UniqueConstraint("customer_id", name="uq_customers_customer_id"),
+        UniqueConstraint("phone_normalized", name="uq_customers_phone_normalized"),
+        CheckConstraint("status IN ('ACTIVE','BLOCKED','MERGED')", name="ck_customers_status"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False, default=uuid.uuid4
+    )
+    full_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    phone_normalized: Mapped[str] = mapped_column(String(20), nullable=False)
+    email: Mapped[str | None] = mapped_column(String(254))
+    company_name: Mapped[str | None] = mapped_column(String(120))
+    bni_chapter: Mapped[str | None] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="ACTIVE")
+    marketing_consent: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    consent_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class CustomerDevice(Base):
+    """Máy khách đang dùng. ĐÚNG MỘT `is_primary` mỗi khách (partial unique index).
+
+    `model_code` có thể NULL: `leads.iphone_model` lưu TÊN HIỂN THỊ nên có dòng
+    không tra được sang `iphone_models.display_name` (ADR-0002 §2.4).
+    """
+
+    __tablename__ = "customer_devices"
+    __table_args__ = (
+        UniqueConstraint("customer_id", "model_code", name="uq_customer_devices_customer_model"),
+        Index(
+            "uq_customer_devices_one_primary",
+            "customer_id",
+            unique=True,
+            postgresql_where=text("is_primary"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    customer_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False
+    )
+    brand: Mapped[str] = mapped_column(String(40), nullable=False, server_default="Apple")
+    model_code: Mapped[str | None] = mapped_column(String(64))
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    year: Mapped[int | None] = mapped_column(Integer)
+    color: Mapped[str | None] = mapped_column(String(40))
+    storage: Mapped[str | None] = mapped_column(String(20))
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class CustomerAcquisition(Base):
+    """FIRST-TOUCH: một dòng mỗi khách, ghi lần đầu, lead sau KHÔNG ghi đè.
+
+    Giá trị của nó nằm ở chỗ là nguồn gốc — ghi đè là làm mất đúng thứ đang cần.
+    """
+
+    __tablename__ = "customer_acquisition"
+    __table_args__ = (UniqueConstraint("customer_id", name="uq_customer_acquisition_customer"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    customer_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False
+    )
+    source: Mapped[str | None] = mapped_column(String(32))
+    referrer_name: Mapped[str | None] = mapped_column(String(120))
+    ref: Mapped[str | None] = mapped_column(String(64))
+    utm_source: Mapped[str | None] = mapped_column(String(64))
+    utm_medium: Mapped[str | None] = mapped_column(String(64))
+    utm_campaign: Mapped[str | None] = mapped_column(String(64))
+    utm_content: Mapped[str | None] = mapped_column(String(64))
+    first_gift_code: Mapped[str | None] = mapped_column(String(32))
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class AuditEvent(Base):

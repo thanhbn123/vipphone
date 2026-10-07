@@ -350,3 +350,62 @@ class AdminIphoneModelOut(BaseModel):
     display_name: str
     active: bool
     sort_order: int
+
+
+# ============================================================================
+# G13 — Khách hàng (Customer 360)
+# ============================================================================
+class CustomerDeviceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    model_code: str | None = None
+    display_name: str
+    year: int | None = None
+    is_primary: bool
+
+
+class CustomerAcquisitionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    source: str | None = None
+    referrer_name: str | None = None
+    ref: str | None = None
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_campaign: str | None = None
+    utm_content: str | None = None
+    first_gift_code: str | None = None
+
+
+class CustomerOut(BaseModel):
+    """Hồ sơ khách rút gọn cho danh sách. KHÔNG có PII nặng."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    customer_id: uuid.UUID
+    full_name: str
+    phone_masked: str
+    status: str
+    marketing_consent: bool
+    created_at: datetime
+
+
+class CustomerGiftOut(BaseModel):
+    gift_code: str
+    iphone_model: str
+    gift_status: str
+    created_at: datetime
+    redeemed_at: datetime | None = None
+
+
+class CustomerDetailOut(CustomerOut):
+    """Customer 360. `orders` để trống cho tới khi G16 làm xong — cố ý, không bịa."""
+
+    email: str | None = None
+    company_name: str | None = None
+    bni_chapter: str | None = None
+    consent_updated_at: datetime | None = None
+    devices: list[CustomerDeviceOut] = []
+    acquisition: CustomerAcquisitionOut | None = None
+    gift_history: list[CustomerGiftOut] = []
+    orders: list[dict] = []

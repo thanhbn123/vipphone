@@ -80,6 +80,7 @@ def test_upgrade_creates_expected_schema(temp_database: str):
         "email",
         "address",
         "company_name",
+        "customer_id",
         "bni_chapter",
         "referrer_name",
         "source",
