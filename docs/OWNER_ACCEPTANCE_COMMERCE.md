@@ -2,7 +2,7 @@
 
 - Ngày đo: **2026-10-07** (UTC)
 - Người đo: DEEPSEEK HARNESS — COMMERCE COMPLETION
-- `develop` cuối: `{{FINAL_DEVELOP}}` · `main`: `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **KHÔNG ĐỔI**
+- `develop` trước PR #83: `34afdf3c99a9ca9973133d848d28ead212c414b9` (đỉnh mới đọc bằng `git rev-parse origin/develop` — ghi một giá trị sẽ sai ngay sau khi ghi) · `main`: `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **KHÔNG ĐỔI**
 - **STAGING (`https://qua.viporder.vn`): CHƯA triển khai các gate dưới đây** — xem §C và D-006.
 - **PRODUCTION: NOT DEPLOYED.**
 
@@ -22,16 +22,16 @@
 | Lịch sử giá | #74 | **PASS (repo)** | trigger DB nguyên tử; đổi giá 1 dòng, thất bại 0 dòng; ảnh chụp đơn không đổi |
 | Ảnh sản phẩm | #80 | **PASS (repo)** | magic bytes + Pillow + xoá EXIF; không có đường URL ngoài; volume media cho staging |
 | Attribution | #81 | **PASS (repo)** | first-touch không ghi đè; báo cáo nguồn tạo khách / chiến dịch ra đơn / referrer ra doanh thu |
-| Trang admin bán hàng | {{PR_ADMIN}} | **PASS (repo)** | E2E: nhân viên thao tác đơn, xác nhận tiền, kho, giá, ảnh, báo cáo |
-| Hành trình 20 bước | {{PR_OPS}} | **PASS (tại máy + CI 3 engine)** | `tests_e2e/test_integrated_journey.py` |
+| Trang admin bán hàng | #82 | **PASS (repo)** | E2E: nhân viên thao tác đơn, xác nhận tiền, kho, giá, ảnh, báo cáo |
+| Hành trình 20 bước | #82 | **PASS (tại máy + CI 3 engine)** | `tests_e2e/test_integrated_journey.py` |
 | Hồi quy quà tặng | mọi PR | **PASS** | toàn bộ bộ funnel/redeem cũ xanh ở mọi PR; bước 20 hành trình |
-| Bảo mật | {{PR_SEC}} | **PASS (repo)** — có 1 lỗi thật đã sửa | §B |
+| Bảo mật | #83 | **PASS (repo)** — có 1 lỗi thật đã sửa | §B |
 | Migration | — | **PASS (tại máy + CI)** | head `0014_order_attribution`; `alembic check` sạch; 24 bảng |
-| Sao lưu / phục hồi | {{PR_OPS}} | **PASS tại máy · NOT RUN staging** | `scripts/restore_drill.py`: 24/24 bảng khớp md5; đối chứng âm phát hiện bản hỏng |
+| Sao lưu / phục hồi | #82 | **PASS tại máy · NOT RUN staging** | `scripts/restore_drill.py`: 24/24 bảng khớp md5; đối chứng âm phát hiện bản hỏng |
 | Rollback mã | — | **PASS tại máy · NOT RUN staging** | mã `develop@G17` chạy trên schema `0014`: 12/12 khói, 0 traceback |
 | Script deploy trên staging thật | — | **BLOCKED** (D-006) | bộ thử deploy 66/66 tại máy; không có đường mạng/khoá SSH tới staging |
 | Nghiệm thu staging thương mại | — | **BLOCKED** (D-006) | `scripts/staging_commerce_smoke.py` 24/24 trên máy chủ `APP_ENV=staging` tại máy |
-| Dọn dữ liệu test | {{PR_OPS}} | **PASS tại máy** | đếm → xoá → còn 0 marker; dữ liệu thật giữ nguyên; từ chối production |
+| Dọn dữ liệu test | #82 | **PASS tại máy** | đếm → xoá → còn 0 marker; dữ liệu thật giữ nguyên; từ chối production |
 | Turnstile thật | — | **BLOCKED_EXTERNAL_CREDENTIAL** | D-002 |
 | Cổng thanh toán thật | — | **NOT INTEGRATED** | ranh giới cho phép |
 

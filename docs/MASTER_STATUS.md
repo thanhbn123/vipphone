@@ -1704,8 +1704,8 @@ Chromium thật) + GitHub Actions (Chromium/Firefox/WebKit thật). **Không có
 | Lịch sử giá | #73 | #74 | `75509f1f2c4fc684c41d28fe8f33d6f64350be0e` | `0012` |
 | Ảnh sản phẩm | #75 | #80 | `4f4305e9c2d54731c889aa5c5c99ce15914e72d3` | `0013` |
 | Attribution | #76 | #81 | `9b096c7093dbe1ae710415ca08265e6fcd552ebb` | `0014` |
-| Admin bán hàng + nghiệm thu tích hợp | #77 #78 | #82 | {{MERGE_82}} | — |
-| Bảo mật log + script nghiệm thu staging + tài liệu | #79 | {{PR_LAST}} | (PR này) | — |
+| Admin bán hàng + nghiệm thu tích hợp | #77 #78 | #82 | `34afdf3c99a9ca9973133d848d28ead212c414b9` | — |
+| Bảo mật log + script nghiệm thu staging + tài liệu | #79 | #83 | (PR này) | — |
 
 Thiết kế từng gate: `docs/recommendation-engine.md`, `docs/commerce.md`, `docs/payments.md`, `docs/inventory.md`,
 `docs/price-history.md`, `docs/product-images.md`, `docs/attribution.md`.
@@ -1722,6 +1722,9 @@ diễn tập phục hồi: 1 · che log: 3 · branch protection: 1 (PR #65). Chi
    KHOÁ + theo GIÁ TRỊ thật.
 3. E2E G16: tự tính sai kỳ vọng (120.000,50 × 2) ⇒ sửa số kỳ vọng, không sửa mã.
 4. Chốt CI chống định dạng tiền bằng số thực (cấm `Number(`) bắt được mã ảnh mới ⇒ đổi sang `parseInt`.
+5. **Lỗi quy trình của harness:** kiểm lint tại máy bỏ sót `scripts/` (CI kiểm `app tests tests_e2e migrations
+   scripts`) ⇒ PR #82 đỏ ở `ruff format --check` (`tests/test_cleanup_script.py`). Sửa bằng commit `style:`
+   trên chính PR; từ đó chạy **đúng lệnh của CI** trước khi đẩy.
 
 ### 37.4 Lỗi THẬT tìm được và đã sửa
 
@@ -1732,7 +1735,7 @@ diễn tập phục hồi: 1 · che log: 3 · branch protection: 1 (PR #65). Chi
 | Access log uvicorn ghi `?q=<SĐT>`, `?phone=<SĐT>` | SĐT trong log truy cập | `AccessLogRedactor`; test bằng uvicorn THẬT |
 | Báo cáo doanh thu 0 trả `"0"` thay vì `"0.00"` | tiền lệch định dạng | `quantize` |
 | Customer 360 trả `orders: []` dù G16 đã có | nhân viên không thấy đơn của khách | nối đơn vào Customer 360 |
-| CI: bước `playwright install --with-deps webkit` treo >10 phút (4 lần, chưa chạy test nào) | PR treo | chạy lại 1 lần/lượt (đạt); thêm `timeout-minutes: 8` |
+| CI: bước `playwright install --with-deps webkit` treo >5–10 phút (≥ 4 lượt, luôn ở bước cài, chưa chạy test nào) | PR treo | chạy lại 1 lần/lượt (đạt); thêm `timeout-minutes: 8` |
 
 ### 37.5 Ranh giới — KHÔNG phải PASS
 
