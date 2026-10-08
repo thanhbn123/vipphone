@@ -316,5 +316,26 @@ else
   ok "chỉ verify.sh ghi nội dung phiếu"
 fi
 
+grp "14. Chốt tĩnh cho các lỗi đã gặp trên bản sao staging (#88)"
+# mv -f lên symlink current/previous chui VÀO thư mục đích thay vì thay symlink.
+if grep -nE 'mv -f .*(current|previous)' "$DEPLOY"/*.sh | grep -qvE '^[^:]+:[0-9]+:[[:space:]]*#'; then
+  bad "có 'mv -f' lên symlink current/previous (phải là mv -Tf)"
+else
+  ok "mọi lần thay symlink current/previous đều dùng mv -Tf"
+fi
+# Gọi ứng dụng qua 127.0.0.1 mà không gửi Host ⇒ 400 Invalid host header.
+nohost="$(grep -nE 'curl .*127\.0\.0\.1' "$DEPLOY"/*.sh | grep -v host_header || true)"
+[ -z "$nohost" ] && ok "mọi curl vào 127.0.0.1 đều gửi Host (host_header)" || bad "curl vào 127.0.0.1 thiếu Host: $nohost"
+# Cổng tạm "cổng chính + 1" đã đụng cổng của dự án khác.
+if grep -nE '(PORT|port) \+ 1' "$DEPLOY"/*.sh >/dev/null; then
+  bad "còn cổng tạm kiểu 'cổng chính + 1'"
+else
+  ok "cổng tạm lấy từ *_TEMP_PORT, không phải cổng chính + 1"
+fi
+[ "$(code_of 'load_conf; select_env staging; [ -n "$ENV_TEMP_PORT" ] && [ "$ENV_TEMP_PORT" != "$STAGING_PORT" ]')" = 0 ] \
+  && ok "STAGING_TEMP_PORT có giá trị và khác cổng chính" || bad "STAGING_TEMP_PORT thiếu hoặc trùng cổng chính"
+[ "$(code_of 'load_conf; select_env staging; ENV_URL=https://qua.viporder.vn/x; [ "$(host_header)" = "-H '"'"'Host: qua.viporder.vn'"'"'" ]')" = 0 ] \
+  && ok "host_header lấy đúng tên máy từ URL" || bad "host_header sai"
+
 printf '\n== KẾT QUẢ: %d đạt · %d không đạt\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

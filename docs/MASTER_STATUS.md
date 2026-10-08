@@ -1784,3 +1784,24 @@ thiếu phần thương mại) + 2 công cụ cho lần chạy thật (`staging_
 
 Đối chứng âm lượt này: chốt SAI HOST (2 đỏ) · `MEDIA_ROOT` rỗng (đỏ) · khoá giả lập ở production (đỏ) ·
 ảnh hỏng trong kiểm trình duyệt (2 ô FAIL) · bản phục hồi hỏng qua `--docker-pg` (FAIL).
+
+## 39. OWNER CHẠY RUNBOOK (CÁCH A) — SỐ ĐO THẬT + DIỄN TẬP TRÊN BẢN SAO (2026-10-08)
+
+Owner chạy lệnh chỉ đọc qua SSH (`~/.ssh/viporder_staging`). **Đo thật trên 160.22.170.20:**
+
+| Mục | Giá trị |
+|---|---|
+| Danh tính | `CIITNRVPlinux`, IP `160.22.170.20` (không phải production), Ubuntu 26.04 |
+| Bản đang chạy | `vipphone-staging:c9ab9d1…` (G14, PR #62), `0.0.0.0:18080`, restart=0 |
+| Database | `vipphone_staging`, `0007_product_catalog`, 11 bảng; mạng `vipphone-staging-net` |
+| Cấu hình | `~/vipphone-staging/.env` (9 biến); `~/vip/vipphone/staging` chưa có |
+| Reverse proxy | Caddy trên host (`/etc/caddy/Caddyfile`); 80/443 |
+| Cổng khác | `18081`/`18443` thuộc `viporder-nginx-1` (dự án khác) |
+| Gọi `127.0.0.1:18080` không Host | `Invalid host header` |
+
+Từ số đo đó: #86/PR #87 (promote không dừng bản cũ) và #88 (8 lỗi chặn — `OWNER_ACCEPTANCE_COMMERCE.md` §G) — tìm
+bằng **bản sao staging** dựng tại máy và chạy nguyên runbook; sau sửa, toàn chuỗi qua (`STAGING_RUNBOOK_COMMERCE.md` §11).
+
+**Vẫn CHƯA có số đo nào trên staging thật** cho các gate thương mại. `DEVELOP == STAGING`: NO. Còn chờ Owner:
+xác nhận upstream Caddy (`grep -n -A8 qua.viporder.vn /etc/caddy/Caddyfile`), có repo + `.venv` trên MacBook, rồi chạy
+runbook từ bước 1.

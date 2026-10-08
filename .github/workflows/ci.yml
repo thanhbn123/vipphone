@@ -358,11 +358,11 @@ jobs:
         run: python -m pytest -q --durations=10
 
       # Script deploy: chốt khoá (không cần máy chủ) + docker_promote bằng Docker
-      # THẬT (#86 — lỗi chỉ lộ ra khi có container thật giữ cổng). Ảnh postgres:16
-      # đã có sẵn trên runner nhờ service container ở trên.
+      # THẬT (#86, #88 — lỗi chỉ lộ ra khi có container thật giữ cổng / chưa kịp nghe).
       - name: Deploy scripts (chốt khoá + promote Docker thật)
         run: |
           bash deploy/tests/thu-deploy.sh
+          docker pull -q python:3.12-slim
           bash deploy/tests/thu-promote-docker.sh
 
   # ---------------------------------------------------------------------

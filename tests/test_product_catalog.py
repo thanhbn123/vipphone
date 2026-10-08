@@ -242,8 +242,29 @@ def test_selling_below_cost_price_is_allowed(client, staff_headers):
     assert Decimal(variant["sale_price"]) < Decimal(variant["cost_price"])
 
     # Bán dưới giá nhập KHÔNG được kéo theo việc lộ giá nhập ra công khai.
-    public_raw = client.get(f"/api/products/{PRODUCT_PAYLOAD['slug']}").text
-    assert "cost_price" not in public_raw and "999" not in public_raw
+    # So theo GIÁ TRỊ, không theo chuỗi con: "999" từng khớp ngẫu nhiên vào UUID /
+    # micro-giây của timestamp ⇒ test đỏ thất thường (#88, lộ ra khi deploy chạy test).
+    public = client.get(f"/api/products/{PRODUCT_PAYLOAD['slug']}")
+    assert "cost_price" not in public.text
+
+    def _scalars(node):
+        if isinstance(node, dict):
+            for value in node.values():
+                yield from _scalars(value)
+        elif isinstance(node, list):
+            for value in node:
+                yield from _scalars(value)
+        else:
+            yield node
+
+    def _is_cost(value) -> bool:
+        try:
+            return Decimal(str(value)) == Decimal("999.00")
+        except (ArithmeticError, ValueError):
+            return False
+
+    leaked = [v for v in _scalars(public.json()) if not isinstance(v, bool) and _is_cost(v)]
+    assert not leaked, f"giá nhập lộ ra trang công khai: {leaked}"
 
 
 def test_availability_is_never_a_quantity(client, staff_headers):

@@ -11,7 +11,16 @@ set -uo pipefail
 
 MODE="${1:-local}"          # local | remote
 BASE_URL="${2:-}"
-PY="${PY:-$HOME/Projects/vipphone/.venv/bin/python}"
+# Python để đọc JSON: venv của CHÍNH repo này, không phải một đường dẫn gán cứng.
+# Từng gán cứng $HOME/Projects/vipphone/... ⇒ trên máy khác mọi bước đọc JSON hỏng
+# trong im lặng: catalog "0 model", gift code rỗng, redeem bị BLOCKED (#88).
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -z "${PY:-}" ]; then
+  if [ -x "$REPO_DIR/.venv/bin/python" ]; then PY="$REPO_DIR/.venv/bin/python"; else PY="$(command -v python3 || true)"; fi
+fi
+[ -n "$PY" ] && [ -x "$PY" ] || { echo "DỪNG: không tìm thấy python (đặt PY=...)." >&2; exit 2; }
+# Khoá nhân viên: nhận cả STAFF_KEY (tên runbook và staging_commerce_smoke.py dùng).
+STAFF_API_KEYS="${STAFF_API_KEYS:-${STAFF_KEY:-}}"
 PASS=0; FAIL=0; BLOCKED=0; NOTTESTED=0
 RESULT_FILE="${RESULT_FILE:-/tmp/staging-acceptance-results.txt}"
 : > "$RESULT_FILE"

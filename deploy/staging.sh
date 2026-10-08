@@ -46,6 +46,7 @@ done
 
 step "3. ĐÓNG GÓI ARTIFACT"
 require_host
+require_ports "$STAGING_PORT" "$ENV_TEMP_PORT" "$PROJECT-staging-app"
 build_artifact "$RELEASE_ID" "$DEPLOY_DIR/artifacts"
 
 # Ghi lại mã băm artifact ở máy trạm. production.sh sẽ dựng lại gói từ đúng
@@ -97,7 +98,7 @@ if [ "${DEPLOY_DRY_RUN:-0}" = "1" ]; then
 else
   probe="$(remote_capture <<REMOTE
 for i in \$(seq 1 30); do
-  code=\$(curl -s -o /dev/null -w '%{http_code}' -m 5 "http://127.0.0.1:$((STAGING_PORT + 1))$HEALTH_PATH" || echo 000)
+  code=\$(curl -s -o /dev/null -w '%{http_code}' -m 5 $(host_header) "http://127.0.0.1:$ENV_TEMP_PORT$HEALTH_PATH" || echo 000)
   if [ "\$code" = "200" ]; then echo "OK \$i"; exit 0; fi
   sleep 2
 done

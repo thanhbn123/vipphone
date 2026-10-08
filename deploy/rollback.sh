@@ -82,8 +82,10 @@ docker run -d --name "$CONTAINER" \
 # current ↔ previous đổi chỗ, để rollback hai lần quay lại chỗ cũ chứ không
 # đi tiếp xuống một bản thứ ba nào không ai chọn.
 OLDCUR="$CUR"
-ln -sfn "\$ROOT/releases/$TARGET" "\$ROOT/current.tmp" && mv -f "\$ROOT/current.tmp" "\$ROOT/current"
-[ -n "\$OLDCUR" ] && { ln -sfn "\$ROOT/releases/\$OLDCUR" "\$ROOT/previous.tmp" && mv -f "\$ROOT/previous.tmp" "\$ROOT/previous"; }
+# mv -T: thay CHÍNH symlink. "mv -f x current" khi current trỏ tới thư mục sẽ chuyển x
+# VÀO thư mục đó — container đã về bản cũ mà current vẫn trỏ bản mới (#88).
+ln -sfn "\$ROOT/releases/$TARGET" "\$ROOT/current.tmp" && mv -Tf "\$ROOT/current.tmp" "\$ROOT/current"
+[ -n "\$OLDCUR" ] && { ln -sfn "\$ROOT/releases/\$OLDCUR" "\$ROOT/previous.tmp" && mv -Tf "\$ROOT/previous.tmp" "\$ROOT/previous"; }
 printf '%s\t%s\tROLLBACK→%s\t%s\n' "\$(date -Is)" "$ENV_NAME" "$TARGET" "\$SHA_T" >> "\$ROOT/history.log"
 echo "đã chạy lại $TARGET"
 REMOTE
@@ -94,7 +96,7 @@ if [ "${DEPLOY_DRY_RUN:-0}" = "1" ]; then
 else
   res="$(remote_capture <<REMOTE
 for i in \$(seq 1 30); do
-  code=\$(curl -s -o /dev/null -w '%{http_code}' -m 5 "http://127.0.0.1:$PORT$HEALTH_PATH" || echo 000)
+  code=\$(curl -s -o /dev/null -w '%{http_code}' -m 5 $(host_header) "http://127.0.0.1:$PORT$HEALTH_PATH" || echo 000)
   [ "\$code" = "200" ] && { echo "OK"; exit 0; }
   sleep 2
 done
