@@ -435,16 +435,22 @@ ROOT="$ENV_ROOT"
 TMPNAME="$container-new"
 
 # Bản đang chạy trở thành bản trước, để rollback có chỗ quay về.
+PREVNAME=""
 if docker inspect "$container" >/dev/null 2>&1; then
-  docker rename "$container" "$container-prev-\$(date +%s)" 2>/dev/null || true
-  docker stop "$container-prev-"* >/dev/null 2>&1 || true
+  PREVNAME="$container-prev-\$(date +%s)"
+  docker rename "$container" "\$PREVNAME"
 fi
+# Dừng MỌI bản trước bằng bộ lọc của docker, KHÔNG bằng glob của shell: glob khớp
+# TÊN FILE trong thư mục hiện tại chứ không phải tên container — bản cũ sẽ chạy
+# tiếp, giữ cổng, và docker run dưới đây hỏng vì cổng đã bị chiếm (#86).
+# (Không dùng dấu backtick trong heredoc này: nó KHÔNG có nháy, backtick sẽ bị chạy.)
+docker ps -q --filter "name=^$container-prev-" | xargs -r docker stop >/dev/null
 [ -L "\$ROOT/current" ] && cp -P "\$ROOT/current" "\$ROOT/previous.tmp" && mv -f "\$ROOT/previous.tmp" "\$ROOT/previous"
 
 docker stop "\$TMPNAME" >/dev/null
 docker rm "\$TMPNAME" >/dev/null
 IMG="$PROJECT-$ENV_NAME:$release_id"
-docker run -d --name "$container" \
+if ! docker run -d --name "$container" \
   --network "$network" \
   --env-file "\$ROOT/shared/.env" \
   -e RELEASE_ID="$release_id" \
@@ -452,7 +458,16 @@ docker run -d --name "$container" \
   -p "127.0.0.1:$port:8000" \
   -v "$PROJECT-$ENV_NAME-media:/app/var/media" \
   --restart unless-stopped \
-  "\$IMG" >/dev/null
+  "\$IMG" >/dev/null; then
+  # Không bao giờ để môi trường không có bản nào chạy: dựng lại bản trước.
+  echo "LỖI: không chạy được bản mới dưới tên chính thức — dựng lại bản trước" >&2
+  docker rm -f "$container" >/dev/null 2>&1 || true
+  if [ -n "\$PREVNAME" ]; then
+    docker rename "\$PREVNAME" "$container" && docker start "$container" >/dev/null \
+      && echo "đã dựng lại bản trước dưới tên $container" >&2
+  fi
+  exit 1
+fi
 
 ln -sfn "\$ROOT/releases/$release_id" "\$ROOT/current.tmp"
 mv -Tf "\$ROOT/current.tmp" "\$ROOT/current" 2>/dev/null || mv -f "\$ROOT/current.tmp" "\$ROOT/current"

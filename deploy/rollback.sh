@@ -76,7 +76,8 @@ docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 docker run -d --name "$CONTAINER" \
   --network "$NETWORK" --env-file "\$ROOT/shared/.env" \
   -e RELEASE_ID="$TARGET" -e GIT_SHA="\$SHA_T" \
-  -p "127.0.0.1:$PORT:8000" --restart unless-stopped "\$IMG" >/dev/null
+  -p "127.0.0.1:$PORT:8000" -v "$PROJECT-$ENV_NAME-media:/app/var/media" \
+  --restart unless-stopped "\$IMG" >/dev/null
 
 # current ↔ previous đổi chỗ, để rollback hai lần quay lại chỗ cũ chứ không
 # đi tiếp xuống một bản thứ ba nào không ai chọn.
