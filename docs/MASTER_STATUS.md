@@ -1754,3 +1754,33 @@ diễn tập phục hồi: 1 · che log: 3 · branch protection: 1 (PR #65). Chi
 
 `docs/OWNER_DECISIONS_REQUIRED.md` D-006 (đường deploy staging — có sẵn khối lệnh một lần chạy), D-007..D-011.
 Nghiệm thu: `docs/OWNER_ACCEPTANCE_COMMERCE.md`.
+
+
+---
+
+## 38. LƯỢT "FINAL STAGING DEPLOYMENT" (2026-10-08) — staging vẫn KHÔNG tới được
+
+### 38.1 Đo lại
+
+| Mục | Đo được |
+|---|---|
+| `develop` | `31a95498883d9a4287549115065d2ea96197a244` = kỳ vọng · CI push xanh |
+| `main` | `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — không đổi |
+| PR / issue mở | 0 / 0 |
+| Branch protection | `main`/`develop`: 4 check, strict, cấm force-push/xoá, `enforce_admins=false` (D-007, không đổi) |
+| `https://qua.viporder.vn` | `CONNECT tunnel failed, response 403` |
+| TCP `160.22.170.20:22` | bị chặn |
+| Khoá SSH / phiên trên máy Owner | không có / không có |
+| Staging SHA, service, DB, migration head | **KHÔNG ĐO ĐƯỢC** — không suy đoán |
+
+⇒ Toàn bộ phần phụ thuộc staging (deploy, migration, nghiệm thu A→J, trình duyệt, tải, sao lưu/phục hồi,
+rollback, rà log, dọn dữ liệu): **BLOCKED_EXTERNAL_ACCESS (D-006)**. Không mục nào bị ghi PASS.
+
+### 38.2 Việc làm được mà không cần staging (PR #85)
+
+3 lỗi thật trên đường deploy đã sửa (chốt SAI HOST; `MEDIA_ROOT=` rỗng ⇒ `Path('.')`; hợp đồng cấu hình + preflight
+thiếu phần thương mại) + 2 công cụ cho lần chạy thật (`staging_browser_check.py`, `restore_drill.py --docker-pg`) +
+`docs/STAGING_RUNBOOK_COMMERCE.md`. Chi tiết: `docs/OWNER_ACCEPTANCE_COMMERCE.md` §E.
+
+Đối chứng âm lượt này: chốt SAI HOST (2 đỏ) · `MEDIA_ROOT` rỗng (đỏ) · khoá giả lập ở production (đỏ) ·
+ảnh hỏng trong kiểm trình duyệt (2 ô FAIL) · bản phục hồi hỏng qua `--docker-pg` (FAIL).

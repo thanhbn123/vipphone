@@ -4,6 +4,9 @@
 - Người đo: DEEPSEEK HARNESS — COMMERCE COMPLETION
 - `develop` trước PR #83: `34afdf3c99a9ca9973133d848d28ead212c414b9` (đỉnh mới đọc bằng `git rev-parse origin/develop` — ghi một giá trị sẽ sai ngay sau khi ghi) · `main`: `7d6162cf31eb96ea27879be3a4671812a9cd7e01` — **KHÔNG ĐỔI**
 - **STAGING (`https://qua.viporder.vn`): CHƯA triển khai các gate dưới đây** — xem §C và D-006.
+- **Đo lại 2026-10-08** (phiên "FINAL STAGING DEPLOYMENT"): `develop` = `31a95498883d9a4287549115065d2ea96197a244`
+  (CI xanh), 0 PR/issue mở, staging **vẫn không tới được** từ phiên harness ⇒ không có số đo staging mới.
+  Lượt này chỉ chuẩn bị cho lần chạy staging thật — §E.
 - **PRODUCTION: NOT DEPLOYED.**
 
 > Luật đọc bảng: `PASS` chỉ khi có lệnh đã chạy và số đo đứng sau. Chưa đo được ⇒ `BLOCKED`/`NOT RUN`
@@ -29,7 +32,7 @@
 | Migration | — | **PASS (tại máy + CI)** | head `0014_order_attribution`; `alembic check` sạch; 24 bảng |
 | Sao lưu / phục hồi | #82 | **PASS tại máy · NOT RUN staging** | `scripts/restore_drill.py`: 24/24 bảng khớp md5; đối chứng âm phát hiện bản hỏng |
 | Rollback mã | — | **PASS tại máy · NOT RUN staging** | mã `develop@G17` chạy trên schema `0014`: 12/12 khói, 0 traceback |
-| Script deploy trên staging thật | — | **BLOCKED** (D-006) | bộ thử deploy 66/66 tại máy; không có đường mạng/khoá SSH tới staging |
+| Script deploy trên staging thật | — | **BLOCKED** (D-006) | bộ thử deploy 70/70 tại máy (thêm chốt SAI HOST); không có đường mạng/khoá SSH tới staging |
 | Nghiệm thu staging thương mại | — | **BLOCKED** (D-006) | `scripts/staging_commerce_smoke.py` 24/24 trên máy chủ `APP_ENV=staging` tại máy |
 | Dọn dữ liệu test | #82 | **PASS tại máy** | đếm → xoá → còn 0 marker; dữ liệu thật giữ nguyên; từ chối production |
 | Turnstile thật | — | **BLOCKED_EXTERNAL_CREDENTIAL** | D-002 |
@@ -66,3 +69,22 @@
    `scripts/cleanup_test_data.py` + `scripts/restore_drill.py` trên staging (khối lệnh nằm ở D-006).
 2. Quyết D-007 (enforce_admins), D-008 (phí ship), cung cấp D-009 (nội dung chuyển khoản), chọn D-010 (kho ảnh).
 3. Không merge `develop → main` cho tới khi có lệnh phát hành của Owner.
+
+
+## E. Chuẩn bị cho lần chạy staging thật (2026-10-08, PR #85)
+
+Ba lỗi THẬT tìm được khi rà đường deploy (không cần staging để tìm, nên đã sửa luôn):
+
+| Lỗi | Hậu quả nếu deploy | Sửa |
+|---|---|---|
+| Không có chốt "sai host": đặt nhầm `STAGING_HOST=160.22.171.228` thì `staging.sh` chạy migration + thay container trên **production** | đụng production | `require_host` từ chối host trong `KNOWN_PRODUCTION_HOSTS` / trùng `PRODUCTION_HOST` (và ngược lại); 4 ca thử, đối chứng âm đỏ |
+| `MEDIA_ROOT=` (rỗng) được đọc thành `Path('.')` | ảnh ghi vào thư mục mã trong container, **mất ở lần deploy sau** | rỗng ⇒ mặc định `/app/var/media` (volume); có test + đối chứng âm |
+| `.env.staging.example` không có biến nào của G16/G17/ảnh; preflight không kiểm cấu hình thương mại | thiếu cấu hình mà không ai biết; khoá webhook giả lập có thể lọt sang production | thêm mục THƯƠNG MẠI; preflight: khoá giả lập ở production ⇒ FAIL, khoá yếu ⇒ FAIL, phí ship/hướng dẫn CK ⇒ WARN (D-008/D-009) |
+
+Công cụ mới cho lần chạy thật — **runbook một-lượt**: `docs/STAGING_RUNBOOK_COMMERCE.md`.
+
+- `scripts/staging_browser_check.py` — 3 engine × 4 độ rộng × các trang công khai, chỉ đọc: tràn ngang, lỗi console,
+  tài nguyên hỏng, mixed content. Tại máy (Chromium): 14/14; đối chứng âm (xoá tệp ảnh) ⇒ 2 ô FAIL đúng.
+- `scripts/restore_drill.py --docker-pg` — diễn tập phục hồi chạy TRÊN máy chủ chỉ với `python3` hệ thống
+  (image ứng dụng không có `pg_dump`). Trên container `postgres:16` giả lập staging tại máy: 24/24 bảng khớp md5;
+  đối chứng âm ⇒ FAIL đúng; DB tạm luôn bị xoá.

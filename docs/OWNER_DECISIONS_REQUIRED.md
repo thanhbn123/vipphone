@@ -291,6 +291,10 @@ chỉ Owner biết mất một ngày lead có sao không.
 
 ## D-006 — ĐƯỜNG TRIỂN KHAI STAGING CHO CÁC GATE THƯƠNG MẠI — BLOCKED_EXTERNAL_ACCESS
 
+**Đo lại 2026-10-08:** vẫn `CONNECT tunnel failed, response 403` cho `qua.viporder.vn`; TCP `160.22.170.20:22`
+bị chặn; `~/.ssh` trống; không có phiên Claude nào trên máy Owner (Remote Control) để chuyển việc.
+**Toàn bộ khối lệnh, theo đúng thứ tự nghiệm thu, nằm ở `docs/STAGING_RUNBOOK_COMMERCE.md`.**
+
 **Đo được (2026-10-07) từ phiên làm việc của harness (container cloud):**
 
 ```

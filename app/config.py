@@ -122,6 +122,16 @@ class Settings(BaseSettings):
     #: Trần dung lượng MỘT ảnh tải lên (byte).
     max_image_bytes: int = Field(default=2_000_000, ge=10_000, le=20_000_000)
 
+    @field_validator("media_root", mode="before")
+    @classmethod
+    def _media_root_not_blank(cls, value: object) -> object:
+        """`MEDIA_ROOT=` (rỗng) KHÔNG được thành `Path('.')` = thư mục hiện tại của tiến
+        trình: ảnh sẽ ghi vào thư mục mã nguồn trong container và mất ở lần deploy sau.
+        Rỗng ⇒ dùng mặc định. Đo được trước khi sửa: `Settings().media_root == Path('.')`."""
+        if isinstance(value, str) and not value.strip():
+            return REPO_ROOT / "var" / "media"
+        return value
+
     @field_validator("gift_code_alphabet")
     @classmethod
     def _check_alphabet(cls, value: str) -> str:
