@@ -37,9 +37,21 @@ Ghi lại: `STAGING SHA BEFORE` (tag image), migration head trước, số bản
 Đo được: IP `160.22.170.20` ✔ · app `vipphone-staging:c9ab9d1…` (G14, PR #62) · DB `vipphone_staging` ở
 `0007_product_catalog`, 11 bảng · `.env` cũ ở `~/vipphone-staging/.env` (9 biến) · `~/vip/vipphone/staging` chưa có.
 
+Đo thêm (2026-10-08): reverse proxy là **Caddy chạy trên host** (`/etc/caddy/Caddyfile`, root); `18081` thuộc
+`viporder-nginx-1` của dự án khác ⇒ cổng tạm của staging là `18180` (`STAGING_TEMP_PORT`, #88); app trả
+`400 Invalid host header` khi gọi `127.0.0.1` không có Host ⇒ mọi health/verify gửi `Host:` lấy từ `STAGING_URL`
+— **`STAGING_URL=https://qua.viporder.vn` trong `deploy.local.conf` là BẮT BUỘC**.
+
 Lượt đầu sẽ: migration `0007 → 0014` (thuần thêm, mã G14 vẫn chạy được trong lúc chờ), đổi container cũ thành
 `vipphone-staging-app-prev-<giây>` **đã dừng**, và bản mới nghe ở `127.0.0.1:18080` (bản cũ nghe `0.0.0.0:18080`).
-Ba điều PHẢI đúng trước khi chạy `staging.sh` — lệnh chỉ đọc:
+`staging.sh` tự kiểm cổng (chính + tạm) **trước** backup/migration và dừng nếu sai. Điều còn phải tự xác nhận —
+Caddy tới app qua đâu (`localhost`/`127.0.0.1:18080` thì đúng; IP public hay IP Docker thì bản mới không tới được):
+
+```bash
+ssh … 'ls -l /etc/caddy/Caddyfile; grep -n -A8 "qua.viporder.vn" /etc/caddy/Caddyfile'
+```
+
+Các kiểm tra khác — lệnh chỉ đọc:
 
 ```bash
 ssh … '
@@ -81,8 +93,8 @@ vào biến môi trường của máy trạm — không dán vào chat/tài li�
 ## 2. Đối chứng âm các cửa khoá (an toàn, không đụng máy chủ)
 
 ```bash
-bash deploy/tests/thu-deploy.sh | tail -1                       # dán: 71 đạt · 0 không đạt (gồm SAI HOST)
-bash deploy/tests/thu-promote-docker.sh | tail -1               # dán: 12 đạt (Docker thật; không có Docker ⇒ BỎ QUA)
+bash deploy/tests/thu-deploy.sh | tail -1                       # dán: 76 đạt · 0 không đạt (gồm SAI HOST + chốt #88)
+bash deploy/tests/thu-promote-docker.sh | tail -1               # dán: 20 đạt (Docker thật; Mac không có Docker ⇒ BỎ QUA — CI đã chạy)
 # sai host: staging trỏ vào production ⇒ phải DỪNG trước khi SSH
 bash -c '. deploy/common.sh; load_conf; STAGING_HOST=160.22.171.228; select_env staging; require_host'; echo "exit=$?"
 # cây bẩn ⇒ staging.sh phải DỪNG ở bước 1
@@ -112,7 +124,8 @@ STAFF_KEY=<khoá nhân viên staging> MOCK_SECRET=<bước 1> \
   .venv/bin/python scripts/staging_commerce_smoke.py --base-url https://qua.viporder.vn --i-know-this-is-staging \
   | tee staging-commerce-smoke.log                    # 24 bước: G15, G16 + idempotency, IDOR, G17 COD/CK/webhook,
                                                       # kho, giá + lịch sử, attribution, quà, huỷ nhả hàng
-bash scripts/staging_acceptance.sh remote https://qua.viporder.vn | tee staging-gift-regression.log   # funnel quà cũ
+STAFF_KEY=<khoá nhân viên staging> bash scripts/staging_acceptance.sh remote https://qua.viporder.vn \
+  | tee staging-gift-regression.log                   # funnel quà cũ (nhận STAFF_KEY từ #88)
 ```
 
 ## 5. Trình duyệt thật × 3 engine × 4 độ rộng (chỉ đọc)
@@ -153,9 +166,10 @@ curl -s https://qua.viporder.vn/api/health; curl -s -o /dev/null -w '%{http_code
 ./deploy/staging.sh && ./deploy/verify.sh staging              # A → B (đưa lại develop)
 ```
 
-Ghi chú ranh giới: lượt đầu dùng script mới, "bản trước" là container cũ đổi tên `vipphone-staging-app-prev-*`;
-nếu `rollback.sh` báo không có `previous` thì chạy `staging.sh` hai lần (bản B lần 1 rồi B' cùng SHA) **không**
-chứng minh được gì — khi đó ghi `ROLLBACK = NOT PROVEN` thay vì PASS. Mã G17 đã được chứng minh chạy trên schema
+Ở lượt đầu `previous` chưa có (bản G14 không do script dựng) ⇒ `rollback.sh` DỪNG đúng thiết kế. Cách đo rollback
+thật: chạy `staging.sh` lần hai (bản B'), rồi `rollback.sh staging` (B' → B: đổi container, `current`↔`previous`,
+health) và `verify.sh staging`, rồi `staging.sh` lần ba. Cùng SHA nên chứng minh **cơ chế** rollback, không chứng minh
+quay về mã cũ hơn — ghi đúng như vậy. Mã G17 đã được chứng minh chạy trên schema
 `0014` (12/12 khói, tại máy) nên quay về bản cũ hơn là an toàn với schema.
 
 ## 9. Log + dọn dữ liệu thử
@@ -172,3 +186,23 @@ ssh … '… python scripts/cleanup_test_data.py --apply'                       
 
 Toàn bộ các tệp `staging-*.log` (đã không chứa secret). Harness điền `docs/OWNER_ACCEPTANCE_COMMERCE.md` và
 `docs/MASTER_STATUS.md` từ đó và kết luận `READY_FOR_OWNER_ACCEPTANCE`.
+
+## 11. Diễn tập toàn bộ runbook trên BẢN SAO staging (2026-10-08, #88)
+
+Dựng tại máy từ số đo thật: container G14 `c9ab9d1` trên `0.0.0.0:18080` với `ALLOWED_HOSTS=qua.viporder.vn`, DB
+`vipphone_staging` ở `0007` (11 bảng, 1 lead "khách thật"), `viporder-nginx-1` giữ `18081`, `.env` cũ 9 biến; `ssh`/`scp`
+thay bằng lệnh tại máy, mọi thứ khác là Docker + PostgreSQL 16 thật. Mã `develop@f75cbfd` **hỏng ở bước 7 sau khi đã
+migration**; sau #88 cả chuỗi qua trong 9 phút 54 giây:
+
+| Bước | Kết quả trên bản sao |
+|---|---|
+| 2 chốt khoá | thu-deploy 76/76 · sai host DỪNG · cây bẩn DỪNG · production không phiếu DỪNG · cổng tạm bị chiếm DỪNG ở bước 3 |
+| 3 deploy + verify | migration 0007→0014, alembic check sạch, health bản mới, đổi bản, verify **11/11 + phiếu PASS** |
+| 4 smoke + quà | 24/24 · funnel quà 28 PASS, 0 FAIL |
+| 6 tải | 287 req/s, p95 ~32 ms, chỉ 429 chủ ý, restart=0 |
+| 7 backup + phục hồi | dump đọc được · 24/24 bảng khớp md5, DB tạm đã xoá |
+| 8 rollback | B'→B: health 200, current/previous đổi đúng, verify 11/11 · deploy lại: verify 11/11 |
+| 9 log + dọn | 0 dòng lỗi · 0 dòng PII/secret · dọn 8 lead/3 đơn marker, còn 0 · **lead khách thật còn nguyên** |
+
+Không đo được trên bản sao (chỉ đo được trên máy thật): Caddy/TLS/DNS thật, Firefox/WebKit tại máy (CI có), preflight
+gọi `https://qua.viporder.vn` (proxy TLS của môi trường thử chặn).

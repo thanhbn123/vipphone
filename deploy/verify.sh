@@ -60,14 +60,14 @@ esac
 
 # --- 2. Health (liveness) ------------------------------------------------
 out="$(remote_capture <<REMOTE
-curl -s -o /dev/null -w '%{http_code}' -m 10 "http://127.0.0.1:$PORT$HEALTH_PATH" || echo 000
+curl -s -o /dev/null -w '%{http_code}' -m 10 $(host_header) "http://127.0.0.1:$PORT$HEALTH_PATH" || echo 000
 REMOTE
 )"
 [ "$out" = "200" ] && p "$HEALTH_PATH → 200" || f "$HEALTH_PATH → $out"
 
 # --- 3. Readiness (có chạm database) -------------------------------------
 out="$(remote_capture <<REMOTE
-curl -s -m 10 "http://127.0.0.1:$PORT$READY_PATH" || echo '{}'
+curl -s -m 10 $(host_header) "http://127.0.0.1:$PORT$READY_PATH" || echo '{}'
 REMOTE
 )"
 case "$out" in
@@ -104,9 +104,9 @@ REMOTE
 esac
 
 # --- 5. Trang chính, API, file tĩnh --------------------------------------
-for path in "/" "/api/config" "/assets/css/main.css"; do
+for path in "/" "/api/public-config" "/assets/css/styles.css"; do
   out="$(remote_capture <<REMOTE
-curl -s -o /dev/null -w '%{http_code}' -m 10 "http://127.0.0.1:$PORT$path" || echo 000
+curl -s -o /dev/null -w '%{http_code}' -m 10 $(host_header) "http://127.0.0.1:$PORT$path" || echo 000
 REMOTE
 )"
   case "$out" in
@@ -123,7 +123,7 @@ out="$(remote_capture <<REMOTE
 curl -s -o /dev/null -w '%{http_code}' -m 10 -X POST \
   -H 'Content-Type: application/json' \
   -d '{"phone":"KHONG-PHAI-SO"}' \
-  "http://127.0.0.1:$PORT/api/leads" || echo 000
+  $(host_header) "http://127.0.0.1:$PORT/api/leads" || echo 000
 REMOTE
 )"
 case "$out" in

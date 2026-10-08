@@ -72,6 +72,8 @@ cat > "$STATE_DIR/production/previous.json" <<JSON
 }
 JSON
 
+require_ports "$PRODUCTION_PORT" "$ENV_TEMP_PORT" "$PROJECT-prod-app"
+
 step "5. SAO LƯU PRODUCTION"
 "$DEPLOY_DIR/backup.sh" production
 
@@ -110,7 +112,7 @@ if [ "${DEPLOY_DRY_RUN:-0}" = "1" ]; then
 else
   probe="$(remote_capture <<REMOTE
 for i in \$(seq 1 30); do
-  code=\$(curl -s -o /dev/null -w '%{http_code}' -m 5 "http://127.0.0.1:$((PRODUCTION_PORT + 1))$HEALTH_PATH" || echo 000)
+  code=\$(curl -s -o /dev/null -w '%{http_code}' -m 5 $(host_header) "http://127.0.0.1:$ENV_TEMP_PORT$HEALTH_PATH" || echo 000)
   [ "\$code" = "200" ] && { echo "OK \$i"; exit 0; }
   sleep 2
 done

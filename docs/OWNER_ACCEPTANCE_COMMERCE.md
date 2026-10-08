@@ -32,7 +32,7 @@
 | Migration | — | **PASS (tại máy + CI)** | head `0014_order_attribution`; `alembic check` sạch; 24 bảng |
 | Sao lưu / phục hồi | #82 | **PASS tại máy · NOT RUN staging** | `scripts/restore_drill.py`: 24/24 bảng khớp md5; đối chứng âm phát hiện bản hỏng |
 | Rollback mã | — | **PASS tại máy · NOT RUN staging** | mã `develop@G17` chạy trên schema `0014`: 12/12 khói, 0 traceback |
-| Script deploy trên staging thật | — | **BLOCKED** (D-006) | bộ thử deploy 71/71 + promote Docker thật 12/12 (#86); không có đường mạng/khoá SSH tới staging |
+| Script deploy trên staging thật | — | **BLOCKED** (D-006) | bộ thử deploy 76/76 + promote Docker thật 20/20 (#86, #88); **diễn tập toàn runbook trên bản sao staging: qua** (runbook §11); không có đường mạng/khoá SSH tới staging |
 | Nghiệm thu staging thương mại | — | **BLOCKED** (D-006) | `scripts/staging_commerce_smoke.py` 24/24 trên máy chủ `APP_ENV=staging` tại máy |
 | Dọn dữ liệu test | #82 | **PASS tại máy** | đếm → xoá → còn 0 marker; dữ liệu thật giữ nguyên; từ chối production |
 | Turnstile thật | — | **BLOCKED_EXTERNAL_CREDENTIAL** | D-002 |
@@ -97,3 +97,23 @@ file chứ không phải tên container ⇒ bản cũ chạy tiếp, giữ cổn
 `port is already allocated` ở **mọi** lượt deploy, sau khi đã migration. Sửa: lọc bằng `docker ps --filter`;
 bản mới không chạy được thì tự dựng lại bản trước và thoát ≠ 0; `rollback.sh` gắn volume ảnh.
 `deploy/tests/thu-promote-docker.sh`: 12/12; mã cũ ⇒ 9 FAIL (đối chứng âm).
+
+## G. Diễn tập trên BẢN SAO staging — 8 lỗi chặn nữa (2026-10-08, issue #88)
+
+Số đo thật từ máy chủ (qua SSH của Owner): G14 `c9ab9d1` trên `0.0.0.0:18080`, DB `0007`/11 bảng, Caddy trên host,
+`18081` thuộc `viporder-nginx-1`, app trả `Invalid host header` khi gọi `127.0.0.1`. Dựng bản sao đúng như thế rồi
+chạy nguyên runbook. Mỗi lỗi dưới đây đều làm lượt staging thật hỏng:
+
+| # | Lỗi | Hậu quả trên máy thật | Sửa + bằng chứng |
+|---|---|---|---|
+| 1 | cổng tạm = 18080+1 = 18081 (của dự án khác) | chết ở bước 7, **sau migration** | `STAGING_TEMP_PORT=18180` + `require_ports` trước backup; đối chứng âm DỪNG ở bước 3 |
+| 2 | health/verify gọi `127.0.0.1` không có Host | bản mới luôn "không khoẻ"; verify luôn FAIL | `host_header` từ `STAGING_URL`; chốt tĩnh |
+| 3 | verify kiểm `/assets/css/main.css` | luôn 404 FAIL | `styles.css`; `tests/test_deploy_verify_paths.py` |
+| 4 | verify kiểm `/api/config` | luôn 404 FAIL | `/api/public-config`; cùng test, đối chứng âm đỏ |
+| 5 | băm cây máy chủ gồm `release.json` | verify luôn "mã KHÁC Git" | loại `release.json` khỏi phép băm |
+| 6 | verify gọi ngay khi container chính chưa nghe | verify 000; **production.sh sẽ tự rollback** | `docker_promote` chờ health 200, không khoẻ ⇒ dựng lại bản trước; ca thử 4 |
+| 7 | `mv -f` lên symlink `current`/`previous` | rollback: container về bản cũ, `current` vẫn trỏ bản mới; từ lượt 3 `previous` đứng yên ⇒ rollback sai bản | `mv -Tf`; ca thử 2b, đối chứng âm 5 FAIL |
+| 8 | `staging_acceptance.sh` gán cứng `PY=$HOME/Projects/vipphone/...` | trên Mac khác: catalog "0 model", không redeem được | venv của repo / `python3`; nhận `STAFF_KEY`; đối chứng âm thoát 2 |
+
+Kèm: test `test_selling_below_cost_price_is_allowed` đỏ ngẫu nhiên (khớp chuỗi "999" trong UUID) ⇒ so theo giá trị;
+`${VAR^^}` (bash 4) thay bằng biến thường cho bash 3.2 của macOS.

@@ -78,19 +78,23 @@ select_env() {
   case "$env" in
     staging)
       ENV_NAME=staging
+      ENV_UPPER=STAGING   # không dùng ${ENV_NAME^^}: bash 3.2 mặc định của macOS không có
       ENV_HOST="${STAGING_HOST:-}"
       ENV_USER="${STAGING_USER:-}"
       ENV_KEY="${STAGING_SSH_KEY:-}"
       ENV_URL="${STAGING_URL:-}"
+      ENV_TEMP_PORT="${STAGING_TEMP_PORT:-}"
       ENV_ROOT="${APP_ROOT}/staging"
       ENV_RUNTIME="${STAGING_RUNTIME:-docker}"
       ;;
     production)
       ENV_NAME=production
+      ENV_UPPER=PRODUCTION
       ENV_HOST="${PRODUCTION_HOST:-}"
       ENV_USER="${PRODUCTION_USER:-}"
       ENV_KEY="${PRODUCTION_SSH_KEY:-}"
       ENV_URL="${PRODUCTION_URL:-}"
+      ENV_TEMP_PORT="${PRODUCTION_TEMP_PORT:-}"
       ENV_ROOT="${APP_ROOT}/production"
       ENV_RUNTIME="${PRODUCTION_RUNTIME:-docker}"
       ;;
@@ -101,9 +105,9 @@ select_env() {
 # require_host: dừng nếu môi trường chưa có host/khoá. Đây là cửa khoá quan
 # trọng nhất của cả bộ: KHÔNG cho phép "chạy một nửa rồi báo thành công".
 require_host() {
-  [ -n "${ENV_HOST:-}" ] || die "$ENV_NAME: chưa có host. Điền ${ENV_NAME^^}_HOST trong deploy/deploy.local.conf"
-  [ -n "${ENV_USER:-}" ] || die "$ENV_NAME: chưa có user. Điền ${ENV_NAME^^}_USER"
-  [ -n "${ENV_KEY:-}"  ] || die "$ENV_NAME: chưa có khoá SSH. Điền ${ENV_NAME^^}_SSH_KEY"
+  [ -n "${ENV_HOST:-}" ] || die "$ENV_NAME: chưa có host. Điền ${ENV_UPPER}_HOST trong deploy/deploy.local.conf"
+  [ -n "${ENV_USER:-}" ] || die "$ENV_NAME: chưa có user. Điền ${ENV_UPPER}_USER"
+  [ -n "${ENV_KEY:-}"  ] || die "$ENV_NAME: chưa có khoá SSH. Điền ${ENV_UPPER}_SSH_KEY"
   # Chốt SAI HOST: staging tuyệt đối không được trỏ vào host production (và
   # ngược lại). Đặt nhầm một IP trong deploy.local.conf là đủ để "deploy staging"
   # chạy migration + thay container trên máy production.
@@ -207,6 +211,62 @@ json_str() {
 }
 
 # --- HTTP -----------------------------------------------------------------
+# url_host: tên máy trong URL — https://qua.viporder.vn/x → qua.viporder.vn
+url_host() {
+  local u="${1#*://}"
+  u="${u%%/*}"; u="${u##*@}"
+  printf '%s' "${u%%:*}"
+}
+
+# host_header: đối số curl cho mọi lần gọi ứng dụng qua 127.0.0.1 TRÊN MÁY CHỦ.
+# Ứng dụng chạy TrustedHostMiddleware theo ALLOWED_HOSTS, nên gọi 127.0.0.1 trần
+# bị trả "400 Invalid host header" (đo trên staging 2026-10-08) — health/verify
+# sẽ luôn hỏng (#88). Dùng bên trong heredoc REMOTE: $(host_header).
+host_header() {
+  local h
+  h="$(url_host "${ENV_URL:-}")"
+  if [ -n "$h" ]; then printf "%s" "-H 'Host: $h'"; fi
+  return 0
+}
+
+# require_ports: kiểm cổng TRƯỚC khi sao lưu/migration — hỏng ở đây thì chưa có gì
+# bị đổi. Cổng tạm phải trống (hoặc do container tạm sót lại của chính dự án giữ);
+# cổng chính phải trống hoặc do chính container của dự án giữ. Đo trên staging
+# 2026-10-08: 18081 (= 18080 + 1, cổng tạm cũ) thuộc viporder-nginx-1 của dự án
+# khác, và staging.sh chỉ phát hiện ra SAU khi đã migration (#88).
+require_ports() {
+  local port="$1" temp="$2" container="$3" out
+  [ -n "$temp" ] || die "$ENV_NAME: chưa cấu hình cổng tạm (${ENV_UPPER}_TEMP_PORT trong deploy.conf)"
+  [ "$temp" != "$port" ] || die "$ENV_NAME: cổng tạm trùng cổng chính ($port)"
+  if [ "${DEPLOY_DRY_RUN:-0}" = "1" ]; then
+    warn "chạy khô: không kiểm được cổng $port/$temp trên máy chủ"
+    return 0
+  fi
+  out="$(remote_capture <<REMOTE
+listening() { (exec 3<>"/dev/tcp/127.0.0.1/\$1") 2>/dev/null; }
+owner() { docker ps --filter "publish=\$1" --format '{{.Names}}' | head -1; }
+if listening $temp; then
+  o="\$(owner $temp)"
+  [ "\$o" = "$container-new" ] || { echo "TAM_BAN \${o:-tien-trinh-ngoai-docker}"; exit 0; }
+fi
+if listening $port; then
+  o="\$(owner $port)"
+  case "\$o" in
+    "$container"|"$container"-prev-*) echo "OK \$o" ;;
+    *) echo "CHINH_BAN \${o:-tien-trinh-ngoai-docker}" ;;
+  esac
+else
+  echo "OK trong"
+fi
+REMOTE
+)"
+  case "$out" in
+    OK\ *)       ok "cổng chính $port: ${out#OK } · cổng tạm $temp: trống" ;;
+    TAM_BAN\ *)  die "cổng tạm $temp đang bị chiếm bởi '${out#TAM_BAN }'. Đổi ${ENV_UPPER}_TEMP_PORT — CHƯA có gì bị đổi." ;;
+    CHINH_BAN\ *) die "cổng chính $port đang bị '${out#CHINH_BAN }' giữ, không phải $container — CHƯA có gì bị đổi." ;;
+    *)            die "không kiểm được cổng trên máy chủ (nhận: '${out:-rỗng}') — CHƯA có gì bị đổi." ;;
+  esac
+}
 # Trả về "<mã http> <thời gian giây>"; mã 000 nghĩa là không nối được.
 http_probe() {
   local url="$1" timeout="${2:-15}"
@@ -338,7 +398,9 @@ remote_tree_sha() {
   remote_capture <<REMOTE
 cd "$ENV_ROOT/releases/$release_id" || exit 1
 # Danh sách file sắp xếp ổn định, băm từng file rồi băm danh sách băm.
-find . -type f -not -path './.git/*' -print0 \
+# release.json do chính lượt deploy ghi SAU lần băm đầu và không có trong Git —
+# tính nó vào thì verify.sh luôn thấy "mã KHÁC cây commit" (#88).
+find . -type f -not -path './.git/*' -not -path './release.json' -print0 \
   | LC_ALL=C sort -z \
   | xargs -0 sha256sum \
   | sha256sum | awk '{print \$1}'
@@ -419,11 +481,11 @@ docker run -d --name "\$TMPNAME" \
   --env-file "\$ROOT/shared/.env" \
   -e RELEASE_ID="$release_id" \
   -e GIT_SHA="$(git_sha)" \
-  -p "127.0.0.1:$((port + 1)):8000" \
+  -p "127.0.0.1:$ENV_TEMP_PORT:8000" \
   -v "$PROJECT-$ENV_NAME-media:/app/var/media" \
   --restart no \
   "\$IMG" >/dev/null
-echo "đã chạy bản mới dưới tên tạm \$TMPNAME ở cổng $((port + 1))"
+echo "đã chạy bản mới dưới tên tạm \$TMPNAME ở cổng $ENV_TEMP_PORT"
 REMOTE
 }
 
@@ -445,7 +507,10 @@ fi
 # tiếp, giữ cổng, và docker run dưới đây hỏng vì cổng đã bị chiếm (#86).
 # (Không dùng dấu backtick trong heredoc này: nó KHÔNG có nháy, backtick sẽ bị chạy.)
 docker ps -q --filter "name=^$container-prev-" | xargs -r docker stop >/dev/null
-[ -L "\$ROOT/current" ] && cp -P "\$ROOT/current" "\$ROOT/previous.tmp" && mv -f "\$ROOT/previous.tmp" "\$ROOT/previous"
+# mv -T: KHÔNG đi theo symlink đích. "mv -f a previous" khi previous là symlink tới
+# một thư mục sẽ CHUYỂN a VÀO thư mục đó và previous đứng yên ở bản cũ hơn — rollback
+# quay về sai bản (#88, đo trên bản sao staging).
+[ -L "\$ROOT/current" ] && cp -P "\$ROOT/current" "\$ROOT/previous.tmp" && mv -Tf "\$ROOT/previous.tmp" "\$ROOT/previous"
 
 docker stop "\$TMPNAME" >/dev/null
 docker rm "\$TMPNAME" >/dev/null
@@ -469,8 +534,29 @@ if ! docker run -d --name "$container" \
   exit 1
 fi
 
+# Chờ bản CHÍNH THỨC khoẻ trên cổng chính trước khi báo xong. Container vừa tạo
+# chưa nghe ngay: không chờ thì verify.sh gọi ngay sau đó nhận 000 — và
+# production.sh coi đó là hỏng rồi TỰ ROLLBACK (#88, đo trên bản sao staging).
+healthy=0
+for i in \$(seq 1 30); do
+  code=\$(curl -s -o /dev/null -w '%{http_code}' -m 5 $(host_header) "http://127.0.0.1:$port$HEALTH_PATH" || true)
+  if [ "\$code" = "200" ]; then healthy=1; break; fi
+  sleep 2
+done
+if [ "\$healthy" != 1 ]; then
+  echo "LỖI: bản chính thức không lên health 200 trên cổng $port — dựng lại bản trước" >&2
+  docker logs --tail 30 "$container" 2>&1 | sed 's/^/    log| /' >&2
+  docker rm -f "$container" >/dev/null 2>&1 || true
+  if [ -n "\$PREVNAME" ]; then
+    docker rename "\$PREVNAME" "$container" && docker start "$container" >/dev/null \
+      && echo "đã dựng lại bản trước dưới tên $container" >&2
+  fi
+  exit 1
+fi
+echo "bản chính thức khoẻ trên cổng $port (lần thử \$i)"
+
 ln -sfn "\$ROOT/releases/$release_id" "\$ROOT/current.tmp"
-mv -Tf "\$ROOT/current.tmp" "\$ROOT/current" 2>/dev/null || mv -f "\$ROOT/current.tmp" "\$ROOT/current"
+mv -Tf "\$ROOT/current.tmp" "\$ROOT/current"
 printf '%s\t%s\t%s\t%s\n' "\$(date -Is)" "$ENV_NAME" "$release_id" "$(git_sha)" >> "\$ROOT/history.log"
 echo "đã chuyển current → $release_id"
 REMOTE
