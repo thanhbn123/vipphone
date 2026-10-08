@@ -104,6 +104,18 @@ require_host() {
   [ -n "${ENV_HOST:-}" ] || die "$ENV_NAME: chưa có host. Điền ${ENV_NAME^^}_HOST trong deploy/deploy.local.conf"
   [ -n "${ENV_USER:-}" ] || die "$ENV_NAME: chưa có user. Điền ${ENV_NAME^^}_USER"
   [ -n "${ENV_KEY:-}"  ] || die "$ENV_NAME: chưa có khoá SSH. Điền ${ENV_NAME^^}_SSH_KEY"
+  # Chốt SAI HOST: staging tuyệt đối không được trỏ vào host production (và
+  # ngược lại). Đặt nhầm một IP trong deploy.local.conf là đủ để "deploy staging"
+  # chạy migration + thay container trên máy production.
+  if [ "$ENV_NAME" = staging ]; then
+    local h
+    for h in ${KNOWN_PRODUCTION_HOSTS:-} ${PRODUCTION_HOST:-}; do
+      [ "$ENV_HOST" = "$h" ] && die "SAI HOST: STAGING_HOST=$ENV_HOST là host PRODUCTION — dừng."
+    done
+  else
+    [ -n "${STAGING_HOST:-}" ] && [ "$ENV_HOST" = "$STAGING_HOST" ] \
+      && die "SAI HOST: PRODUCTION_HOST=$ENV_HOST trùng STAGING_HOST — dừng."
+  fi
   # Nở rộng ~ một cách tường minh: `[ -f "~/..." ]` luôn sai.
   ENV_KEY="${ENV_KEY/#\~/$HOME}"
   [ -f "$ENV_KEY" ] || die "$ENV_NAME: không thấy file khoá SSH tại $ENV_KEY"

@@ -211,3 +211,16 @@ Có nó thì toàn bộ 11 mục `BLOCKED` ở trên chạy được ngay — b�
 
 **Điều KHÔNG được làm:** ghi `STAGING_ACCEPTANCE = PASS` dựa trên kết quả LOCAL.
 Máy này khác máy chủ staging về hệ điều hành, mạng, reverse proxy, TLS, và tải.
+
+
+---
+
+## 8. Phần THƯƠNG MẠI (G15 → attribution) — CHƯA nghiệm thu trên staging
+
+Đo 2026-10-07 và 2026-10-08: phiên harness không tới được staging (proxy 403, cổng 22 bị chặn, không khoá SSH).
+Staging vẫn ở bản G14; `develop` = `31a9549…` (+ PR #85) ⇒ `develop ≠ staging`.
+
+Mọi bước deploy + nghiệm thu thương mại trên staging: `docs/STAGING_RUNBOOK_COMMERCE.md`
+(deploy bằng script mới lần đầu, preflight, backup, migration, API 24 bước, trình duyệt 3 engine × 4 độ rộng,
+tải nhẹ, sao lưu + phục hồi vào DB tạm, rollback thật, rà log, dọn dữ liệu thử). Kết quả tại máy và
+ranh giới: `docs/OWNER_ACCEPTANCE_COMMERCE.md`.

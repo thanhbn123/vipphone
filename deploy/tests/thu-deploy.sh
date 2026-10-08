@@ -96,6 +96,23 @@ K="$(mktemp)"; printf 'khoa-gia\n' > "$K"
 # Chiều ngược: khoá trỏ tới file KHÔNG tồn tại.
 [ "$(code_of 'load_conf; STAGING_HOST=1.2.3.4; STAGING_USER=deploy; STAGING_SSH_KEY=/khong/co/khoa; select_env staging; require_host')" != 0 ] \
   && ok "require_host dừng khi file khoá không tồn tại" || bad "require_host nhận khoá không tồn tại"
+# Chốt SAI HOST — chiều ngược: staging trỏ vào host production (danh sách đã biết,
+# hoặc trùng PRODUCTION_HOST) phải DỪNG; production trùng STAGING_HOST phải DỪNG.
+for wrong in "160.22.171.228" "9.9.9.9 PRODUCTION_HOST=9.9.9.9"; do
+  host="${wrong%% *}"; extra="${wrong#"$host"}"
+  out="$(run_lib "load_conf; $extra STAGING_HOST=$host; STAGING_USER=deploy; STAGING_SSH_KEY=$K; select_env staging; require_host")"
+  if [ "$(code_of "load_conf; $extra STAGING_HOST=$host; STAGING_USER=deploy; STAGING_SSH_KEY=$K; select_env staging; require_host")" != 0 ] \
+     && [[ "$out" == *"SAI HOST"* ]]; then
+    ok "staging trỏ vào host production $host ⇒ DỪNG (SAI HOST)"
+  else
+    bad "staging trỏ vào host production $host mà KHÔNG dừng: $out"
+  fi
+done
+[ "$(code_of "load_conf; STAGING_HOST=1.2.3.4; PRODUCTION_HOST=1.2.3.4; PRODUCTION_USER=deploy; PRODUCTION_SSH_KEY=$K; select_env production; require_host")" != 0 ] \
+  && ok "production trùng host staging ⇒ DỪNG" || bad "production trùng host staging mà đi tiếp"
+# Chiều thuận: production có host riêng thì đi tiếp.
+[ "$(code_of "load_conf; STAGING_HOST=1.2.3.4; PRODUCTION_HOST=5.6.7.8; PRODUCTION_USER=deploy; PRODUCTION_SSH_KEY=$K; select_env production; require_host")" = 0 ] \
+  && ok "production host riêng ⇒ đi tiếp" || bad "production host riêng bị chặn"
 rm -f "$K"
 
 grp "6. Cửa khoá migration — KHÔNG tự hạ cấp"

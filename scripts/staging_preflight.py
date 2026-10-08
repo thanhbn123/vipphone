@@ -249,6 +249,8 @@ def check_static(report: Report) -> None:
             "chưa cấu hình ⇒ bot protection đang TẮT (BLOCKED_EXTERNAL_CREDENTIAL)",
         )
 
+    check_commerce(report, app_env)
+
     # ------------------------------------------------------------- minh bạch
     if _env("TRUST_PROXY_HEADERS").lower() in {"1", "true", "yes", "on"}:
         report.add(
@@ -266,6 +268,62 @@ def check_static(report: Report) -> None:
         )
     else:
         report.add("EXPOSE_READINESS_DETAILS nên tắt", PASS, "false")
+
+
+MIN_WEBHOOK_SECRET_LEN = 32
+SHIPPING_FEE_RE = re.compile(r"^\d{1,10}(\.\d{1,2})?$")
+
+
+def check_commerce(report: Report, app_env: str) -> None:
+    """Cấu hình thương mại (G16/G17/ảnh) — xem docs/OWNER_DECISIONS_REQUIRED.md D-008..D-011."""
+    # Webhook GIẢ LẬP: ở production là cửa hậu nhận "đã thanh toán" — cấm tuyệt đối.
+    mock = _env("PAYMENT_MOCK_WEBHOOK_SECRET")
+    if app_env == "production" and mock:
+        report.add(
+            "PAYMENT_MOCK_WEBHOOK_SECRET không có ở production",
+            FAIL,
+            "production KHÔNG được có khoá webhook giả lập (mã tự tắt, nhưng khoá không được tồn tại)",
+        )
+    elif mock and len(mock) < MIN_WEBHOOK_SECRET_LEN:
+        report.add(
+            "PAYMENT_MOCK_WEBHOOK_SECRET đủ mạnh",
+            FAIL,
+            f"ngắn hơn {MIN_WEBHOOK_SECRET_LEN} ký tự — sinh bằng: "
+            'python -c "import secrets; print(secrets.token_urlsafe(48))"',
+        )
+    elif mock:
+        report.add("Webhook giả lập (STAGING_MOCK)", PASS, "đã bật, khoá đủ dài")
+    elif app_env == "staging":
+        report.add(
+            "Webhook giả lập (STAGING_MOCK)",
+            WARN,
+            "chưa đặt PAYMENT_MOCK_WEBHOOK_SECRET ⇒ không nghiệm thu được đường webhook (D-011)",
+        )
+
+    fee = _env("SHIPPING_FEE_FLAT")
+    if fee and not SHIPPING_FEE_RE.match(fee):
+        report.add(
+            "SHIPPING_FEE_FLAT hợp lệ", FAIL, f"{fee!r} không phải số tiền dạng 30000 hoặc 30000.00"
+        )
+    elif not fee or float(fee) == 0:
+        report.add(
+            "Phí giao hàng",
+            WARN,
+            "SHIPPING_FEE_FLAT = 0 (mặc định) — chưa có biểu phí Owner duyệt (D-008)",
+        )
+    else:
+        report.add("Phí giao hàng", PASS, f"đồng giá {fee}")
+
+    if not _env("BANK_TRANSFER_INSTRUCTIONS"):
+        report.add(
+            "Hướng dẫn chuyển khoản",
+            WARN,
+            "BANK_TRANSFER_INSTRUCTIONS trống ⇒ khách chỉ thấy mã đơn + 'VIP PHONE sẽ liên hệ' (D-009)",
+        )
+
+    media = _env("MEDIA_ROOT")
+    if media and not media.startswith("/"):
+        report.add("MEDIA_ROOT là đường dẫn tuyệt đối", FAIL, f"{media!r}")
 
 
 # ----------------------------------------------------------------------- LIVE
