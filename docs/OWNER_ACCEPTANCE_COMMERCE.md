@@ -32,7 +32,7 @@
 | Migration | — | **PASS (tại máy + CI)** | head `0014_order_attribution`; `alembic check` sạch; 24 bảng |
 | Sao lưu / phục hồi | #82 | **PASS tại máy · NOT RUN staging** | `scripts/restore_drill.py`: 24/24 bảng khớp md5; đối chứng âm phát hiện bản hỏng |
 | Rollback mã | — | **PASS tại máy · NOT RUN staging** | mã `develop@G17` chạy trên schema `0014`: 12/12 khói, 0 traceback |
-| Script deploy trên staging thật | — | **BLOCKED** (D-006) | bộ thử deploy 70/70 tại máy (thêm chốt SAI HOST); không có đường mạng/khoá SSH tới staging |
+| Script deploy trên staging thật | — | **BLOCKED** (D-006) | bộ thử deploy 71/71 + promote Docker thật 12/12 (#86); không có đường mạng/khoá SSH tới staging |
 | Nghiệm thu staging thương mại | — | **BLOCKED** (D-006) | `scripts/staging_commerce_smoke.py` 24/24 trên máy chủ `APP_ENV=staging` tại máy |
 | Dọn dữ liệu test | #82 | **PASS tại máy** | đếm → xoá → còn 0 marker; dữ liệu thật giữ nguyên; từ chối production |
 | Turnstile thật | — | **BLOCKED_EXTERNAL_CREDENTIAL** | D-002 |
@@ -88,3 +88,12 @@ Công cụ mới cho lần chạy thật — **runbook một-lượt**: `docs/ST
 - `scripts/restore_drill.py --docker-pg` — diễn tập phục hồi chạy TRÊN máy chủ chỉ với `python3` hệ thống
   (image ứng dụng không có `pg_dump`). Trên container `postgres:16` giả lập staging tại máy: 24/24 bảng khớp md5;
   đối chứng âm ⇒ FAIL đúng; DB tạm luôn bị xoá.
+
+## F. Lỗi chặn deploy thứ tư (2026-10-08, issue #86)
+
+Rà lại script trước lượt chạy thật, dựng lại đúng hình dạng staging vừa đo (container G14 giữ `0.0.0.0:18080`)
+bằng Docker thật: `docker_promote` dừng bản cũ bằng **glob của shell** (`"$container-prev-"*`) — glob khớp tên
+file chứ không phải tên container ⇒ bản cũ chạy tiếp, giữ cổng ⇒ `docker run` bản mới hỏng
+`port is already allocated` ở **mọi** lượt deploy, sau khi đã migration. Sửa: lọc bằng `docker ps --filter`;
+bản mới không chạy được thì tự dựng lại bản trước và thoát ≠ 0; `rollback.sh` gắn volume ảnh.
+`deploy/tests/thu-promote-docker.sh`: 12/12; mã cũ ⇒ 9 FAIL (đối chứng âm).

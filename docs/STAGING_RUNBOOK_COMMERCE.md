@@ -32,6 +32,33 @@ ssh -i <khoá> deploy@160.22.170.20 '
 Phải thấy: IP `160.22.170.20` (KHÔNG `160.22.171.228`), db `vipphone_staging`. Nhập nhằng ⇒ **DỪNG**.
 Ghi lại: `STAGING SHA BEFORE` (tag image), migration head trước, số bảng trước.
 
+## 0b. Đo trước lượt đầu (đã đo 2026-10-08 trên máy chủ)
+
+Đo được: IP `160.22.170.20` ✔ · app `vipphone-staging:c9ab9d1…` (G14, PR #62) · DB `vipphone_staging` ở
+`0007_product_catalog`, 11 bảng · `.env` cũ ở `~/vipphone-staging/.env` (9 biến) · `~/vip/vipphone/staging` chưa có.
+
+Lượt đầu sẽ: migration `0007 → 0014` (thuần thêm, mã G14 vẫn chạy được trong lúc chờ), đổi container cũ thành
+`vipphone-staging-app-prev-<giây>` **đã dừng**, và bản mới nghe ở `127.0.0.1:18080` (bản cũ nghe `0.0.0.0:18080`).
+Ba điều PHẢI đúng trước khi chạy `staging.sh` — lệnh chỉ đọc:
+
+```bash
+ssh … '
+  echo "== ai phục vụ qua.viporder.vn?"; ss -ltnp 2>/dev/null | grep -E ":(80|443|18080|18081) " ; docker ps --format "{{.Names}} {{.Ports}}" | grep -E ":(80|443)->" || true
+  echo "== mạng của pg + app"; for c in vipphone-staging-pg vipphone-staging-app; do docker inspect -f "$c {{range \$k,\$v := .NetworkSettings.Networks}}{{\$k}} {{end}}" $c; done
+  echo "== host trong DATABASE_URL (KHÔNG in mật khẩu)"; sed -n "s#^DATABASE_URL=.*@\([^/:]*\).*#\1#p" ~/vipphone-staging/.env'
+```
+
+1. Reverse proxy phải tới app qua `127.0.0.1:18080` (proxy chạy trên host). Nếu proxy là container nối qua
+   `172.17.0.1:18080` thì bản mới **không tới được** ⇒ DỪNG, báo lại.
+2. `vipphone-staging-pg` nằm trong mạng `vipphone-staging-net`, và host trong `DATABASE_URL` là `vipphone-staging-pg`.
+3. Cổng `18081` (cổng tạm) trống.
+
+Bộ test tại máy của `staging.sh` cần PostgreSQL sống: đặt `TEST_DATABASE_URL` theo `docs/DIRECT-DEPLOY.md` §2.
+
+**Quay về khẩn cấp ở lượt đầu** (lúc này `rollback.sh` chưa có `previous`): bản G14 vẫn còn, chỉ bị dừng —
+`docker rm -f vipphone-staging-app && docker rename vipphone-staging-app-prev-<giây> vipphone-staging-app && docker start vipphone-staging-app`.
+Lược đồ đã ở 0014 nhưng thuần thêm ⇒ mã G14 chạy được.
+
 ## 1. Chuyển cấu hình sang bố cục của script mới (một lần)
 
 Script mới đọc `~/vip/vipphone/staging/shared/.env` (chưa từng tồn tại ở cách deploy cũ ⇒ lần đầu `staging.sh`
@@ -54,7 +81,8 @@ vào biến môi trường của máy trạm — không dán vào chat/tài li�
 ## 2. Đối chứng âm các cửa khoá (an toàn, không đụng máy chủ)
 
 ```bash
-bash deploy/tests/thu-deploy.sh | tail -1                       # dán: 70 đạt · 0 không đạt (gồm SAI HOST)
+bash deploy/tests/thu-deploy.sh | tail -1                       # dán: 71 đạt · 0 không đạt (gồm SAI HOST)
+bash deploy/tests/thu-promote-docker.sh | tail -1               # dán: 12 đạt (Docker thật; không có Docker ⇒ BỎ QUA)
 # sai host: staging trỏ vào production ⇒ phải DỪNG trước khi SSH
 bash -c '. deploy/common.sh; load_conf; STAGING_HOST=160.22.171.228; select_env staging; require_host'; echo "exit=$?"
 # cây bẩn ⇒ staging.sh phải DỪNG ở bước 1
