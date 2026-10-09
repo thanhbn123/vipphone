@@ -1805,3 +1805,39 @@ bằng **bản sao staging** dựng tại máy và chạy nguyên runbook; sau s
 **Vẫn CHƯA có số đo nào trên staging thật** cho các gate thương mại. `DEVELOP == STAGING`: NO. Còn chờ Owner:
 xác nhận upstream Caddy (`grep -n -A8 qua.viporder.vn /etc/caddy/Caddyfile`), có repo + `.venv` trên MacBook, rồi chạy
 runbook từ bước 1.
+
+## 40. STAGING THẬT ĐÃ CHẠY TRỌN RUNBOOK — `DEVELOP == STAGING`: **YES** (2026-10-10)
+
+Owner chạy từ MacBook (`/bin/bash` 3.2.57, OpenSSH 10.3, khoá `~/.ssh/viporder_staging`), lệnh `bash scripts/owner_staging_run.sh`.
+Bốn lượt trong đêm, mỗi lượt dừng ở lỗi đầu tiên và **không lượt nào đụng máy chủ trước khi hỏng** (đúng thiết kế #88):
+
+| Lượt | `develop` | Dừng ở | Nguyên nhân (đo) | Sửa |
+|---|---|---|---|---|
+| 00:19 | `f056e55` | cửa Caddy | `/etc/caddy/Caddyfile` **không tồn tại** (Caddy chạy trong container `vip-staging-caddy`, `net=host`), script báo nhầm "không có quyền" | #93 → PR #94: đọc Caddy admin API (`localhost:2019`, user `deploy` đọc được) ⇒ `qua.viporder.vn → 127.0.0.1:18080` |
+| 00:56 | `f056e55` | `staging.sh` bước 3, mã 127 | bash 3.2 cắt heredoc trong `$( )` tại `)` lẻ của `case` trong `require_ports`; diễn tập §11 chạy bash ≥ 4 nên không thấy | #92 → PR #94: `case` → `if`; `thu-deploy.sh` nhóm 15 (8 ca, chạy thật dưới `/bin/bash`) |
+| 01:20 | `f786e83` | `staging.sh` bước 4, mã 1 | `scp` OpenSSH ≥ 9 chạy SFTP, không nở `$HOME` trong `APP_ROOT`; bản sao §11 thay `scp` bằng `cp` | #95 → PR #96: lấy đường dẫn tuyệt đối do máy chủ nở rồi mới `scp`; nhóm 16 |
+| **01:30:35 → 01:38:59** | **`85a5f06`** | **không — 27/27 bước qua** | | |
+
+### 40.1 Số đo lượt đủ (thư mục log `staging-run-20261010-013035/`, 0 tệp chứa secret — đã quét bằng giá trị thật của `STAFF_API_KEYS` và khoá webhook)
+
+| Bước | Kết quả |
+|---|---|
+| 00 danh tính · Caddy | `CIITNRVPlinux` `160.22.170.20`, DB `vipphone_staging`; Caddy (admin API) → `127.0.0.1:18080` |
+| 02 chốt khoá | `thu-deploy.sh` **86/86** (bash 3.2); sai host / cây bẩn / production không phiếu ⇒ DỪNG đúng |
+| 03 deploy | test tại máy 611 passed · cổng 18080 = `vipphone-staging-app`, 18180 trống · artifact 482 062 byte, sha256 khớp hai đầu · sao lưu trước đổi `backups/20261010-013122` · **migration `0007 → 0014`** (7 bước, transactional) · `alembic check` sạch · đổi bản, bản G14 `c9ab9d1` thành `-prev-…` đã dừng · `verify.sh` **11/11, phiếu PASS** |
+| 03 preflight | 17 PASS · 3 WARN chủ ý: 1 khoá nhân viên, Turnstile tắt (D-002), `SHIPPING_FEE_FLAT=0` (D-008) · head `0014_order_attribution` · health/ready 200 |
+| 04 thương mại | `staging_commerce_smoke.py` **24/24** (run `26EDEF`) |
+| 04 hồi quy quà | `staging_acceptance.sh remote` **28 PASS · 0 FAIL · 1 BLOCKED** (ca "MIGRATION ở HEAD" cần DB — đã phủ bởi verify/preflight) |
+| 05 trình duyệt | **96/96 ô**: chromium · firefox · webkit × 320/375/390/430 px × 8 trang công khai trên `https://qua.viporder.vn` |
+| 06 tải nhẹ | 8 luồng × 30 s: 1 400 request, 42 req/s, **0 lỗi, 0 × 429**, p50 30,5 ms · p95 344,1 ms · sau tải app 81 MiB, pg 32 MiB, `restart=0` |
+| 07 sao lưu + phục hồi | dump 112 K đọc được (`pg_restore --list`) · `restore_drill.py --docker-pg` trên máy chủ: **24/24 bảng khớp md5**, DB tạm đã xoá |
+| 08 rollback thật | deploy lần 2 (`…013643`) → `rollback.sh` về `…013039`: health 200, verify 11/11 → deploy lần 3 (`…013751`): verify 11/11; `current`/`previous` trỏ đúng |
+| 09 log · dọn | `docker logs --since 3h`: **0 dòng lỗi, 0 dòng PII/secret** · dọn marker: 3 đơn, 3 thanh toán, 6 sự kiện, 3 kho, 2 lead, 2 khách, 1 sản phẩm demo ⇒ **còn 0**; `leads` trước lượt (dump 01:31:22) = 0 dòng, sau = 0 — không dữ liệu thật nào bị đụng |
+| trạng thái cuối | head `0014_order_attribution`, **24 bảng**; `current → releases/20261010-013751-85a5f06`; `vipphone-staging-app` = `vipphone-staging:20261010-013751-85a5f06` nghe `127.0.0.1:18080`; `vipphone-staging-pg` Up 2 days |
+
+### 40.2 Còn lại — không đổi
+
+- `main` `7d6162c` **không đổi**; **PRODUCTION: NOT DEPLOYED**; `enforce_admins=false` (D-007) không đổi.
+- Vẫn chờ Owner: D-007, D-008 (phí ship), D-009 (nội dung chuyển khoản thật — staging đang dùng câu `[THỬ]`), D-010 (kho ảnh), D-002 (Turnstile).
+- Trên máy chủ còn 3 container `vipphone-staging-app-prev-*` đã dừng (gồm bản G14 `c9ab9d1`) và 4 bản sao lưu trong `backups/` — giữ để quay về, chưa dọn.
+
