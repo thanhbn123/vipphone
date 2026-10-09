@@ -245,7 +245,7 @@ require_ports() {
   # KHÔNG dùng `case` (hay bất kỳ dấu `)` lẻ nào) trong heredoc nằm trong `$( )`:
   # bash 3.2 của macOS đếm ngoặc cả trong thân heredoc, cắt `$(` tại `)` lẻ đầu
   # tiên ⇒ máy chủ nhận script cụt, phần còn lại chạy TẠI MÁY TRẠM (#92).
-  # Bộ thử: deploy/tests/thu-deploy.sh mục "heredoc trong \$( )".
+  # Bộ thử: deploy/tests/thu-deploy.sh mục 15.
   out="$(remote_capture <<REMOTE
 listening() { (exec 3<>"/dev/tcp/127.0.0.1/\$1") 2>/dev/null; }
 owner() { docker ps --filter "publish=\$1" --format '{{.Names}}' | head -1; }
@@ -332,12 +332,24 @@ ship_release() {
     printf '  %s[CHẠY KHÔ] scp %s → %s@%s:%s/incoming/%s\n' "$C_DIM" \
       "$(basename "$ARTIFACT")" "$ENV_USER" "$ENV_HOST" "$ENV_ROOT" "$C_0"
   else
-    remote_sh <<REMOTE
+    # APP_ROOT là '$HOME/vip/vipphone' (nguyên chữ, do máy chủ nở). Mọi lệnh qua
+    # remote_sh đi qua bash ở xa nên nở được; nhưng scp của OpenSSH ≥ 9 chạy chế
+    # độ SFTP — KHÔNG có shell ở xa — nên nhận nguyên chữ `$HOME/...` và báo
+    # "dest open ... No such file or directory" (#95, lượt thật 2026-10-10 01:21).
+    # Vì vậy: lấy đường dẫn TUYỆT ĐỐI do máy chủ nở ra, rồi mới scp vào đó.
+    local root_abs
+    root_abs="$(remote_capture <<REMOTE
 ROOT="$ENV_ROOT"
 mkdir -p "\$ROOT/releases" "\$ROOT/shared" "\$ROOT/backups" "\$ROOT/incoming"
+cd "\$ROOT" && pwd -P
 REMOTE
+)"
+    case "$root_abs" in
+      /*) ;;
+      *) die "$ENV_NAME: không lấy được đường dẫn tuyệt đối của $ENV_ROOT trên máy chủ (nhận '$root_abs')" ;;
+    esac
     scp -q -o BatchMode=yes -o StrictHostKeyChecking=accept-new -i "$ENV_KEY" \
-      "$ARTIFACT" "$ENV_USER@$ENV_HOST:$ENV_ROOT/incoming/" </dev/null
+      "$ARTIFACT" "$ENV_USER@$ENV_HOST:$root_abs/incoming/" </dev/null
   fi
 
   remote_sh <<REMOTE

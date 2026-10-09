@@ -337,7 +337,7 @@ fi
 [ "$(code_of 'load_conf; select_env staging; ENV_URL=https://qua.viporder.vn/x; [ "$(host_header)" = "-H '"'"'Host: qua.viporder.vn'"'"'" ]')" = 0 ] \
   && ok "host_header lấy đúng tên máy từ URL" || bad "host_header sai"
 
-grp "12. Heredoc trong \$( ) phải sống được với bash 3.2 của macOS (#92)"
+grp "15. Heredoc trong \$( ) phải sống được với bash 3.2 của macOS (#92)"
 # bash 3.2 đếm ngoặc CẢ trong thân heredoc nằm trong $( ): một dấu `)` lẻ (mẫu
 # `case`) cắt `$(` sớm ⇒ máy chủ nhận script cụt, phần còn lại chạy tại máy trạm.
 # (a) quét tĩnh: mọi heredoc `$(remote_... <<TAG` phải cân ngoặc.
@@ -406,6 +406,39 @@ elif [ "$bmaj" -ge 4 ]; then
   ok "đối chứng âm: /bin/bash $bmaj.x không có lỗi #92 — ca (b) ở máy này chỉ là chiều thuận"
 else
   bad "đối chứng âm: /bin/bash $bmaj.x KHÔNG làm hỏng heredoc có ) lẻ — không hiểu, xem lại"
+fi
+
+grp "16. scp phải nhận đường dẫn TUYỆT ĐỐI (OpenSSH ≥ 9 chạy SFTP, không nở \$HOME) (#95)"
+# ship_release với remote_* và scp giả: đích scp không được chứa `$`, phải là đường
+# dẫn máy chủ đã nở; và không được scp khi máy chủ không trả về đường dẫn tuyệt đối.
+ship_out="$(/bin/bash -c "
+  cd '$REPO'; . '$DEPLOY/common.sh' 2>/dev/null
+  ENV_NAME=staging ENV_ROOT='\$HOME/vip/vipphone/staging' ENV_USER=deploy ENV_HOST=h ENV_KEY=/dev/null
+  ARTIFACT=/tmp/x.tar.gz ARTIFACT_SHA256=0
+  remote_sh() { cat >/dev/null; }
+  remote_capture() { cat >/dev/null; echo /home/deploy/vip/vipphone/staging; }
+  scp() { echo \"SCP_DEST=\${@: -1}\"; }
+  ship_release r1
+" 2>&1)"
+dest="$(printf '%s\n' "$ship_out" | sed -n 's/^SCP_DEST=//p')"
+case "$dest" in
+  'deploy@h:/home/deploy/vip/vipphone/staging/incoming/') ok "scp tới đường dẫn tuyệt đối do máy chủ nở: $dest" ;;
+  *'$'*) bad "scp vẫn mang nguyên chữ \$ (SFTP sẽ hỏng): ${dest:-<không scp>}" ;;
+  *) bad "đích scp lạ: ${dest:-<không scp>} · $(printf '%s' "$ship_out" | tail -1)" ;;
+esac
+ship_bad="$(/bin/bash -c "
+  cd '$REPO'; . '$DEPLOY/common.sh' 2>/dev/null
+  ENV_NAME=staging ENV_ROOT='\$HOME/vip/vipphone/staging' ENV_USER=deploy ENV_HOST=h ENV_KEY=/dev/null
+  ARTIFACT=/tmp/x.tar.gz ARTIFACT_SHA256=0
+  remote_sh() { cat >/dev/null; }
+  remote_capture() { cat >/dev/null; echo; }
+  scp() { echo SCP_DA_CHAY; }
+  ship_release r1
+" 2>&1)"; rc=$?
+if [ "$rc" != 0 ] && ! printf '%s' "$ship_bad" | grep -q SCP_DA_CHAY; then
+  ok "máy chủ không trả đường dẫn tuyệt đối ⇒ DỪNG trước scp (mã $rc)"
+else
+  bad "máy chủ trả rỗng mà vẫn scp hoặc không dừng (mã $rc)"
 fi
 
 printf '\n== KẾT QUẢ: %d đạt · %d không đạt\n' "$PASS" "$FAIL"

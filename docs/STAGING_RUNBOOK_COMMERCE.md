@@ -20,7 +20,10 @@ Script chạy đúng các mục 0–9 dưới đây theo thứ tự, mỗi bư�
 `localhost:18080`. Mục 1 (chuyển `.env`, sinh khoá webhook TRÊN máy chủ) làm tự động, chỉ in tên biến. Gửi lại cả thư mục log.
 Đã diễn tập trên bản sao staging: 26/26 bước qua; Caddy trỏ IP public ⇒ dừng ở bước 00; 0 tệp log chứa secret.
 **Phải chạy bằng `bash` của macOS được** (3.2.57): lượt thật đầu tiên 2026-10-10 chết ở bước 3 vì bash 3.2 cắt heredoc
-trong `$( )` tại dấu `)` lẻ (#92) — bộ thử `thu-deploy.sh` mục 12 nay chặn kiểu lỗi này.
+trong `$( )` tại dấu `)` lẻ (#92) — bộ thử `thu-deploy.sh` mục 15 nay chặn kiểu lỗi này. Lượt thứ hai cùng ngày chết ở
+bước 4: `scp` của OpenSSH ≥ 9 chạy chế độ SFTP, không nở `$HOME` trong `APP_ROOT` (#95) — nay `ship_release` lấy đường
+dẫn tuyệt đối do máy chủ nở trước khi `scp` (bộ thử mục 16). Cả hai lỗi chỉ hiện trên máy thật vì bản sao §11 thay
+`ssh`/`scp` bằng lệnh tại máy.
 
 Các mục dưới đây là từng bước thủ công (dùng khi cần chạy lại một bước riêng).
 
