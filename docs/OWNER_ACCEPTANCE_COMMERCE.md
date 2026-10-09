@@ -7,6 +7,9 @@
 - **Đo lại 2026-10-08** (phiên "FINAL STAGING DEPLOYMENT"): `develop` = `31a95498883d9a4287549115065d2ea96197a244`
   (CI xanh), 0 PR/issue mở, staging **vẫn không tới được** từ phiên harness ⇒ không có số đo staging mới.
   Lượt này chỉ chuẩn bị cho lần chạy staging thật — §E.
+- **Đo lại 2026-10-10 (Owner chạy từ MacBook, staging THẬT):** `develop` = `85a5f066b4d9ae005955a334a1c111c1404ecc7d`,
+  **staging = develop** (`current → 20261010-013751-85a5f06`, head `0014`, 24 bảng). Toàn runbook 27/27 bước qua — §H.
+  Bốn hạng mục BLOCKED/NOT RUN ở bảng A nay **PASS (staging)**.
 - **PRODUCTION: NOT DEPLOYED.**
 
 > Luật đọc bảng: `PASS` chỉ khi có lệnh đã chạy và số đo đứng sau. Chưa đo được ⇒ `BLOCKED`/`NOT RUN`
@@ -29,12 +32,12 @@
 | Hành trình 20 bước | #82 | **PASS (tại máy + CI 3 engine)** | `tests_e2e/test_integrated_journey.py` |
 | Hồi quy quà tặng | mọi PR | **PASS** | toàn bộ bộ funnel/redeem cũ xanh ở mọi PR; bước 20 hành trình |
 | Bảo mật | #83 | **PASS (repo)** — có 1 lỗi thật đã sửa | §B |
-| Migration | — | **PASS (tại máy + CI)** | head `0014_order_attribution`; `alembic check` sạch; 24 bảng |
-| Sao lưu / phục hồi | #82 | **PASS tại máy · NOT RUN staging** | `scripts/restore_drill.py`: 24/24 bảng khớp md5; đối chứng âm phát hiện bản hỏng |
-| Rollback mã | — | **PASS tại máy · NOT RUN staging** | mã `develop@G17` chạy trên schema `0014`: 12/12 khói, 0 traceback |
-| Script deploy trên staging thật | — | **BLOCKED** (D-006) | bộ thử deploy 76/76 + promote Docker thật 20/20 (#86, #88); **diễn tập toàn runbook trên bản sao staging: qua** (runbook §11); không có đường mạng/khoá SSH tới staging |
-| Nghiệm thu staging thương mại | — | **BLOCKED** (D-006) | `scripts/staging_commerce_smoke.py` 24/24 trên máy chủ `APP_ENV=staging` tại máy |
-| Dọn dữ liệu test | #82 | **PASS tại máy** | đếm → xoá → còn 0 marker; dữ liệu thật giữ nguyên; từ chối production |
+| Migration | — | **PASS (tại máy + CI + staging)** | head `0014_order_attribution`; `alembic check` sạch; 24 bảng; staging `0007 → 0014` 2026-10-10 (§H) |
+| Sao lưu / phục hồi | #82 | **PASS tại máy + staging** | `scripts/restore_drill.py --docker-pg` trên máy chủ: 24/24 bảng khớp md5 (§H); đối chứng âm phát hiện bản hỏng |
+| Rollback mã | — | **PASS tại máy + staging** | staging: `rollback.sh` B'→B health 200, verify 11/11, deploy lại 11/11 (§H); tại máy: mã `develop@G17` trên schema `0014`: 12/12 khói |
+| Script deploy trên staging thật | #94, #96 | **PASS (staging thật, 2026-10-10)** | `staging.sh` + `verify.sh` 11/11 phiếu PASS trên `160.22.170.20`; sau 2 lỗi chỉ hiện trên máy thật (bash 3.2 #92, scp SFTP #95) — §H |
+| Nghiệm thu staging thương mại | — | **PASS (staging thật)** | `staging_commerce_smoke.py` **24/24** trên `https://qua.viporder.vn`; hồi quy quà 28 PASS; trình duyệt 96/96; tải 0 lỗi — §H |
+| Dọn dữ liệu test | #82 | **PASS tại máy + staging** | staging: đếm → xoá 3 đơn/3 thanh toán/2 lead/… → còn 0 marker; `leads` trước = sau = 0 dòng; từ chối production |
 | Turnstile thật | — | **BLOCKED_EXTERNAL_CREDENTIAL** | D-002 |
 | Cổng thanh toán thật | — | **NOT INTEGRATED** | ranh giới cho phép |
 
@@ -117,3 +120,24 @@ chạy nguyên runbook. Mỗi lỗi dưới đây đều làm lượt staging th
 
 Kèm: test `test_selling_below_cost_price_is_allowed` đỏ ngẫu nhiên (khớp chuỗi "999" trong UUID) ⇒ so theo giá trị;
 `${VAR^^}` (bash 4) thay bằng biến thường cho bash 3.2 của macOS.
+
+## H. Staging THẬT — toàn runbook qua (2026-10-10, Owner chạy từ MacBook)
+
+Lệnh: `bash scripts/owner_staging_run.sh` trên MacBook của Owner (`/bin/bash` 3.2.57, OpenSSH 10.3). Chi tiết từng bước,
+bốn lượt chạy và hai lỗi mới chỉ hiện trên máy thật: `MASTER_STATUS.md` §40. Log: `staging-run-20261010-013035/` (0 tệp chứa secret).
+
+| Gate | Trên staging thật | Số đo |
+|---|---|---|
+| Cửa khoá | PASS | IP `160.22.170.20`, DB `vipphone_staging`, Caddy → `127.0.0.1:18080` (admin API); `thu-deploy.sh` 86/86; 3 đối chứng âm DỪNG đúng |
+| Deploy + migration | PASS | `0007 → 0014`, 24 bảng, `alembic check` sạch; bản G14 `c9ab9d1` đã dừng, `verify.sh` 11/11 + phiếu PASS |
+| Preflight | PASS (3 WARN chủ ý) | Turnstile tắt (D-002), `SHIPPING_FEE_FLAT=0` (D-008), 1 khoá nhân viên |
+| Thương mại A→J | PASS | `staging_commerce_smoke.py` 24/24 (run `26EDEF`) |
+| Hồi quy quà | PASS | 28 PASS · 0 FAIL · 1 BLOCKED (ca cần DB, đã phủ bởi verify) |
+| Trình duyệt | PASS | 96/96: 3 engine × 4 độ rộng × 8 trang, 0 tràn ngang, 0 lỗi console, 0 tài nguyên hỏng |
+| Tải nhẹ | PASS | 1 400 req / 32,9 s, 0 lỗi, 0 × 429, p95 344 ms, `restart=0` |
+| Sao lưu + phục hồi | PASS | dump đọc được; `restore_drill.py --docker-pg`: 24/24 bảng khớp md5; DB tạm đã xoá |
+| Rollback | PASS | B'→B health 200 + verify 11/11; deploy lại verify 11/11 |
+| Log + dọn | PASS | 0 dòng lỗi, 0 PII/secret; marker còn 0; `leads` trước lượt = 0 (dump 01:31:22), sau = 0 |
+
+**Không đổi:** `main` `7d6162c`; PRODUCTION NOT DEPLOYED; `enforce_admins` không đổi. **Owner còn phải quyết:** D-002, D-007, D-008, D-009, D-010 (xem `OWNER_DECISIONS_REQUIRED.md`).
+
