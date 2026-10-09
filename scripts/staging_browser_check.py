@@ -39,12 +39,26 @@ def product_page(base: str) -> str | None:
         return None
 
 
+def _benign_console(text: str) -> bool:
+    """Cảnh báo của CHÍNH trình duyệt khi trang chạy qua http không phải localhost:
+    header COOP bị bỏ qua vì origin "không đáng tin". Không phải lỗi ứng dụng; trên
+    https thật nó không xuất hiện (đo trên bản sao staging, 2026-10-08)."""
+    return "Cross-Origin-Opener-Policy header has been ignored" in text and "untrustworthy" in text
+
+
 def check_page(browser, base: str, path: str, width: int) -> list[str]:
     origin = "{0.scheme}://{0.netloc}".format(urlsplit(base))
     problems: list[str] = []
     context = browser.new_context(viewport={"width": width, "height": 860})
     page = context.new_page()
-    page.on("console", lambda m: m.type == "error" and problems.append(f"console: {m.text[:160]}"))
+    page.on(
+        "console",
+        lambda m: (
+            m.type == "error"
+            and not _benign_console(m.text)
+            and problems.append(f"console: {m.text[:160]}")
+        ),
+    )
     page.on("pageerror", lambda e: problems.append(f"js: {str(e)[:160]}"))
 
     def on_response(response):

@@ -104,7 +104,7 @@ jobs:
             migrations/versions/0014_order_attribution.py docs/attribution.md \
             app/logredact.py scripts/restore_drill.py scripts/staging_commerce_smoke.py \
             docs/OWNER_ACCEPTANCE_COMMERCE.md docs/STAGING_RUNBOOK_COMMERCE.md \
-            scripts/staging_browser_check.py \
+            scripts/staging_browser_check.py scripts/owner_staging_run.sh \
             docs/MASTER_STATUS.md docs/architecture.md docs/lead-schema.md \
             docs/catalog.md \
             docs/adr/0001-stack-selection.md \
