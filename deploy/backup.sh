@@ -3,9 +3,10 @@
 # SAO LƯU trước khi triển khai — VIP PHONE
 #   ./deploy/backup.sh staging|production
 # =============================================================================
-# Sao lưu bốn thứ, theo đúng brief:
+# Sao lưu năm thứ:
 #   1. database  — pg_dump -Fc (dạng nén, phục hồi chọn lọc được)
 #   2. dữ liệu bền — <ENV_ROOT>/shared/data nếu có
+#   2b. ảnh sản phẩm — Docker volume <PROJECT>-<ENV>-media nếu có (D-010)
 #   3. cấu hình cần thiết — DANH SÁCH BIẾN trong shared/.env (chỉ TÊN, không giá trị)
 #   4. metadata bản đang chạy — current/release.json + history.log
 #
@@ -57,6 +58,28 @@ docker exec "$PG_CONTAINER" rm -f /tmp/verify.dump
 if [ -d "\$ROOT/shared/data" ]; then
   tar -czf "\$DEST/shared-data-$STAMP.tar.gz" -C "\$ROOT/shared" data
   sha256sum "\$DEST/shared-data-$STAMP.tar.gz" > "\$DEST/shared-data-$STAMP.tar.gz.sha256"
+fi
+
+# 2b. Ảnh sản phẩm — Docker named volume mà container ứng dụng gắn vào /app/var/media.
+#     Trước 2026-10-10 bước này KHÔNG có: DB phục hồi được nhưng ảnh thì mất (D-010).
+#     Stream tar ra stdout để file do CHÍNH user deploy tạo (container ghi thẳng vào
+#     thư mục gắn thì file thuộc root, deploy không xoá/xoay vòng được về sau).
+#     Dùng lại ảnh của container CSDL (chắc chắn có trên máy, có tar), không kéo ảnh mới.
+MEDIA_VOL="$PROJECT-$ENV_NAME-media"
+if docker volume inspect "\$MEDIA_VOL" >/dev/null 2>&1; then
+  IMG="\$(docker inspect -f '{{.Config.Image}}' "$PG_CONTAINER")"
+  MEDIA_TAR="\$DEST/media-$STAMP.tar.gz"
+  docker run --rm --network none -v "\$MEDIA_VOL:/m:ro" "\$IMG" tar -czf - -C /m . > "\$MEDIA_TAR"
+  chmod 600 "\$MEDIA_TAR"
+  if ! tar -tzf "\$MEDIA_TAR" >/dev/null 2>&1; then
+    echo "LỖI: bản sao lưu ảnh \$MEDIA_TAR KHÔNG đọc lại được." >&2
+    exit 1
+  fi
+  N_ANH="\$(tar -tzf "\$MEDIA_TAR" | grep -vc '/\$' || true)"
+  sha256sum "\$MEDIA_TAR" > "\$MEDIA_TAR.sha256"
+  echo "ảnh: volume \$MEDIA_VOL ⇒ \$N_ANH tệp, tar đọc lại được"
+else
+  echo "ảnh: không có volume \$MEDIA_VOL — bỏ qua (chưa từng chạy bản có ảnh)"
 fi
 
 # 3. Cấu hình: CHỈ TÊN BIẾN. Giá trị là secret và cố ý không được sao lưu ở đây
