@@ -238,7 +238,7 @@ gọi `https://qua.viporder.vn` (proxy TLS của môi trường thử chặn).
 
 ## 12. Lượt THẬT đầu tiên trọn vẹn (2026-10-10, `develop` `85a5f06`)
 
-Từ MacBook của Owner, `bash scripts/owner_staging_run.sh`: **27/27 bước qua trong 01:38:59 − 01:30:35**, migration `0007 → 0014`,
+Từ MacBook của Owner, `bash scripts/owner_staging_run.sh`: **27/27 bước qua, 01:30:35 → 01:38:59 (8 phút 24 giây)**, migration `0007 → 0014`,
 `current → 20261010-013751-85a5f06`. Trước đó ba lượt dừng sớm, không lượt nào đụng máy chủ trước khi hỏng: cửa Caddy
 (#93), bash 3.2 cắt heredoc (#92), `scp` SFTP không nở `$HOME` (#95). Số đo từng bước: `MASTER_STATUS.md` §40.
 Hai điều §11 không đo được nay đã đo trên máy thật: Caddy/TLS/DNS thật (admin API → `127.0.0.1:18080`, 96/96 ô trình
