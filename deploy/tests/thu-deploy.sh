@@ -337,5 +337,76 @@ fi
 [ "$(code_of 'load_conf; select_env staging; ENV_URL=https://qua.viporder.vn/x; [ "$(host_header)" = "-H '"'"'Host: qua.viporder.vn'"'"'" ]')" = 0 ] \
   && ok "host_header lấy đúng tên máy từ URL" || bad "host_header sai"
 
+grp "12. Heredoc trong \$( ) phải sống được với bash 3.2 của macOS (#92)"
+# bash 3.2 đếm ngoặc CẢ trong thân heredoc nằm trong $( ): một dấu `)` lẻ (mẫu
+# `case`) cắt `$(` sớm ⇒ máy chủ nhận script cụt, phần còn lại chạy tại máy trạm.
+# (a) quét tĩnh: mọi heredoc `$(remote_... <<TAG` phải cân ngoặc.
+lech="$(python3 - "$DEPLOY" <<'PY'
+import re, sys, glob
+for f in sorted(glob.glob(sys.argv[1] + "/*.sh")):
+    lines = open(f, encoding="utf-8").read().split("\n")
+    i = 0
+    while i < len(lines):
+        m = re.search(r"\$\(\s*remote_\w+\s*<<-?\s*['\"]?(\w+)", lines[i])
+        if m:
+            tag, start, body = m.group(1), i + 1, []
+            i += 1
+            while i < len(lines) and lines[i].strip() != tag:
+                body.append(lines[i]); i += 1
+            txt = "\n".join(body)
+            if txt.count("(") != txt.count(")"):
+                print(f"{f}:{start} mở={txt.count('(')} đóng={txt.count(')')}")
+        i += 1
+PY
+)"
+[ -z "$lech" ] && ok "24 heredoc \$(remote_* <<TAG) đều cân ngoặc" || bad "heredoc lệch ngoặc (bash 3.2 sẽ cắt): $lech"
+# (b) chạy thật require_ports dưới /bin/bash của máy với remote_capture giả: script
+#     gửi đi phải nguyên vẹn (có nhánh "OK trong" ở cuối) và không chạy gì tại máy trạm.
+cap="$(mktemp)"
+out="$(/bin/bash -c "
+  cd '$REPO'; . '$DEPLOY/common.sh' 2>/dev/null
+  remote_capture() { cat > '$cap'; echo 'OK trong'; }
+  ENV_NAME=staging ENV_UPPER=STAGING
+  require_ports 18080 18180 vipphone-staging-app
+" 2>&1)"; rc=$?
+if [ "$rc" = 0 ] && grep -q 'echo "OK trong"' "$cap" && [ "$(tail -1 "$cap")" = "fi" ]; then
+  ok "require_ports gửi heredoc nguyên vẹn dưới $(/bin/bash -c 'echo bash $BASH_VERSION')"
+else
+  bad "require_ports hỏng dưới /bin/bash (mã $rc): $(printf '%s' "$out" | tail -2 | tr '\n' ' ')"
+fi
+# (c) logic ở xa: chạy phần thân (bỏ 2 dòng định nghĩa) với listening/owner giả.
+body="$(sed 1,2d "$cap")"
+ports_case() { # <muốn> <chính nghe?> <tạm nghe?> <chủ cổng>
+  local want="$1" L="$2" T="$3" O="$4" got
+  got="$(bash -c "listening(){ [ \"\$1\" = 18180 ] && [ '$T' = 1 ] && return 0; [ \"\$1\" = 18080 ] && [ '$L' = 1 ] && return 0; return 1; }; owner(){ echo '$O'; }; $body" 2>&1)"
+  [ "$got" = "$want" ] && ok "cổng: $want" || bad "cổng: muốn [$want] được [$got]"
+}
+ports_case "OK vipphone-staging-app"          1 0 vipphone-staging-app
+ports_case "OK vipphone-staging-app-prev-123" 1 0 vipphone-staging-app-prev-123
+ports_case "CHINH_BAN viporder-nginx-1"       1 0 viporder-nginx-1
+ports_case "OK trong"                         0 0 ""
+ports_case "TAM_BAN viporder-nginx-1"         0 1 viporder-nginx-1
+rm -f "$cap"
+# (d) đối chứng âm: một heredoc có `)` lẻ PHẢI bị bash 3.2 làm hỏng — chứng minh ca (b)
+#     đo đúng thứ cần đo. Trên bash ≥ 4 không có lỗi này: ghi rõ ca (b) chỉ là chiều thuận.
+neg="$(/bin/bash -c '
+  cap() { cat; }
+  f() { out="$(cap <<R
+case "x" in
+  *) echo "a" ;;
+esac
+R
+)"; printf "%s" "$out"; }
+  f' 2>&1)"
+want="$(printf 'case "x" in\n  *) echo "a" ;;\nesac')"
+bmaj="$(/bin/bash -c 'echo ${BASH_VERSINFO[0]}')"
+if [ "$neg" != "$want" ]; then
+  ok "đối chứng âm: /bin/bash $bmaj.x làm hỏng heredoc có ) lẻ đúng như #92 ⇒ ca (b) có giá trị"
+elif [ "$bmaj" -ge 4 ]; then
+  ok "đối chứng âm: /bin/bash $bmaj.x không có lỗi #92 — ca (b) ở máy này chỉ là chiều thuận"
+else
+  bad "đối chứng âm: /bin/bash $bmaj.x KHÔNG làm hỏng heredoc có ) lẻ — không hiểu, xem lại"
+fi
+
 printf '\n== KẾT QUẢ: %d đạt · %d không đạt\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
