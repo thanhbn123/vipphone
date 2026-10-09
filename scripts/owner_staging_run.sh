@@ -92,26 +92,59 @@ check_identity() {
   echo "KẾT QUẢ: danh tính đúng — $EXPECT_IP, $DB"
 }
 check_caddy() {
-  if ! rsh "cat /etc/caddy/Caddyfile" > "$OUT/00-caddy.raw" 2>&1; then
+  local host up src
+  host="$(printf '%s' "$BASE" | sed -E 's#^[a-z]+://##; s#[:/].*$##')"
+  # Đường 1: Caddyfile trên host (chỉ khi user deploy đọc được). Phân biệt
+  # "không tồn tại" với "không có quyền" — hai nguyên nhân, hai cách xử (#93).
+  if rsh "cat /etc/caddy/Caddyfile" > "$OUT/00-caddy.raw" 2>"$OUT/00-caddy.err"; then
+    src=Caddyfile
+    up="$(awk -v h="$host" '
+      index($0, h) && /\{/ {inb=1; d=0}
+      inb { n=gsub(/\{/,"{"); m=gsub(/\}/,"}"); d+=n-m; if ($1=="reverse_proxy") {print $2} if (d<=0 && NR>1 && m>0) inb=0 }' "$OUT/00-caddy.raw" | head -1)"
+  else
+    grep -q 'No such file' "$OUT/00-caddy.err" && echo "/etc/caddy/Caddyfile không tồn tại trên host (Caddy có thể chạy trong container)" \
+                                                || echo "/etc/caddy/Caddyfile: $(tr -d '\n' < "$OUT/00-caddy.err")"
+    # Đường 2: Caddy admin API (localhost:2019) — đo 2026-10-10: user deploy đọc được,
+    # không cần sudo; Caddy staging chạy trong container net=host nên 127.0.0.1 là host.
+    if rsh "curl -s --max-time 5 http://localhost:2019/config/" > "$OUT/00-caddy.raw" 2>/dev/null && [ -s "$OUT/00-caddy.raw" ]; then
+      src="admin API"
+      up="$("$PY" - "$host" "$OUT/00-caddy.raw" <<'PY'
+import json, sys
+host, path = sys.argv[1], sys.argv[2]
+cfg = json.load(open(path, encoding="utf-8"))
+def walk(o, hit):
+    if isinstance(o, dict):
+        if o.get("handler") == "reverse_proxy" and hit:
+            for u in o.get("upstreams", []):
+                if "dial" in u: print(u["dial"]); return True
+        if "match" in o and any(host in m.get("host", []) for m in o["match"] if isinstance(m, dict)):
+            hit = True
+        for v in o.values():
+            if walk(v, hit): return True
+    elif isinstance(o, list):
+        for v in o:
+            if walk(v, hit): return True
+    return False
+walk(cfg, False)
+PY
+)"
+    fi
+  fi
+  if [ -z "${src:-}" ]; then
     if [ "${CADDY_UPSTREAM_CONFIRMED:-}" = "localhost:$STAGING_PORT" ]; then
-      echo "KẾT QUẢ: user deploy không đọc được Caddyfile; Owner đã tự xác nhận upstream = localhost:$STAGING_PORT"
+      echo "KẾT QUẢ: không đọc được Caddyfile lẫn admin API; Owner đã tự xác nhận upstream = localhost:$STAGING_PORT"
       return 0
     fi
-    echo "DỪNG: user deploy không đọc được /etc/caddy/Caddyfile. Owner xem bằng quyền root:"
-    echo "      sudo grep -n -A8 qua.viporder.vn /etc/caddy/Caddyfile"
+    echo "DỪNG: không đọc được Caddyfile (host) lẫn Caddy admin API (localhost:2019). Owner xem bằng quyền root:"
+    echo "      sudo grep -rn -A8 $host /etc/caddy/Caddyfile /srv/*/Caddyfile"
     echo "      nếu reverse_proxy là localhost:$STAGING_PORT hoặc 127.0.0.1:$STAGING_PORT thì chạy lại với"
     echo "      CADDY_UPSTREAM_CONFIRMED=localhost:$STAGING_PORT bash scripts/owner_staging_run.sh"
     return 1
   fi
-  local host up
-  host="$(printf '%s' "$BASE" | sed -E 's#^[a-z]+://##; s#[:/].*$##')"
-  up="$(awk -v h="$host" '
-    index($0, h) && /\{/ {inb=1; d=0}
-    inb { n=gsub(/\{/,"{"); m=gsub(/\}/,"}"); d+=n-m; if ($1=="reverse_proxy") {print $2} if (d<=0 && NR>1 && m>0) inb=0 }' "$OUT/00-caddy.raw" | head -1)"
-  echo "Caddy: $host → ${up:-(không tìm thấy reverse_proxy)}"
+  echo "Caddy ($src): $host → ${up:-(không tìm thấy reverse_proxy)}"
   case "$up" in
     localhost:"$STAGING_PORT"|127.0.0.1:"$STAGING_PORT"|http://localhost:"$STAGING_PORT"|http://127.0.0.1:"$STAGING_PORT")
-      echo "KẾT QUẢ: Caddy tới app qua $up — bản mới nghe 127.0.0.1:$STAGING_PORT là đúng" ;;
+      echo "KẾT QUẢ: Caddy ($src) tới app qua $up — bản mới nghe 127.0.0.1:$STAGING_PORT là đúng" ;;
     *) echo "DỪNG: Caddy trỏ '${up:-?}', không phải localhost:$STAGING_PORT — bản mới (127.0.0.1) sẽ không tới được. Báo lại harness."; return 1 ;;
   esac
 }

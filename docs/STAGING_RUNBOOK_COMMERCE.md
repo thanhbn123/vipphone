@@ -19,6 +19,8 @@ Script chạy đúng các mục 0–9 dưới đây theo thứ tự, mỗi bư�
 `160.22.170.20` (không phải production), DB phải là `vipphone_staging`, Caddy phải chuyển `qua.viporder.vn` tới
 `localhost:18080`. Mục 1 (chuyển `.env`, sinh khoá webhook TRÊN máy chủ) làm tự động, chỉ in tên biến. Gửi lại cả thư mục log.
 Đã diễn tập trên bản sao staging: 26/26 bước qua; Caddy trỏ IP public ⇒ dừng ở bước 00; 0 tệp log chứa secret.
+**Phải chạy bằng `bash` của macOS được** (3.2.57): lượt thật đầu tiên 2026-10-10 chết ở bước 3 vì bash 3.2 cắt heredoc
+trong `$( )` tại dấu `)` lẻ (#92) — bộ thử `thu-deploy.sh` mục 12 nay chặn kiểu lỗi này.
 
 Các mục dưới đây là từng bước thủ công (dùng khi cần chạy lại một bước riêng).
 
@@ -57,6 +59,14 @@ Ghi lại: `STAGING SHA BEFORE` (tag image), migration head trước, số bản
 `viporder-nginx-1` của dự án khác ⇒ cổng tạm của staging là `18180` (`STAGING_TEMP_PORT`, #88); app trả
 `400 Invalid host header` khi gọi `127.0.0.1` không có Host ⇒ mọi health/verify gửi `Host:` lấy từ `STAGING_URL`
 — **`STAGING_URL=https://qua.viporder.vn` trong `deploy.local.conf` là BẮT BUỘC**.
+
+Đo thêm (2026-10-10, user `deploy`, chỉ đọc): **`/etc/caddy/Caddyfile` KHÔNG tồn tại trên host** — Caddy phục vụ
+80/443 là container `vip-staging-caddy` (`caddy:2`, `net=host`), Caddyfile thật gắn từ `/srv/vip-staging-proxy/Caddyfile`
+(root). **Caddy admin API đọc được bằng user `deploy`, không cần sudo:** `curl -s localhost:2019/config/` ⇒ route
+`qua.viporder.vn` có `reverse_proxy` upstream `dial: 127.0.0.1:18080`; vì `net=host`, đó là loopback của host ⇒ bản mới
+nghe `127.0.0.1:18080` tới được. `owner_staging_run.sh` từ #93 tự đọc admin API khi không có Caddyfile; chỉ khi cả hai
+đường đều không đọc được mới cần `CADDY_UPSTREAM_CONFIRMED`. Có một container Caddy thứ hai
+(`vip-customs-ai-staging-proxy-1`, mạng riêng, `127.0.0.1:18100`) — không phục vụ 80/443, không liên quan.
 
 Lượt đầu sẽ: migration `0007 → 0014` (thuần thêm, mã G14 vẫn chạy được trong lúc chờ), đổi container cũ thành
 `vipphone-staging-app-prev-<giây>` **đã dừng**, và bản mới nghe ở `127.0.0.1:18080` (bản cũ nghe `0.0.0.0:18080`).

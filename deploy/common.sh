@@ -242,6 +242,10 @@ require_ports() {
     warn "chạy khô: không kiểm được cổng $port/$temp trên máy chủ"
     return 0
   fi
+  # KHÔNG dùng `case` (hay bất kỳ dấu `)` lẻ nào) trong heredoc nằm trong `$( )`:
+  # bash 3.2 của macOS đếm ngoặc cả trong thân heredoc, cắt `$(` tại `)` lẻ đầu
+  # tiên ⇒ máy chủ nhận script cụt, phần còn lại chạy TẠI MÁY TRẠM (#92).
+  # Bộ thử: deploy/tests/thu-deploy.sh mục "heredoc trong \$( )".
   out="$(remote_capture <<REMOTE
 listening() { (exec 3<>"/dev/tcp/127.0.0.1/\$1") 2>/dev/null; }
 owner() { docker ps --filter "publish=\$1" --format '{{.Names}}' | head -1; }
@@ -251,10 +255,9 @@ if listening $temp; then
 fi
 if listening $port; then
   o="\$(owner $port)"
-  case "\$o" in
-    "$container"|"$container"-prev-*) echo "OK \$o" ;;
-    *) echo "CHINH_BAN \${o:-tien-trinh-ngoai-docker}" ;;
-  esac
+  if [ "\$o" = "$container" ] || [ "\${o#$container-prev-}" != "\$o" ]; then echo "OK \$o"
+  else echo "CHINH_BAN \${o:-tien-trinh-ngoai-docker}"
+  fi
 else
   echo "OK trong"
 fi
