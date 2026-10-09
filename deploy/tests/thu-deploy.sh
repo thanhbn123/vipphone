@@ -441,5 +441,17 @@ else
   bad "máy chủ trả rỗng mà vẫn scp hoặc không dừng (mã $rc)"
 fi
 
+grp "17. backup.sh sao lưu cả volume ảnh (D-010)"
+# Tên volume trong backup.sh phải trùng tên volume mà container ứng dụng gắn vào —
+# lệch một chữ là sao lưu "thành công" một volume rỗng không ai dùng.
+gan="$(grep -oE '\$PROJECT-\$(ENV_NAME|env)-media' "$DEPLOY/common.sh" | sort -u | head -1)"
+sl="$(grep -oE '^MEDIA_VOL="[^"]+"' "$DEPLOY/backup.sh" | sed 's/^MEDIA_VOL="//; s/"$//')"
+[ -n "$gan" ] && [ "$sl" = "$gan" ] && ok "backup.sh sao lưu đúng volume container gắn: $sl" \
+  || bad "volume sao lưu '$sl' ≠ volume container gắn '$gan'"
+grep -q 'tar -tzf "\\$MEDIA_TAR"' "$DEPLOY/backup.sh" && ok "bản sao lưu ảnh được đọc lại (tar -tzf) trước khi báo xong" \
+  || bad "bản sao lưu ảnh không được kiểm đọc lại"
+grep -q 'tar -czf - -C /m . > ' "$DEPLOY/backup.sh" && ok "tar stream ra stdout ⇒ file thuộc user deploy, không thuộc root" \
+  || bad "không thấy tar stream ra stdout (thiếu bước, hoặc ghi thẳng vào thư mục gắn ⇒ file thuộc root)"
+
 printf '\n== KẾT QUẢ: %d đạt · %d không đạt\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -12,13 +12,13 @@
 | D-002 | Credential Turnstile | **BLOCKED_EXTERNAL_CREDENTIAL** | bot protection thật |
 | D-003 | Branch protection | ✅ **CLOSED** — đo 2026-10-07: `main` + `develop` bắt buộc PR + đúng 4 check tự động, `strict`, cấm force-push/xoá; đối chứng âm PR #65 bị chặn | — |
 | D-004 | Chính sách lưu trữ PII | **CLOSED** — Owner đã chốt 2026-10-02 | — |
-| D-005 | RPO/RTO + lịch sao lưu | **CLOSED** — Owner đã chốt 2026-10-02 | — |
-| D-006 | **Đường triển khai staging cho các gate thương mại** | **BLOCKED_EXTERNAL_ACCESS** | deploy + nghiệm thu staging G15→attribution; `develop == staging` |
+| D-005 | RPO/RTO + lịch sao lưu | Chính sách **CLOSED** (2026-10-02) · **lịch chạy tự động: CHƯA CÓ** (đo 2026-10-10) | RPO 24 giờ trên staging |
+| D-006 | Đường triển khai staging cho các gate thương mại | ✅ **CLOSED** 2026-10-10 — Owner chạy runbook từ MacBook, 27/27 bước qua | — |
 | D-007 | `enforce_admins` của branch protection | **OWNER_DECISION** (hiện `false`) | admin vẫn bypass được check đỏ |
 | D-008 | Biểu phí giao hàng | **OWNER_DECISION** (hiện `SHIPPING_FEE_FLAT=0.00`) | tổng đơn thật |
-| D-009 | Nội dung chuyển khoản (số TK, ngân hàng, chủ TK) | **OWNER_INPUT** (`BANK_TRANSFER_INSTRUCTIONS` đang rỗng) | khách tự chuyển khoản không cần gọi |
-| D-010 | Kho ảnh production + sao lưu ảnh | **OWNER_DECISION** | ảnh sản phẩm ở production |
-| D-011 | Khoá webhook giả lập trên staging | **OWNER_INPUT** (tuỳ chọn) | nghiệm thu đường webhook trên staging |
+| D-009 | Nội dung chuyển khoản (số TK, ngân hàng, chủ TK) | **OWNER_INPUT** (staging đang dùng câu `[THỬ - STAGING]`, production chưa có) | khách tự chuyển khoản không cần gọi |
+| D-010 | Kho ảnh production + sao lưu ảnh | **OWNER_DECISION** (kho production) · sao lưu volume ảnh staging: ✅ có từ 2026-10-10 | ảnh sản phẩm ở production |
+| D-011 | Khoá webhook giả lập trên staging | ✅ **CLOSED** 2026-10-10 — sinh TRÊN máy chủ (runbook §1), webhook ký đúng ⇒ APPLIED, gửi lại ⇒ DUPLICATE, ký sai ⇒ 401 | — |
 | — | Cổng thanh toán thật | **NOT INTEGRATED** (ranh giới cho phép) | thu tiền online thật |
 
 ---
@@ -252,6 +252,12 @@ ghi kèm SHA-256, tự dọn theo hạn mức.
 
 **⚠️ Giới hạn:** script lưu **cùng máy staging** ⇒ mất máy là mất cả hai. Cần đích **khác máy**.
 
+**Đo lại 2026-10-10 (user `deploy` trên `160.22.170.20`, chỉ đọc):** `crontab -l` không có dòng nào cho vipphone/sao lưu,
+không có timer systemd nào tên vipphone. Bản sao lưu tự động cuối cùng trong `~/vipphone-staging/backups/daily` là
+**2026-10-03 00:13** (từ trước sự cố §35). Các bản trong `~/vip/vipphone/staging/backups/` đều do `deploy/backup.sh`
+chạy tay hoặc theo lượt deploy ⇒ **RPO 24 giờ: CHƯA ĐẠT**. Bật lịch là thêm cấu hình bền trên máy chủ ⇒ **Owner quyết**:
+(a) cron của user `deploy` gọi `deploy/backup.sh` qua bản phát hành `current`, hoặc (b) nối vào hệ sao lưu chung VIP Vault.
+
 ---
 
 ## D-005 (bản cũ, giữ tham chiếu) — RPO / RTO VÀ LỊCH SAO LƯU
@@ -289,7 +295,12 @@ chỉ Owner biết mất một ngày lead có sao không.
 
 ---
 
-## D-006 — ĐƯỜNG TRIỂN KHAI STAGING CHO CÁC GATE THƯƠNG MẠI — BLOCKED_EXTERNAL_ACCESS
+## D-006 — ĐƯỜNG TRIỂN KHAI STAGING CHO CÁC GATE THƯƠNG MẠI — ✅ CLOSED (2026-10-10)
+
+**Đóng 2026-10-10:** Owner chọn cách 1 (chạy từ MacBook). `bash scripts/owner_staging_run.sh` trên `develop` `85a5f06`
+qua 27/27 bước sau hai bản vá chỉ lộ ra trên máy thật (#92, #95) — `MASTER_STATUS.md` §40, `OWNER_ACCEPTANCE_COMMERCE.md` §H.
+Phần dưới giữ làm lịch sử.
+
 
 **Đo lại 2026-10-08:** vẫn `CONNECT tunnel failed, response 403` cho `qua.viporder.vn`; TCP `160.22.170.20:22`
 bị chặn; `~/.ssh` trống; không có phiên Claude nào trên máy Owner (Remote Control) để chuyển việc.
@@ -344,8 +355,8 @@ ngưỡng đơn. Đồng giá thì chỉ cần đặt biến môi trường; cá
 
 ## D-010 — KHO ẢNH PRODUCTION + SAO LƯU ẢNH
 
-Staging lưu ảnh trên Docker named volume `vipphone-staging-media`. `deploy/backup.sh` **chưa** sao lưu volume
-này (chỉ sao lưu DB). Production nên dùng kho đối tượng S3-compatible (+ CDN) — chỉ cần thêm một lớp hiện thực
+Staging lưu ảnh trên Docker named volume `vipphone-staging-media`. Từ 2026-10-10 `deploy/backup.sh` sao lưu cả volume
+này (`media-<thời điểm>.tar.gz` + sha256, đọc lại bằng `tar -tzf` trước khi báo xong; bộ thử `thu-deploy.sh` nhóm 17). Production nên dùng kho đối tượng S3-compatible (+ CDN) — chỉ cần thêm một lớp hiện thực
 `app/storage.ObjectStorage`. Owner chọn nhà cung cấp/vùng lưu trữ; chưa chọn thì production chưa có ảnh bền.
 
 ## D-011 — KHOÁ WEBHOOK GIẢ LẬP TRÊN STAGING (tuỳ chọn)
