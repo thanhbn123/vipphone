@@ -163,3 +163,17 @@ bảo vệ của database.
 
 Mục **5** đáng lưu ý: 250 dòng phục hồi gần như tức thì. Với dữ liệu thật, con số sẽ khác và
 **chưa ai đo**.
+
+## Sao lưu tự động staging → NAS (2026-10-10, D-005)
+
+`scripts/staging_backup.sh` chạy **trên máy staging** bằng cron của user `deploy` (không sudo). Mỗi lượt:
+dump DB `-Fc` + kiểm `pg_restore --list` · tar volume ảnh · sha256 · bản tuần (Chủ nhật) · **chép sang NAS và so
+sha256 hai đầu** · xoay vòng 14 ngày / 4 tuần ở **cả hai** nơi.
+
+- NAS gắn tại `/mnt/vip-nas` (CIFS tới `100.120.9.63` qua Tailscale, `uid=deploy`) do **root làm một lần** bằng
+  script ngoài repo (vault `production/staging-160-22-170-20/gan-tailscale-nas.sh`). Đích:
+  `/mnt/vip-nas/vip-vault/viporder-staging/vipphone/{daily,weekly}` — cùng quy ước "mỗi máy một thư mục" của VIP Vault.
+- Chỉ coi NAS là đã gắn khi `mountpoint -q` đúng. NAS chưa gắn hoặc sha256 lệch ⇒ bản trên máy **vẫn giữ**, in
+  `⚠`, **thoát mã 3** (cron ghi log; không bao giờ báo OK giả).
+- Đã thử thật trên staging 2026-10-10 bằng thư mục tạm: NAS gắn ⇒ mã 0, khớp sha256 · 3 lượt giữ 2 ⇒ còn 2 ở mỗi
+  nơi · NAS chưa gắn ⇒ mã 3, 0 tệp ghi nhầm · bản chép bị làm hỏng ⇒ báo LỆCH, mã 3 · tên DB có `prod` ⇒ từ chối.
