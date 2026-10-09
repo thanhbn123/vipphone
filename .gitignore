@@ -48,3 +48,6 @@ pg-backup/
 
 # Ảnh sản phẩm tải lên (kho lưu local) — dữ liệu, không phải mã nguồn
 var/
+
+# Log của scripts/owner_staging_run.sh (gửi cho harness, không vào Git).
+staging-run-*/

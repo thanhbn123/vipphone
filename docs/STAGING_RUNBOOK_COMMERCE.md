@@ -6,6 +6,22 @@ Mỗi bước ghi **bằng chứng cần dán lại**. Bước nào FAIL ⇒ d�
 > Phiên harness cloud (2026-10-07/08) **không** chạy được runbook này: `curl https://qua.viporder.vn` ⇒
 > `CONNECT tunnel failed, response 403`; TCP `160.22.170.20:22` bị chặn; không có khoá SSH. Xem D-006.
 
+## Cách nhanh: MỘT lệnh (khuyên dùng)
+
+Sau khi làm xong phần "Cần trên máy trạm" (repo ở `develop`, `.venv`, `deploy/deploy.local.conf`, PostgreSQL tạm cho test):
+
+```bash
+cd ~/vipphone && bash scripts/owner_staging_run.sh
+```
+
+Script chạy đúng các mục 0–9 dưới đây theo thứ tự, mỗi bước một log trong `staging-run-<thời điểm>/`, **dừng ở bước hỏng
+đầu tiên**, và thay mọi giá trị secret bằng `***` trước khi kết thúc. Cửa khoá trước khi đụng máy chủ: IP phải là
+`160.22.170.20` (không phải production), DB phải là `vipphone_staging`, Caddy phải chuyển `qua.viporder.vn` tới
+`localhost:18080`. Mục 1 (chuyển `.env`, sinh khoá webhook TRÊN máy chủ) làm tự động, chỉ in tên biến. Gửi lại cả thư mục log.
+Đã diễn tập trên bản sao staging: 26/26 bước qua; Caddy trỏ IP public ⇒ dừng ở bước 00; 0 tệp log chứa secret.
+
+Các mục dưới đây là từng bước thủ công (dùng khi cần chạy lại một bước riêng).
+
 | | |
 |---|---|
 | Staging | `160.22.170.20` · user `deploy` · `https://qua.viporder.vn` · container `vipphone-staging-app` (18080) + `vipphone-staging-pg` · db `vipphone_staging` |
