@@ -24,15 +24,20 @@ PG_CONTAINER="${PG_CONTAINER:-vipphone-staging-pg}"
 DBNAME="${DBNAME:-vipphone_staging}"
 DBUSER="${DBUSER:-vipphone}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=scripts/ghi_trang_thai.sh
+. "$HERE/ghi_trang_thai.sh"
+TT_GHI_CHU="dừng trước khi phục hồi (xem cron-phuc-hoi.log)"
 
 echo "== diễn tập phục hồi từ NAS ($(date '+%Y-%m-%d %H:%M:%S %z'))"
-if [ ! -s "$NAS_CRED" ]; then echo "KẾT QUẢ: FAIL — thiếu tài khoản NAS $NAS_CRED"; exit 3; fi
+if [ ! -s "$NAS_CRED" ]; then echo "KẾT QUẢ: FAIL — thiếu tài khoản NAS $NAS_CRED"; ghi_trang_thai phuc-hoi 3 "thiếu tài khoản NAS"; exit 3; fi
 if [ "$(docker inspect -f '{{.State.Running}}' "$NAS_TS_CONTAINER" 2>/dev/null)" != true ]; then
-  echo "KẾT QUẢ: FAIL — container Tailscale $NAS_TS_CONTAINER không chạy ⇒ không tới được NAS"; exit 3
+  echo "KẾT QUẢ: FAIL — container Tailscale $NAS_TS_CONTAINER không chạy ⇒ không tới được NAS"
+  ghi_trang_thai phuc-hoi 3 "container Tailscale không chạy"; exit 3
 fi
 BAT_DAU=$(date +%s)
 TMP="$(mktemp -d "$HOME/.nas-restore-drill-XXXXXX")"
-trap 'rm -rf -- "${TMP:?}"' EXIT
+# shellcheck disable=SC2154  # rc được gán ngay trong chuỗi trap
+trap 'rc=$?; rm -rf -- "${TMP:?}"; ghi_trang_thai phuc-hoi "$rc" "$TT_GHI_CHU"' EXIT
 chmod 700 "$TMP"
 
 smb() {
@@ -46,26 +51,29 @@ smb() {
 # script sẽ chết IM LẶNG ngay trong phép gán (đo được khi thử). Thiếu thì báo bên dưới.
 MOI="$( { smb 'ls vipphone-2*.dump' || true; } | awk '$1 ~ /^vipphone-2.*\.dump$/ {print $1}' | sort | tail -1)"
 if [ -z "$MOI" ]; then
-  echo "KẾT QUẢ: FAIL — không thấy bản dump nào trên NAS ($NAS_DIR/daily)"; exit 3
+  echo "KẾT QUẢ: FAIL — không thấy bản dump nào trên NAS ($NAS_DIR/daily)"; TT_GHI_CHU="không thấy bản dump trên NAS"; exit 3
 fi
 smb "get \"$MOI\"; get \"$MOI.sha256\"" >/dev/null || true
 if [ ! -s "$TMP/$MOI" ] || [ ! -s "$TMP/$MOI.sha256" ]; then
-  echo "KẾT QUẢ: FAIL — không tải được $MOI (hoặc .sha256) từ NAS"; exit 3
+  echo "KẾT QUẢ: FAIL — không tải được $MOI (hoặc .sha256) từ NAS"; TT_GHI_CHU="không tải được bản dump từ NAS"; exit 3
 fi
 echo "1. tải từ NAS: $MOI ($(stat -c %s "$TMP/$MOI" 2>/dev/null || echo 0) byte) trong $(( $(date +%s) - BAT_DAU ))s"
 
 # 2. sha256.
 if ! ( cd "$TMP" && sha256sum -c --quiet "$MOI.sha256" ); then
-  echo "KẾT QUẢ: FAIL — sha256 của bản tải từ NAS KHÔNG khớp"; exit 3
+  echo "KẾT QUẢ: FAIL — sha256 của bản tải từ NAS KHÔNG khớp"; TT_GHI_CHU="sha256 bản trên NAS LỆCH"; exit 3
 fi
 echo "2. sha256 khớp"
 
 # 3. Phục hồi vào database tạm.
 echo "3. phục hồi"
 RC=0
+TT_GHI_CHU="phục hồi dừng giữa chừng"
 python3 -I "$HERE/restore_drill.py" --docker-pg "$PG_CONTAINER" --db "$DBNAME" --user "$DBUSER" \
   --from-dump "$TMP/$MOI" || RC=$?
 
 # 4. RTO đo được.
-echo "4. tổng thời gian tải + kiểm + phục hồi: $(( $(date +%s) - BAT_DAU ))s (mục tiêu D-005: 14400s)"
+GIAY=$(( $(date +%s) - BAT_DAU ))
+echo "4. tổng thời gian tải + kiểm + phục hồi: ${GIAY}s (mục tiêu D-005: 14400s)"
+if [ "$RC" = 0 ]; then TT_GHI_CHU="PASS $MOI trong ${GIAY}s"; else TT_GHI_CHU="phục hồi HỎNG $MOI (mã $RC)"; fi
 exit "$RC"
