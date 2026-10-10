@@ -154,7 +154,14 @@ class DockerPgBackend:
 
 # --------------------------------------------------------------------------
 def snapshot(backend, db: str) -> dict:
-    head = [r[0] for r in backend.query(db, "SELECT version_num FROM alembic_version")]
+    # Bản phục hồi hỏng có thể KHÔNG có bảng alembic_version: báo "không có head" chứ
+    # không để truy vấn nổ thành traceback (cron đọc log, traceback khó đọc).
+    has_version = backend.query(db, "SELECT to_regclass('public.alembic_version') IS NOT NULL")
+    head = (
+        [r[0] for r in backend.query(db, "SELECT version_num FROM alembic_version")]
+        if has_version and str(has_version[0][0]).lower() in ("true", "t")
+        else []
+    )
     tables = [
         r[0]
         for r in backend.query(
@@ -191,6 +198,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db", help="tên database nguồn (chế độ --docker-pg)")
     parser.add_argument("--user", default="vipphone", help="user PostgreSQL (chế độ --docker-pg)")
     parser.add_argument("--keep", action="store_true", help="giữ database phục hồi để soi tay")
+    parser.add_argument(
+        "--from-dump",
+        help="phục hồi TỆP DUMP CÓ SẴN (ví dụ bản tải về từ NAS) thay vì dump lại nguồn. "
+        "Khác dữ liệu hiện tại chỉ là THÔNG TIN (bản sao lưu cũ hơn nguồn là bình thường); "
+        "FAIL khi phục hồi lỗi, ra rỗng, mất migration head hoặc thiếu bảng quan trọng.",
+    )
     args = parser.parse_args(argv)
 
     if args.docker_pg:
@@ -213,9 +226,13 @@ def main(argv: list[str] | None = None) -> int:
 
     with tempfile.TemporaryDirectory(prefix="vipphone-drill-") as tmp:
         dump_path = os.path.join(tmp, "drill.dump")
-        print(f"1. pg_dump -Fc {source}")
         started = time.monotonic()
-        backend.dump(dump_path)
+        if args.from_dump:
+            dump_path = args.from_dump
+            print(f"1. dùng tệp dump có sẵn {dump_path}")
+        else:
+            print(f"1. pg_dump -Fc {source}")
+            backend.dump(dump_path)
         with open(dump_path, "rb") as handle:
             digest = hashlib.sha256(handle.read()).hexdigest()
         print(
@@ -232,39 +249,84 @@ def main(argv: list[str] | None = None) -> int:
         try:
             print("3. pg_restore --no-owner --no-privileges")
             started = time.monotonic()
-            backend.restore(target, dump_path)
+            try:
+                backend.restore(target, dump_path)
+            except subprocess.CalledProcessError as exc:
+                print(
+                    f"   pg_restore LỖI (mã {exc.returncode}) — tệp hỏng hoặc không phải dump -Fc"
+                )
+                failures.append(f"pg_restore lỗi (mã {exc.returncode})")
+                return finish(failures, args)
             print(f"   phục hồi xong trong {time.monotonic() - started:.1f}s")
             a, b = snapshot(backend, source), snapshot(backend, target)
-
-            print("4. so nguồn ↔ bản phục hồi")
-            print(f"   migration head : {a['head']} ↔ {b['head']}")
-            if a["head"] != b["head"]:
-                failures.append("migration head lệch")
-            print(f"   số bảng        : {len(a['tables'])} ↔ {len(b['tables'])}")
-            if a["tables"] != b["tables"]:
-                failures.append("danh sách bảng lệch")
-            for table in CRITICAL_TABLES:
-                if table not in a["content"]:
-                    failures.append(f"thiếu bảng quan trọng {table}")
-                    continue
-                left, right = a["content"][table], b["content"].get(table)
-                mark = "OK " if left == right else "LỆCH"
-                print(f"   [{mark}] {table:<22} {left[0]:>6} dòng  md5 {left[1][:12]}")
-                if left != right:
-                    failures.append(f"{table} lệch")
-            mismatched = [t for t in a["tables"] if a["content"][t] != b["content"].get(t)]
-            print(f"   bảng khớp md5   : {len(a['tables']) - len(mismatched)}/{len(a['tables'])}")
-            failures += [f"{t} lệch" for t in mismatched if t not in CRITICAL_TABLES]
+            if args.from_dump:
+                failures += check_restored_file(a, b)
+            else:
+                failures += compare_with_source(a, b)
         finally:
             if not args.keep:
                 backend.admin(f'DROP DATABASE IF EXISTS "{target}"')
-                print(f"5. đã xoá database tạm {target}; tệp dump tạm đã xoá")
+                print(
+                    f"5. đã xoá database tạm {target}"
+                    + ("" if args.from_dump else "; tệp dump tạm đã xoá")
+                )
 
+    return finish(failures, args)
+
+
+def finish(failures: list[str], args: argparse.Namespace) -> int:
     if failures:
         print("KẾT QUẢ: FAIL — " + "; ".join(failures), file=sys.stderr)
         return 1
-    print("KẾT QUẢ: PASS — bản phục hồi khớp nguồn (head, bảng, số dòng, md5 nội dung).")
+    if args.from_dump:
+        print("KẾT QUẢ: PASS — tệp sao lưu phục hồi được (có head, đủ bảng quan trọng).")
+    else:
+        print("KẾT QUẢ: PASS — bản phục hồi khớp nguồn (head, bảng, số dòng, md5 nội dung).")
     return 0
+
+
+def check_restored_file(a: dict, b: dict) -> list[str]:
+    """Bản phục hồi từ TỆP: chỉ đòi tự nó lành. Khác nguồn hiện tại = thông tin."""
+    failures: list[str] = []
+    print("4. kiểm bản phục hồi từ tệp (khác nguồn hiện tại chỉ là thông tin)")
+    print(f"   migration head : {b['head'] or '(KHÔNG CÓ)'} · nguồn hiện tại {a['head']}")
+    print(f"   số bảng        : {len(b['tables'])} · nguồn hiện tại {len(a['tables'])}")
+    if not b["head"]:
+        failures.append("bản phục hồi không có migration head")
+    if not b["tables"]:
+        failures.append("bản phục hồi không có bảng nào")
+    for table in CRITICAL_TABLES:
+        if table not in b["content"]:
+            failures.append(f"bản phục hồi thiếu bảng quan trọng {table}")
+        else:
+            print(f"   [OK ] {table:<22} {b['content'][table][0]:>6} dòng")
+    same = [t for t in b["tables"] if a["content"].get(t) == b["content"].get(t)]
+    print(f"   bảng giống hệt nguồn hiện tại: {len(same)}/{len(b['tables'])} (thông tin)")
+    return failures
+
+
+def compare_with_source(a: dict, b: dict) -> list[str]:
+    failures: list[str] = []
+    print("4. so nguồn ↔ bản phục hồi")
+    print(f"   migration head : {a['head']} ↔ {b['head']}")
+    if a["head"] != b["head"]:
+        failures.append("migration head lệch")
+    print(f"   số bảng        : {len(a['tables'])} ↔ {len(b['tables'])}")
+    if a["tables"] != b["tables"]:
+        failures.append("danh sách bảng lệch")
+    for table in CRITICAL_TABLES:
+        if table not in a["content"]:
+            failures.append(f"thiếu bảng quan trọng {table}")
+            continue
+        left, right = a["content"][table], b["content"].get(table)
+        mark = "OK " if left == right else "LỆCH"
+        print(f"   [{mark}] {table:<22} {left[0]:>6} dòng  md5 {left[1][:12]}")
+        if left != right:
+            failures.append(f"{table} lệch")
+    mismatched = [t for t in a["tables"] if a["content"][t] != b["content"].get(t)]
+    print(f"   bảng khớp md5   : {len(a['tables']) - len(mismatched)}/{len(a['tables'])}")
+    failures += [f"{t} lệch" for t in mismatched if t not in CRITICAL_TABLES]
+    return failures
 
 
 if __name__ == "__main__":

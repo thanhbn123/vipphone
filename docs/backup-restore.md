@@ -191,3 +191,17 @@ Root của staging không vào được từ máy Owner, nên NAS **không** g�
 Thử thật 2026-10-10 trên thư mục NAS riêng (đã xoá): 3 lượt giữ 2 ⇒ NAS còn đúng 2 bản, mỗi bản tải lại khớp ·
 NAS sai địa chỉ ⇒ "không tải được", mã 3 · không có container ⇒ cảnh báo, mã 3.
 
+
+### Diễn tập phục hồi TỪ NAS hằng tháng (2026-10-10, D-005 "kiểm phục hồi mỗi tháng")
+
+`scripts/nas_restore_drill.sh` (cron `deploy`, ngày 1 hằng tháng): tải bản dump mới nhất + `.sha256` từ NAS qua
+container Tailscale → so sha256 → `restore_drill.py --from-dump` phục hồi vào database TẠM mới (không đè database
+đang chạy), kiểm có migration head + đủ bảng quan trọng → xoá database tạm và tệp tạm (có PII) → in tổng thời gian.
+Khác dữ liệu hiện tại chỉ là thông tin (bản sao lưu cũ hơn nguồn là bình thường). Thoát 0 PASS · 1 phục hồi hỏng ·
+3 không lấy được bản / lệch sha256 / thiếu tài khoản / container không chạy.
+
+Đo thật trên staging 2026-10-10: bản `vipphone-20261010T020901Z.dump` (88 650 byte) từ NAS ⇒ sha256 khớp ⇒ phục hồi
+0,3 s, head `0014`, 24 bảng ⇒ **tổng 11–12 s** (mục tiêu RTO 4 giờ; DB staging còn rất nhỏ nên con số này KHÔNG nói
+gì về RTO của dữ liệu thật). Ca âm: thư mục NAS rỗng / không container / không tài khoản ⇒ thông báo đúng, mã 3.
+Tại máy (PostgreSQL 16 tạm): `--from-dump` bản tốt PASS · tệp cắt cụt ⇒ "pg_restore lỗi" · dump DB rỗng ⇒ "không có
+migration head"; chế độ cũ vẫn PASS; 0 database tạm sót.
