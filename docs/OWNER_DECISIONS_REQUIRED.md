@@ -12,7 +12,7 @@
 | D-002 | Credential Turnstile | **BLOCKED_EXTERNAL_CREDENTIAL** | bot protection thật |
 | D-003 | Branch protection | ✅ **CLOSED** — đo 2026-10-07: `main` + `develop` bắt buộc PR + đúng 4 check tự động, `strict`, cấm force-push/xoá; đối chứng âm PR #65 bị chặn | — |
 | D-004 | Chính sách lưu trữ PII | **CLOSED** — Owner đã chốt 2026-10-02 | — |
-| D-005 | RPO/RTO + lịch sao lưu | Chính sách **CLOSED** (2026-10-02) · **lịch chạy tự động: CHƯA CÓ** (đo 2026-10-10) | RPO 24 giờ trên staging |
+| D-005 | RPO/RTO + lịch sao lưu | ✅ **CLOSED** — chính sách 2026-10-02 · lịch staging chạy từ 2026-10-10 (cron 02:47, DB + ảnh, chép NAS có so sha256) | — |
 | D-006 | Đường triển khai staging cho các gate thương mại | ✅ **CLOSED** 2026-10-10 — Owner chạy runbook từ MacBook, 27/27 bước qua | — |
 | D-007 | `enforce_admins` của branch protection | **OWNER_DECISION** (hiện `false`) | admin vẫn bypass được check đỏ |
 | D-008 | Biểu phí giao hàng | **OWNER_DECISION** (hiện `SHIPPING_FEE_FLAT=0.00`) | tổng đơn thật |
@@ -257,6 +257,12 @@ không có timer systemd nào tên vipphone. Bản sao lưu tự động cuối 
 **2026-10-03 00:13** (từ trước sự cố §35). Các bản trong `~/vip/vipphone/staging/backups/` đều do `deploy/backup.sh`
 chạy tay hoặc theo lượt deploy ⇒ **RPO 24 giờ: CHƯA ĐẠT**. Bật lịch là thêm cấu hình bền trên máy chủ ⇒ **Owner quyết**:
 (a) cron của user `deploy` gọi `deploy/backup.sh` qua bản phát hành `current`, hoặc (b) nối vào hệ sao lưu chung VIP Vault.
+
+**Đóng 2026-10-10:** cron của `deploy` `47 2 * * *` gọi `current/scripts/staging_backup.sh` (#99, #100): DB + ảnh, giữ
+14 ngày / 4 tuần, chép sang NAS `//100.120.9.63/data/vip-vault/viporder-staging/vipphone` qua Tailscale chạy trong
+container `vipphone-tailscale` (root không vào được nên NAS không gắn thành ổ). **Nghiệm thu bằng dấu vết của cron**
+(không chạy tay): lượt một lần 09:09:01 ⇒ dump 88 650 byte + ảnh, cả hai **tải lại từ NAS khớp sha256**, NAS có đủ 4 tệp.
+Còn chưa đo: RTO 4 giờ trên dữ liệu thật (DB staging hiện rất nhỏ), kiểm phục hồi hằng tháng chưa có lịch.
 
 ---
 
