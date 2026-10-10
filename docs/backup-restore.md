@@ -205,3 +205,14 @@ Khác dữ liệu hiện tại chỉ là thông tin (bản sao lưu cũ hơn ngu
 gì về RTO của dữ liệu thật). Ca âm: thư mục NAS rỗng / không container / không tài khoản ⇒ thông báo đúng, mã 3.
 Tại máy (PostgreSQL 16 tạm): `--from-dump` bản tốt PASS · tệp cắt cụt ⇒ "pg_restore lỗi" · dump DB rỗng ⇒ "không có
 migration head"; chế độ cũ vẫn PASS; 0 database tạm sót.
+
+### Tệp trạng thái cho cảnh báo (2026-10-10, V-13452)
+
+Mỗi lượt `staging_backup.sh` / `nas_restore_drill.sh` ghi `trang-thai-sao-luu.json` / `trang-thai-phuc-hoi.json`
+(`scripts/ghi_trang_thai.sh`, gọi trong `trap EXIT` ⇒ chết giữa chừng vẫn có) cạnh bản sao lưu trên máy và trên NAS:
+`data/vip-vault/viporder-staging/vipphone/`. Trường: `ket_qua` (`ok`/`loi`), `ma_thoat`, `luc`, `luc_unix`, `ghi_chu`.
+
+**Luật bên đọc** (bộ cảnh báo có Zalo): `ket_qua != "ok"` ⇒ báo; `luc_unix` cũ hơn **26 giờ** (sao lưu) / **32 ngày**
+(phục hồi) ⇒ báo — bắt cả ca NAS hỏng (tệp trên NAS không được cập nhật) và cron không chạy.
+Thử thật trên staging: sao lưu OK ⇒ `ok` lên NAS · NAS sai địa chỉ ⇒ `loi` mã 3 trên máy, NAS giữ tệp cũ ·
+từ chối tên `prod` ⇒ `loi` mã 2 · diễn tập OK ⇒ `ok` lên NAS.

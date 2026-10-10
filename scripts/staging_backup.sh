@@ -34,7 +34,12 @@ SMB_IMG="${SMB_IMG:-vipphone-smbclient:alpine3.20}"
 KEEP_DAILY="${KEEP_DAILY:-14}"
 KEEP_WEEKLY="${KEEP_WEEKLY:-4}"
 
-case "$DBNAME" in *prod*) echo "TỪ CHỐI: tên database chứa 'prod' ($DBNAME)"; exit 2;; esac
+# Trạng thái cho bộ cảnh báo (V-13452): ghi trong trap EXIT ⇒ chết giữa chừng vẫn có.
+# shellcheck source=scripts/ghi_trang_thai.sh
+. "$(cd "$(dirname "$0")" && pwd)/ghi_trang_thai.sh"
+TT_DIR="$DEST"; TT_GHI_CHU="dừng giữa chừng (xem cron-sao-luu.log)"
+trap 'ghi_trang_thai sao-luu "$?" "$TT_GHI_CHU"' EXIT
+case "$DBNAME" in *prod*) echo "TỪ CHỐI: tên database chứa 'prod' ($DBNAME)"; TT_GHI_CHU="TỪ CHỐI: tên database có prod"; exit 2;; esac
 mkdir -p "$DEST/daily" "$DEST/weekly"
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -126,5 +131,6 @@ fi
 
 dem() { local n=0 f; for f in "$1"/$2; do [ -e "$f" ] && n=$((n+1)); done; echo "$n"; }
 if [ "$NAS_RC" = 0 ]; then KQ="OK — máy + NAS"; else KQ="CHỈ TRÊN MÁY (mã 3)"; fi
+TT_GHI_CHU="$KQ"
 echo "KẾT QUẢ: $KQ · ngày:$(dem "$DEST/daily" 'vipphone-2*.dump') tuần:$(dem "$DEST/weekly" 'vipphone-weekly-*.dump')"
 exit "$NAS_RC"
