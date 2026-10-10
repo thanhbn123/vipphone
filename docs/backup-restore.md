@@ -177,3 +177,17 @@ sha256 hai đầu** · xoay vòng 14 ngày / 4 tuần ở **cả hai** nơi.
   `⚠`, **thoát mã 3** (cron ghi log; không bao giờ báo OK giả).
 - Đã thử thật trên staging 2026-10-10 bằng thư mục tạm: NAS gắn ⇒ mã 0, khớp sha256 · 3 lượt giữ 2 ⇒ còn 2 ở mỗi
   nơi · NAS chưa gắn ⇒ mã 3, 0 tệp ghi nhầm · bản chép bị làm hỏng ⇒ báo LỆCH, mã 3 · tên DB có `prod` ⇒ từ chối.
+
+### Đường (b) — không cần root: Tailscale trong container + smbclient (2026-10-10, đang dùng)
+
+Root của staging không vào được từ máy Owner, nên NAS **không** gắn thành ổ. Thay vào đó:
+- container `vipphone-tailscale` (ảnh `tailscale/tailscale`, mạng riêng của container, `TS_ACCEPT_DNS=false`,
+  volume `vipphone-tailscale-state`) — máy `viporder-staging-vipphone` trong tailnet của Owner;
+- tài khoản NAS ở `~deploy/.config/vip-nas/cred` (600), Owner nhập trên máy chủ, không qua hội thoại;
+- `scripts/nas_smb_push.sh` chạy trong ảnh `vipphone-smbclient:alpine3.20` với `--network container:vipphone-tailscale`:
+  put tên tạm → rename → put `.sha256` → **tải lại từ NAS và so sha256** → xoay vòng trên NAS.
+- Đích: share `data` (cùng share VIP Vault), `vip-vault/viporder-staging/vipphone/{daily,weekly}`.
+
+Thử thật 2026-10-10 trên thư mục NAS riêng (đã xoá): 3 lượt giữ 2 ⇒ NAS còn đúng 2 bản, mỗi bản tải lại khớp ·
+NAS sai địa chỉ ⇒ "không tải được", mã 3 · không có container ⇒ cảnh báo, mã 3.
+
